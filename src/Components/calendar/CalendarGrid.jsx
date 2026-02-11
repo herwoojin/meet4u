@@ -147,36 +147,45 @@ const CalendarGrid = () => {
                             <div
                                 key={i}
                                 className={`
-                                    min-h-[8rem] p-2 cursor-pointer transition-colors border-r border-b border-gray-100 bg-white hover:bg-gray-50
+                                    min-h-[6rem] md:min-h-[8rem] p-1 md:p-2 cursor-pointer transition-colors border-r border-b border-gray-100 bg-white hover:bg-gray-50
                                     ${!isCurrentMonth ? "bg-gray-50" : ""}
                                     ${isSelected ? "bg-blue-50" : ""}
                                 `}
                                 onClick={() => onDateClick(date)}
                             >
                                 <span className={`
-                                    text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full mb-1
+                                    text-xs md:text-sm font-medium w-5 h-5 md:w-7 md:h-7 flex items-center justify-center rounded-full mb-1
                                     ${isToday ? "bg-gray-900 text-white" : dateColor}
                                 `}>
                                     {format(date, 'd')}
                                 </span>
 
                                 <div className="space-y-1 mt-1">
-                                    {dailyMeetings.map((meeting) => (
-                                        <div
-                                            key={meeting.id}
-                                            className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded border border-blue-100 truncate hover:bg-blue-100 transition-colors flex items-center justify-between group"
-                                            onClick={(e) => handleMeetingClick(e, meeting)}
-                                        >
-                                            <span className="truncate flex-1 font-medium">
-                                                {meeting.startTime} {meeting.title}
-                                            </span>
-                                            {meeting.attendeesList?.length > 0 && (
-                                                <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
-                                                    <Users size={8} /> {meeting.attendeesList.length}
+                                    {dailyMeetings.map((meeting) => {
+                                        const isCompleted = meeting.status === 'completed';
+                                        return (
+                                            <div
+                                                key={meeting.id}
+                                                className={`
+                                                    text-[10px] md:text-xs px-1.5 py-0.5 md:px-2 md:py-1 rounded border truncate transition-colors flex items-center justify-between group
+                                                    ${isCompleted
+                                                        ? 'bg-red-50 text-red-700 border-red-100 hover:bg-red-100'
+                                                        : 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100'
+                                                    }
+                                                `}
+                                                onClick={(e) => handleMeetingClick(e, meeting)}
+                                            >
+                                                <span className={`truncate flex-1 font-medium ${isCompleted ? 'line-through opacity-70' : ''}`}>
+                                                    {meeting.startTime} {meeting.title}
                                                 </span>
-                                            )}
-                                        </div>
-                                    ))}
+                                                {meeting.attendeesList?.length > 0 && (
+                                                    <span className={`text-[9px] md:text-[10px] flex items-center gap-0.5 ${isCompleted ? 'text-red-400' : 'text-gray-400'}`}>
+                                                        <Users size={8} /> {meeting.attendeesList.length}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         );

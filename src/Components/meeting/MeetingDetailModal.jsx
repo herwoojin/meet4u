@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, Clock, Users, Trash2, Edit, Check, HelpCircle, XCircle, AlignLeft } from 'lucide-react';
 import { db } from '../../lib/firebase';
-import { deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { deleteDoc, doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { format, isValid } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
@@ -72,17 +72,88 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
         console.error("Date formatting error:", e);
     }
 
-    // Helper to get display name with nickname if available
-    const getDisplayName = (emailRaw) => {
-        // 1. Try to find if this email matches current user
-        if (currentUser?.email && (currentUser.email === emailRaw || currentUser.email.replace(/\./g, '_') === emailRaw)) {
-            if (currentUser.displayName) {
-                return `${currentUser.displayName} (${currentUser.email})`;
+    // State for user profiles (nicknames)
+    const [userMap, setUserMap] = React.useState({});
+
+    // Fetch user profiles for all attendees
+    React.useEffect(() => {
+        const fetchUserProfiles = async () => {
+            const allEmails = Array.from(new Set([...(meeting.attendeesList || []), ...Object.keys(meeting.responses || {})]));
+            if (allEmails.length === 0) return;
+
+            // Firestore 'in' query limit is 10. Chunk the emails.
+            const chunks = [];
+            for (let i = 0; i < allEmails.length; i += 10) {
+                chunks.push(allEmails.slice(i, i + 10));
             }
-            return currentUser.email;
+
+            const profileMap = {};
+
+            try {
+                // We have a mix of raw emails and sanitized keys.
+                // The `users` collection now has `email` and `emailSanitized`.
+                // Ideally we search against the field that matches our key.
+                // Since we can't do OR queries easily across fields with 'in', let's just search 'email' first.
+                // Most keys in `attendeesList` are raw emails.
+
+                await Promise.all(chunks.map(async (chunk) => {
+                    const q = query(collection(db, "users"), where("email", "in", chunk));
+                    const querySnapshot = await getDocs(q);
+                    querySnapshot.forEach((doc) => {
+                        const userData = doc.data();
+                        if (userData.email && userData.displayName) {
+                            profileMap[userData.email] = userData.displayName;
+                            profileMap[userData.email.replace(/\./g, '_')] = userData.displayName;
+                        }
+                    });
+                }));
+
+                // Fallback: If we missed some users (maybe they are only in responses with sanitized keys),
+                // we could try searching by 'emailSanitized'.
+                // But for now, let's assume the primary key is 'email'.
+
+                setUserMap(prev => ({ ...prev, ...profileMap }));
+            } catch (error) {
+                console.error("Error fetching user profiles:", error);
+            }
+        };
+
+        fetchUserProfiles();
+    }, [meeting]);
+
+
+    // Helper to get display name with nickname if available, hiding email
+    const getDisplayName = (emailRaw) => {
+        // 1. Try to find if this email matches current user (use auth profile)
+        if (currentUser?.email && (currentUser.email === emailRaw || currentUser.email.replace(/\./g, '_') === emailRaw)) {
+            return currentUser.displayName || currentUser.email.split('@')[0];
         }
-        // 2. Otherwise return the email (raw or sanitized key)
-        return emailRaw;
+
+        // 2. Try to find in fetched userMap
+        // Check both raw and sanitized versions just to be safe
+        if (userMap[emailRaw]) return userMap[emailRaw];
+        const sanitized = emailRaw.replace(/\./g, '_'); // In case emailRaw was a real email
+        // Or if emailRaw was already sanitized, we might need to reconstruct? 
+        // Actually the map stores keys as they come from DB (real emails) and we also added sanitized keys above.
+        if (userMap[sanitized]) return userMap[sanitized];
+
+        // 3. Otherwise return the part before @ as nickname fallback to hide email
+        return emailRaw.split('@')[0];
+    };
+
+    const handleComplete = async () => {
+        if (!isCreator) return;
+        if (window.confirm('이 미팅을 완료 상태로 변경하시겠습니까?')) {
+            try {
+                await updateDoc(doc(db, "meetings", meeting.id), {
+                    status: 'completed'
+                });
+                onClose();
+            } catch (error) {
+                console.error("Error completing meeting:", error);
+                alert("상태 변경 중 오류가 발생했습니다.");
+            }
+        }
     };
 
     const getDisplayEmailInitial = (displayString) => {
@@ -95,9 +166,14 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 animate-fade-in" onClick={onClose}>
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden relative transform transition-all scale-100" onClick={e => e.stopPropagation()}>
                 {/* Header */}
-                <div className="flex justify-between items-start p-6 border-b border-gray-100 bg-white">
+                <div className={`flex justify-between items-start p-6 border-b border-gray-100 ${meeting.status === 'completed' ? 'bg-red-50' : 'bg-white'}`}>
                     <div>
-                        <h2 className="text-xl font-bold text-gray-900">{meeting.title}</h2>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-bold text-gray-900">{meeting.title}</h2>
+                            {meeting.status === 'completed' && (
+                                <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full border border-red-200 font-bold">완료됨</span>
+                            )}
+                        </div>
                         <div className="flex items-center text-gray-500 mt-2 text-sm">
                             <Clock size={16} className="mr-1.5 text-blue-500" />
                             <div className="leading-tight">
@@ -190,49 +266,51 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     </div>
 
                     {/* Response Actions */}
-                    <div>
-                        <h3 className="text-sm font-bold text-gray-900 mb-3">참석 여부 응답</h3>
-                        <div className="grid grid-cols-3 gap-3 mb-4">
+                    {meeting.status !== 'completed' && (
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-900 mb-3">참석 여부 응답</h3>
+                            <div className="grid grid-cols-3 gap-3 mb-4">
+                                <button
+                                    onClick={() => setSelectedStatus('attend')}
+                                    className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border ${selectedStatus === 'attend'
+                                        ? 'bg-green-600 text-white border-green-600 ring-2 ring-green-100'
+                                        : 'bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:border-green-200 hover:text-green-700'
+                                        }`}
+                                >
+                                    <Check size={16} /> 참석
+                                </button>
+                                <button
+                                    onClick={() => setSelectedStatus('maybe')}
+                                    className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border ${selectedStatus === 'maybe'
+                                        ? 'bg-orange-500 text-white border-orange-500 ring-2 ring-orange-100'
+                                        : 'bg-white text-gray-700 border-gray-200 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-700'
+                                        }`}
+                                >
+                                    <HelpCircle size={16} /> 미정
+                                </button>
+                                <button
+                                    onClick={() => setSelectedStatus('decline')}
+                                    className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border ${selectedStatus === 'decline'
+                                        ? 'bg-red-500 text-white border-red-500 ring-2 ring-red-100'
+                                        : 'bg-white text-gray-700 border-gray-200 hover:bg-red-50 hover:border-red-200 hover:text-red-700'
+                                        }`}
+                                >
+                                    <XCircle size={16} /> 불참
+                                </button>
+                            </div>
                             <button
-                                onClick={() => setSelectedStatus('attend')}
-                                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border ${selectedStatus === 'attend'
-                                    ? 'bg-green-600 text-white border-green-600 ring-2 ring-green-100'
-                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:border-green-200 hover:text-green-700'
+                                onClick={saveResponse}
+                                disabled={!selectedStatus || selectedStatus === getStatusForEmail(currentUser?.email)}
+                                className={`w-full py-3 rounded-lg text-sm font-bold transition-all shadow-md flex items-center justify-center gap-2
+                                    ${!selectedStatus || selectedStatus === getStatusForEmail(currentUser?.email)
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                        : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg'
                                     }`}
                             >
-                                <Check size={16} /> 참석
-                            </button>
-                            <button
-                                onClick={() => setSelectedStatus('maybe')}
-                                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border ${selectedStatus === 'maybe'
-                                    ? 'bg-orange-500 text-white border-orange-500 ring-2 ring-orange-100'
-                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-700'
-                                    }`}
-                            >
-                                <HelpCircle size={16} /> 미정
-                            </button>
-                            <button
-                                onClick={() => setSelectedStatus('decline')}
-                                className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border ${selectedStatus === 'decline'
-                                    ? 'bg-red-500 text-white border-red-500 ring-2 ring-red-100'
-                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-red-50 hover:border-red-200 hover:text-red-700'
-                                    }`}
-                            >
-                                <XCircle size={16} /> 불참
+                                <Check size={18} /> 응답 저장하기
                             </button>
                         </div>
-                        <button
-                            onClick={saveResponse}
-                            disabled={!selectedStatus || selectedStatus === getStatusForEmail(currentUser?.email)}
-                            className={`w-full py-3 rounded-lg text-sm font-bold transition-all shadow-md flex items-center justify-center gap-2
-                                ${!selectedStatus || selectedStatus === getStatusForEmail(currentUser?.email)
-                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                    : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg'
-                                }`}
-                        >
-                            <Check size={18} /> 응답 저장하기
-                        </button>
-                    </div>
+                    )}
                 </div>
 
                 {/* Footer Actions */}
@@ -246,6 +324,15 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                 >
                                     <Edit size={16} className="text-gray-500" /> 수정
                                 </button>
+                                {/* Complete Button */}
+                                {meeting.status !== 'completed' && (
+                                    <button
+                                        onClick={handleComplete}
+                                        className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-green-300 rounded-lg text-sm font-medium text-green-700 hover:bg-green-50 transition-colors shadow-sm"
+                                    >
+                                        <Check size={16} /> 완료
+                                    </button>
+                                )}
                                 <button
                                     onClick={handleDelete}
                                     className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-red-200 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm"

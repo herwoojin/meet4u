@@ -17,8 +17,10 @@ const StatCard = ({ icon: Icon, label, value, colorClass }) => (
     </div>
 );
 
-const MeetingCard = ({ title, time, attendees, status }) => (
-    <div className="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer shadow-sm">
+import MeetingDetailModal from '../Components/meeting/MeetingDetailModal';
+
+const MeetingCard = ({ title, time, attendees, status, onJoin }) => (
+    <div className="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer shadow-sm" onClick={onJoin}>
         <div className="flex justify-between items-start mb-2">
             <div>
                 <h3 className="font-semibold text-gray-900">{title}</h3>
@@ -38,7 +40,13 @@ const MeetingCard = ({ title, time, attendees, status }) => (
                     <img key={i} src={`https://ui-avatars.com/api/?name=${a}&background=random`} alt={a} className="w-6 h-6 rounded-full border border-white" />
                 ))}
             </div>
-            <button className="text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1 font-medium">
+            <button
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onJoin();
+                }}
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center space-x-1 font-medium"
+            >
                 <Video size={14} />
                 <span>참여하기</span>
             </button>
@@ -51,6 +59,12 @@ const Dashboard = () => {
     const navigate = useNavigate();
     const [meetings, setMeetings] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selectedMeeting, setSelectedMeeting] = useState(null);
+
+    const handleEditMeeting = (meeting) => {
+        setSelectedMeeting(null);
+        navigate('/schedule', { state: { meetingToEdit: meeting } });
+    };
 
     useEffect(() => {
         if (!currentUser) return;
@@ -135,6 +149,7 @@ const Dashboard = () => {
                                     time={`${meeting.date} • ${meeting.startTime} - ${meeting.endTime}`}
                                     attendees={meeting.attendeesList || []}
                                     status={meeting.status || 'upcoming'}
+                                    onJoin={() => setSelectedMeeting(meeting)}
                                 />
                             ))
                         )}
@@ -164,6 +179,13 @@ const Dashboard = () => {
                     </div>
                 </div>
             </div>
+            {selectedMeeting && (
+                <MeetingDetailModal
+                    meeting={selectedMeeting}
+                    onClose={() => setSelectedMeeting(null)}
+                    onEdit={handleEditMeeting}
+                />
+            )}
         </div>
     );
 };

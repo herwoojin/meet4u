@@ -7,7 +7,7 @@ import MeetingForm from './Components/meeting/MeetingForm';
 import CalendarGrid from './Components/calendar/CalendarGrid';
 import ProfilePage from './Pages/Profile';
 import CreateMeeting from './Pages/CreateMeeting';
-import { Calendar, Home, LogOut, PlusCircle, Settings, Menu, X } from 'lucide-react';
+import { Calendar, Home, LogOut, PlusCircle, Settings, Menu, X, MapPin } from 'lucide-react';
 
 const PrivateRoute = ({ children }) => {
     const { currentUser } = useAuth();
@@ -59,6 +59,16 @@ const ProtectedLayout = () => {
                     <SidebarItem to="/schedule" icon={PlusCircle} label="미팅 생성" onClick={() => setIsMobileMenuOpen(false)} />
                     <div className="pt-4 mt-4 border-t border-gray-200">
                         <SidebarItem to="/profile" icon={Settings} label="설정" onClick={() => setIsMobileMenuOpen(false)} />
+                        <a
+                            href="https://whereurl.com/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center space-x-3 p-3 rounded-lg transition-colors text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                            onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                            <MapPin size={20} />
+                            <span className="font-medium">내위치공유(지금가고있어요)</span>
+                        </a>
                     </div>
                 </nav>
 

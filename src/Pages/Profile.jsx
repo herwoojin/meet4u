@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, User, Mail, Edit2, Save, X } from 'lucide-react';
 import { updateProfile } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 const Profile = () => {
     const { currentUser, logout } = useAuth();
@@ -21,11 +22,21 @@ const Profile = () => {
         if (!newName.trim()) return;
         setLoading(true);
         try {
+            // 1. Update Firebase Auth Profile
             await updateProfile(auth.currentUser, {
                 displayName: newName
             });
+
+            // 2. Sync with Firestore 'users' collection for global visibility
+            await setDoc(doc(db, "users", currentUser.uid), {
+                email: currentUser.email,
+                displayName: newName,
+                photoURL: currentUser.photoURL,
+                updatedAt: new Date().toISOString()
+            }, { merge: true });
+
             setIsEditing(false);
-            // Force reload or just let AuthContext update (might take a moment, so manual window reload is safer for immediate reflection if Context doesn't catch it fast enough)
+            // Force reload to reflect changes
             window.location.reload();
         } catch (error) {
             console.error("Error updating profile:", error);
