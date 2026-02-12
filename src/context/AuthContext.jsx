@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { auth, googleProvider, db } from '../lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -26,16 +26,29 @@ export const AuthProvider = ({ children }) => {
 
             if (user) {
                 try {
-                    // Auto-sync user profile to Firestore for global discovery
-                    // This ensures the nickname is visible to others even if they haven't manually updated their profile
-                    await setDoc(doc(db, "users", user.uid), {
-                        email: user.email,
-                        displayName: user.displayName,
-                        photoURL: user.photoURL,
-                        lastSeen: new Date().toISOString(),
-                        // Store sanitized email for easier lookup from response keys
-                        emailSanitized: user.email.replace(/\./g, '_')
-                    }, { merge: true });
+                    // Check if user document exists before writing
+                    const userDocRef = doc(db, "users", user.uid);
+                    const userSnapshot = await getDoc(userDocRef);
+
+                    if (!userSnapshot.exists()) {
+                        // Create new user profile if it doesn't exist
+                        await setDoc(userDocRef, {
+                            email: user.email,
+                            displayName: user.displayName,
+                            photoURL: user.photoURL,
+                            createdAt: new Date().toISOString(),
+                            lastSeen: new Date().toISOString(),
+                            emailSanitized: user.email.replace(/\./g, '_')
+                        });
+                    } else {
+                        // Only update lastSeen and photoURL (if changed) to avoid overwriting custom displayName
+                        await setDoc(userDocRef, {
+                            lastSeen: new Date().toISOString(),
+                            emailSanitized: user.email.replace(/\./g, '_'),
+                            // Optional definition: could also sync photoURL if we want auth to be source of truth for photo
+                            photoURL: user.photoURL
+                        }, { merge: true });
+                    }
                 } catch (error) {
                     console.error("Error syncing user profile:", error);
                 }

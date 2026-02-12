@@ -18,6 +18,7 @@ const StatCard = ({ icon: Icon, label, value, colorClass }) => (
 );
 
 import MeetingDetailModal from '../Components/meeting/MeetingDetailModal';
+import WeeklyCalendar from '../Components/calendar/WeeklyCalendar';
 
 const MeetingCard = ({ title, time, attendees, status, onJoin }) => (
     <div className="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer shadow-sm" onClick={onJoin}>
@@ -99,13 +100,7 @@ const Dashboard = () => {
         return meetingDate >= new Date();
     });
 
-    const hoursScheduled = meetings.reduce((acc, curr) => {
-        // Approximate duration calculation
-        const start = new Date(`2000-01-01T${curr.startTime}`);
-        const end = new Date(`2000-01-01T${curr.endTime}`);
-        const durationHours = (end - start) / (1000 * 60 * 60);
-        return acc + (durationHours > 0 ? durationHours : 0);
-    }, 0).toFixed(1);
+
 
     return (
         <div className="space-y-6">
@@ -122,60 +117,72 @@ const Dashboard = () => {
                 </button>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatCard icon={Calendar} label="다가오는 미팅" value={upcomingMeetings.length} colorClass="bg-blue-100 text-blue-600" />
-                <StatCard icon={Clock} label="예정된 시간" value={hoursScheduled} colorClass="bg-purple-100 text-purple-600" />
-                <StatCard icon={Users} label="활성 팀" value="1" colorClass="bg-green-100 text-green-600" />
+            {/* Weekly Calendar Section */}
+            <div className="mb-8">
+                <WeeklyCalendar />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                        <h3 className="text-xl font-bold text-gray-900">나의 일정</h3>
-                        <a href="/calendar" className="text-blue-600 text-sm hover:underline font-medium">전체 보기</a>
-                    </div>
-                    <div className="space-y-4">
-                        {loading ? (
-                            <p className="text-gray-400">일정을 불러오는 중...</p>
-                        ) : meetings.length === 0 ? (
-                            <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-100">
-                                <p className="text-gray-500">예정된 미팅이 없습니다.</p>
-                            </div>
-                        ) : (
-                            meetings.map(meeting => (
-                                <MeetingCard
-                                    key={meeting.id}
-                                    title={meeting.title}
-                                    time={`${meeting.date} • ${meeting.startTime} - ${meeting.endTime}`}
-                                    attendees={meeting.attendeesList || []}
-                                    status={meeting.status || 'upcoming'}
-                                    onJoin={() => setSelectedMeeting(meeting)}
-                                />
-                            ))
-                        )}
-                    </div>
-                </div>
+            {/* Stat Cards Removed */}
 
-                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                    <h3 className="text-xl font-bold text-gray-900 mb-4">빠른 실행</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <button
-                            onClick={() => navigate('/schedule')}
-                            className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-left group border border-gray-100"
-                        >
-                            <div className="bg-blue-100 text-blue-600 p-2 rounded w-fit mb-3 group-hover:scale-110 transition-transform">
-                                <Calendar size={20} />
-                            </div>
-                            <h4 className="font-semibold text-gray-900">미팅 예약</h4>
-                            <p className="text-xs text-gray-500 mt-1">새로운 일정 만들기</p>
-                        </button>
-                        <button className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-left group border border-gray-100">
-                            <div className="bg-orange-100 text-orange-600 p-2 rounded w-fit mb-3 group-hover:scale-110 transition-transform">
-                                <Users size={20} />
-                            </div>
-                            <h4 className="font-semibold text-gray-900">팀 관리</h4>
-                            <p className="text-xs text-gray-500 mt-1">멤버 초대 및 관리</p>
-                        </button>
+            <div className="space-y-8">
+                <div className="space-y-8">
+                    {/* Upcoming Meetings Section */}
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-gray-900">진행 중 / 예정된 미팅</h3>
+                            <a href="/calendar" className="text-blue-600 text-sm hover:underline font-medium">전체 보기</a>
+                        </div>
+                        <div className="space-y-4">
+                            {loading ? (
+                                <p className="text-gray-400">일정을 불러오는 중...</p>
+                            ) : upcomingMeetings.length === 0 ? (
+                                <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-100">
+                                    <p className="text-gray-500">예정된 미팅이 없습니다.</p>
+                                </div>
+                            ) : (
+                                upcomingMeetings.map(meeting => (
+                                    <MeetingCard
+                                        key={meeting.id}
+                                        title={meeting.title}
+                                        time={`${meeting.date} • ${meeting.startTime} - ${meeting.endTime}`}
+                                        attendees={meeting.attendeesList || []}
+                                        status={meeting.status || 'upcoming'}
+                                        onJoin={() => setSelectedMeeting(meeting)}
+                                    />
+                                ))
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Completed Meetings Section */}
+                    <div className="space-y-4">
+                        <h3 className="text-xl font-bold text-gray-900 text-gray-500">완료된 미팅</h3>
+                        <div className="space-y-4">
+                            {loading ? (
+                                <p className="text-gray-400">일정을 불러오는 중...</p>
+                            ) : meetings.filter(m => {
+                                const meetingDate = new Date(m.date + 'T' + m.startTime);
+                                return meetingDate < new Date() || m.status === 'completed';
+                            }).length === 0 ? (
+                                <div className="text-center py-6 bg-gray-50 rounded-xl border border-gray-100 border-dashed">
+                                    <p className="text-gray-400 text-sm">완료된 미팅이 없습니다.</p>
+                                </div>
+                            ) : (
+                                meetings.filter(m => {
+                                    const meetingDate = new Date(m.date + 'T' + m.startTime);
+                                    return meetingDate < new Date() || m.status === 'completed';
+                                }).map(meeting => (
+                                    <MeetingCard
+                                        key={meeting.id}
+                                        title={meeting.title}
+                                        time={`${meeting.date} • ${meeting.startTime} - ${meeting.endTime}`}
+                                        attendees={meeting.attendeesList || []}
+                                        status='completed'
+                                        onJoin={() => setSelectedMeeting(meeting)}
+                                    />
+                                ))
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

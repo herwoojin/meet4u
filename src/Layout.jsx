@@ -8,6 +8,7 @@ import CalendarGrid from './Components/calendar/CalendarGrid';
 import ProfilePage from './Pages/Profile';
 import CreateMeeting from './Pages/CreateMeeting';
 import { Calendar, Home, LogOut, PlusCircle, Settings, Menu, X, MapPin } from 'lucide-react';
+import useChatNotifications from './hooks/useChatNotifications';
 
 const PrivateRoute = ({ children }) => {
     const { currentUser } = useAuth();
@@ -33,6 +34,8 @@ const ProtectedLayout = () => {
     const { logout, currentUser } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
+    useChatNotifications();
+
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
     return (
@@ -54,8 +57,8 @@ const ProtectedLayout = () => {
                 </div>
 
                 <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-                    <SidebarItem to="/" icon={Home} label="대시보드" onClick={() => setIsMobileMenuOpen(false)} />
-                    <SidebarItem to="/calendar" icon={Calendar} label="캘린더" onClick={() => setIsMobileMenuOpen(false)} />
+                    <SidebarItem to="/" icon={Home} label="주간캘린더" onClick={() => setIsMobileMenuOpen(false)} />
+                    <SidebarItem to="/calendar" icon={Calendar} label="월캘린더" onClick={() => setIsMobileMenuOpen(false)} />
                     <SidebarItem to="/schedule" icon={PlusCircle} label="미팅 생성" onClick={() => setIsMobileMenuOpen(false)} />
                     <div className="pt-4 mt-4 border-t border-gray-200">
                         <SidebarItem to="/profile" icon={Settings} label="설정" onClick={() => setIsMobileMenuOpen(false)} />

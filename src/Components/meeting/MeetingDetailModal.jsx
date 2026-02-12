@@ -5,6 +5,7 @@ import { deleteDoc, doc, updateDoc, collection, query, where, getDocs } from 'fi
 import { format, isValid } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
+import ChatModal from '../chat/ChatModal';
 
 const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
     const { currentUser } = useAuth();
@@ -28,6 +29,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
     };
 
     const [selectedStatus, setSelectedStatus] = React.useState(null);
+    const [selectedChatUser, setSelectedChatUser] = React.useState(null);
 
     // Initialize selected status from existing response
     React.useEffect(() => {
@@ -82,9 +84,28 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
             if (allEmails.length === 0) return;
 
             // Firestore 'in' query limit is 10. Chunk the emails.
+            // Chunk the emails.
             const chunks = [];
             for (let i = 0; i < allEmails.length; i += 10) {
-                chunks.push(allEmails.slice(i, i + 10));
+                // Ensure we query with lowercase emails since `users` collection might have inconsistent casing 
+                // (though new users are effectively lowercased by our new logic, legacy might not be).
+                // Actually, AuthContext writes raw email. We should query raw OR lowercase? 
+                // `in` query is exact match. Let's try to query both if possible, or assume standardized.
+                // Given we just started standardizing in MeetingForm, best to query the raw email AND the lowercased version if different.
+
+                const rawSlice = allEmails.slice(i, i + 10);
+                const processedSlice = new Set();
+                rawSlice.forEach(e => {
+                    processedSlice.add(e);
+                    processedSlice.add(e.toLowerCase());
+                });
+
+                // Re-chunking might be needed if processedSlice > 10, but `in` limit is 30 (actually 10 for some types, 30 for others). 
+                // Firestore `in` limit is 10. So better to just lowercase them all if we assume `users` have lowercase emails?
+                // Or just keep it simple: strict lowercase for everything going forward.
+                // Let's stick to the plan: lowercase keys for lookup.
+
+                chunks.push(rawSlice.map(e => e.toLowerCase()));
             }
 
             const profileMap = {};
@@ -131,10 +152,12 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
 
         // 2. Try to find in fetched userMap
         // Check both raw and sanitized versions just to be safe
+        // Prioritize lowercase lookup
+        const lowerEmail = emailRaw.toLowerCase();
+        if (userMap[lowerEmail]) return userMap[lowerEmail];
         if (userMap[emailRaw]) return userMap[emailRaw];
-        const sanitized = emailRaw.replace(/\./g, '_'); // In case emailRaw was a real email
-        // Or if emailRaw was already sanitized, we might need to reconstruct? 
-        // Actually the map stores keys as they come from DB (real emails) and we also added sanitized keys above.
+
+        const sanitized = emailRaw.replace(/\./g, '_');
         if (userMap[sanitized]) return userMap[sanitized];
 
         // 3. Otherwise return the part before @ as nickname fallback to hide email
@@ -251,12 +274,20 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                 }
 
                                 return (
-                                    <div key={idx} className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-gray-100 shadow-sm hover:border-blue-200 transition-colors">
+                                    <div
+                                        key={idx}
+                                        className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-gray-100 shadow-sm hover:border-blue-200 transition-colors cursor-pointer group"
+                                        onClick={() => {
+                                            if (emailRaw !== currentUser?.email) {
+                                                setSelectedChatUser({ email: emailRaw, name: displayName });
+                                            }
+                                        }}
+                                    >
                                         <div className="flex items-center gap-3 overflow-hidden">
                                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-xs font-bold text-blue-700 border border-blue-100 shrink-0">
                                                 {getDisplayEmailInitial(displayName)}
                                             </div>
-                                            <span className="text-sm text-gray-700 truncate">{displayName}</span>
+                                            <span className="text-sm text-gray-700 truncate group-hover:text-blue-600 transition-colors">{displayName}</span>
                                         </div>
                                         {statusBadge}
                                     </div>
@@ -353,6 +384,14 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     </div>
                 </div>
             </div>
+
+            {selectedChatUser && (
+                <ChatModal
+                    targetUserEmail={selectedChatUser.email}
+                    targetUserName={selectedChatUser.name}
+                    onClose={() => setSelectedChatUser(null)}
+                />
+            )}
         </div>
     );
 };

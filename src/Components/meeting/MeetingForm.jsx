@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Users, AlignLeft, CheckCircle, Loader } from 'lucide-react';
+import { Calendar, Clock, MapPin, AlignLeft, CheckCircle, Loader } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
@@ -61,7 +61,7 @@ const MeetingForm = () => {
             ...formData,
             createdBy: currentUser.uid,
             status: 'upcoming',
-            attendeesList: formData.attendees.split(',').map(email => email.trim()).filter(email => email)
+            attendeesList: []
         };
 
         try {
@@ -176,21 +176,7 @@ const MeetingForm = () => {
                     />
                 </div>
 
-                {/* Attendees */}
-                <div>
-                    <label className="block text-gray-700 mb-2 font-medium flex items-center gap-2">
-                        <Users size={16} /> 참석자
-                    </label>
-                    <input
-                        type="text"
-                        name="attendees"
-                        value={formData.attendees}
-                        onChange={handleChange}
-                        className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder="예: alice@example.com, bob@example.com"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">이메일을 쉼표(,)로 구분하여 입력하세요</p>
-                </div>
+
 
                 {/* Description */}
                 <div>
