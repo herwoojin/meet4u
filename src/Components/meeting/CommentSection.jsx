@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../lib/firebase';
-import { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { Send, MessageSquare } from 'lucide-react';
+import { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
+import { Send, MessageSquare, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -64,6 +64,16 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         }
     };
 
+    const handleDelete = async (commentId) => {
+        if (!window.confirm("댓글을 삭제하시겠습니까?")) return;
+        try {
+            await deleteDoc(doc(db, "comments", commentId));
+        } catch (error) {
+            console.error("Error deleting comment:", error);
+            alert("댓글 삭제 실패");
+        }
+    };
+
     return (
         <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex flex-col h-80">
             <div className="flex items-center gap-2 mb-4 text-gray-900 font-bold border-b border-gray-200 pb-2">
@@ -81,6 +91,15 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                     return (
                         <div key={comment.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                             <div className="flex items-center gap-2 mb-1">
+                                {isMe && (
+                                    <button
+                                        onClick={() => handleDelete(comment.id)}
+                                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                                        title="삭제"
+                                    >
+                                        <Trash2 size={12} />
+                                    </button>
+                                )}
                                 <span className="text-xs font-bold text-gray-700">{comment.senderName}</span>
                                 <span className="text-[10px] text-gray-400">
                                     {comment.timestamp ? format(comment.timestamp.toDate(), 'a h:mm', { locale: ko }) : '방금 전'}
