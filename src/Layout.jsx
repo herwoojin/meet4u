@@ -9,6 +9,7 @@ import ProfilePage from './Pages/Profile';
 import CreateMeeting from './Pages/CreateMeeting';
 import { Calendar, Home, LogOut, PlusCircle, Settings, Menu, X, MapPin } from 'lucide-react';
 import useChatNotifications from './hooks/useChatNotifications';
+import ChatModal from './Components/chat/ChatModal';
 
 const PrivateRoute = ({ children }) => {
     const { currentUser } = useAuth();
@@ -31,10 +32,10 @@ const SidebarItem = ({ to, icon: Icon, label, onClick }) => {
 };
 
 const ProtectedLayout = () => {
-    const { logout, currentUser } = useAuth();
+    const { logout, currentUser, activeChatUser, closeChat, openChat } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
-    useChatNotifications();
+    useChatNotifications(openChat);
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
@@ -124,6 +125,15 @@ const ProtectedLayout = () => {
                     </Routes>
                 </main>
             </div>
+            {
+                activeChatUser && (
+                    <ChatModal
+                        targetUserEmail={activeChatUser.email}
+                        targetUserName={activeChatUser.name}
+                        onClose={closeChat}
+                    />
+                )
+            }
         </div>
     )
 }

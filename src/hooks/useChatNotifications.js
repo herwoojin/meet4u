@@ -3,7 +3,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
-const useChatNotifications = () => {
+const useChatNotifications = (openChat) => {
     const { currentUser } = useAuth();
 
     useEffect(() => {
@@ -27,10 +27,22 @@ const useChatNotifications = () => {
 
                         // 1. Browser Notification
                         if (Notification.permission === 'granted') {
-                            new Notification(`New message from ${senderName}`, {
+                            const notification = new Notification(`New message from ${senderName}`, {
                                 body: chatData.lastMessage,
                                 icon: '/pwa-192x192.png'
                             });
+
+                            notification.onclick = (e) => {
+                                e.preventDefault();
+                                window.focus();
+                                if (openChat) {
+                                    openChat({
+                                        email: chatData.lastSender,
+                                        name: senderName
+                                    });
+                                }
+                                notification.close();
+                            };
                         }
                     }
                 }
@@ -43,7 +55,7 @@ const useChatNotifications = () => {
         }
 
         return () => unsubscribe();
-    }, [currentUser]);
+    }, [currentUser, openChat]);
 };
 
 export default useChatNotifications;

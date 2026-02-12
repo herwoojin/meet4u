@@ -88,7 +88,7 @@ const WeeklyCalendar = () => {
                                     </div>
                                     <div className="flex items-center gap-1 text-xs text-gray-500 bg-white px-2 py-1 rounded border border-gray-200 ml-2 shrink-0">
                                         <Users size={12} />
-                                        <span>{meeting.attendeesList?.length || 0}</span>
+                                        <span>{Object.values(meeting.responses || {}).filter(r => r === 'attend').length}</span>
                                     </div>
                                 </div>
                             ))

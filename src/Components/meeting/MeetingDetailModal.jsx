@@ -5,10 +5,9 @@ import { deleteDoc, doc, updateDoc, collection, query, where, getDocs } from 'fi
 import { format, isValid } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
-import ChatModal from '../chat/ChatModal';
 
 const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
-    const { currentUser } = useAuth();
+    const { currentUser, openChat } = useAuth();
 
     if (!meeting) return null;
 
@@ -29,7 +28,6 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
     };
 
     const [selectedStatus, setSelectedStatus] = React.useState(null);
-    const [selectedChatUser, setSelectedChatUser] = React.useState(null);
 
     // Initialize selected status from existing response
     React.useEffect(() => {
@@ -279,7 +277,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                         className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-gray-100 shadow-sm hover:border-blue-200 transition-colors cursor-pointer group"
                                         onClick={() => {
                                             if (emailRaw !== currentUser?.email) {
-                                                setSelectedChatUser({ email: emailRaw, name: displayName });
+                                                openChat({ email: emailRaw, name: displayName });
                                             }
                                         }}
                                     >
@@ -385,13 +383,6 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                 </div>
             </div>
 
-            {selectedChatUser && (
-                <ChatModal
-                    targetUserEmail={selectedChatUser.email}
-                    targetUserName={selectedChatUser.name}
-                    onClose={() => setSelectedChatUser(null)}
-                />
-            )}
         </div>
     );
 };
