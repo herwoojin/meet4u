@@ -5,9 +5,10 @@ import { deleteDoc, doc, updateDoc, collection, query, where, getDocs } from 'fi
 import { format, isValid } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
+import CommentSection from './CommentSection';
 
 const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
-    const { currentUser, openChat } = useAuth();
+    const { currentUser } = useAuth();
 
     if (!meeting) return null;
 
@@ -274,12 +275,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                 return (
                                     <div
                                         key={idx}
-                                        className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-gray-100 shadow-sm hover:border-blue-200 transition-colors cursor-pointer group"
-                                        onClick={() => {
-                                            if (emailRaw !== currentUser?.email) {
-                                                openChat({ email: emailRaw, name: displayName });
-                                            }
-                                        }}
+                                        className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-gray-100 shadow-sm transition-colors"
                                     >
                                         <div className="flex items-center gap-3 overflow-hidden">
                                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-xs font-bold text-blue-700 border border-blue-100 shrink-0">
@@ -340,16 +336,15 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                             </button>
                         </div>
                     )}
-                </div>
 
-                {/* Footer Actions */}
-                <div className="p-4 border-t border-gray-100 flex justify-between bg-gray-50 items-center">
-                    <div className="flex gap-2">
+                    {/* Footer Actions (Moved inside content) */}
+                    <div className="pt-4 border-t border-gray-100 flex flex-col gap-4">
+                        {/* Action Buttons */}
                         {isCreator && (
-                            <>
+                            <div className="flex flex-wrap gap-2">
                                 <button
                                     onClick={() => onEdit(meeting)}
-                                    className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                                    className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm flex-1 justify-center"
                                 >
                                     <Edit size={16} className="text-gray-500" /> 수정
                                 </button>
@@ -357,32 +352,36 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                 {meeting.status !== 'completed' && (
                                     <button
                                         onClick={handleComplete}
-                                        className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-green-300 rounded-lg text-sm font-medium text-green-700 hover:bg-green-50 transition-colors shadow-sm"
+                                        className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-green-300 rounded-lg text-sm font-medium text-green-700 hover:bg-green-50 transition-colors shadow-sm flex-1 justify-center"
                                     >
                                         <Check size={16} /> 완료
                                     </button>
                                 )}
                                 <button
                                     onClick={handleDelete}
-                                    className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-red-200 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm"
+                                    className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-red-200 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm flex-1 justify-center"
                                 >
                                     <Trash2 size={16} /> 삭제
                                 </button>
-                            </>
+                            </div>
                         )}
-                    </div>
 
-                    <div className="flex gap-2">
+                        {/* Comment Section */}
+                        <CommentSection
+                            meetingId={meeting.id}
+                            currentUser={currentUser}
+                            attendees={Array.from(new Set([...(meeting.attendeesList || []), ...Object.keys(meeting.responses || {})]))}
+                        />
+
                         <button
                             onClick={onClose}
-                            className="flex items-center gap-1 px-5 py-2.5 bg-gray-900 border border-transparent rounded-lg text-sm font-bold text-white hover:bg-gray-800 transition-all shadow-md hover:shadow-lg"
+                            className="w-full py-3 bg-gray-100 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors mt-2"
                         >
                             닫기
                         </button>
                     </div>
                 </div>
             </div>
-
         </div>
     );
 };

@@ -8,7 +8,7 @@ import CalendarGrid from './Components/calendar/CalendarGrid';
 import ProfilePage from './Pages/Profile';
 import CreateMeeting from './Pages/CreateMeeting';
 import { Calendar, Home, LogOut, PlusCircle, Settings, Menu, X, MapPin } from 'lucide-react';
-import useChatNotifications from './hooks/useChatNotifications';
+import useCommentNotifications from './hooks/useCommentNotifications';
 import ChatModal from './Components/chat/ChatModal';
 
 const PrivateRoute = ({ children }) => {
@@ -35,7 +35,7 @@ const ProtectedLayout = () => {
     const { logout, currentUser, activeChatUser, closeChat, openChat } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
-    useChatNotifications(openChat);
+    useCommentNotifications();
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
