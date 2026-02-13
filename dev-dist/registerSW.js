@@ -1,1 +1,0 @@
-if('serviceWorker' in navigator) navigator.serviceWorker.register('/meet4u/dev-sw.js?dev-sw', { scope: '/meet4u/', type: 'classic' })

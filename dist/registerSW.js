@@ -1,1 +1,0 @@
-if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/meet4u/sw.js', { scope: '/meet4u/' })})}
