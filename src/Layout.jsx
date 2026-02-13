@@ -40,12 +40,13 @@ const ProtectedLayout = () => {
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
 
     return (
-        <div className="flex h-screen bg-gray-50 text-gray-900 overflow-hidden">
+        // Changed h-screen to min-h-screen and removed overflow-hidden to allow natural scrolling on mobile
+        <div className="flex flex-col md:flex-row min-h-screen bg-gray-50 text-gray-900">
             {/* Sidebar */}
             <aside className={`
                 fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out
                 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-                md:relative md:translate-x-0 md:flex md:flex-col
+                md:relative md:translate-x-0 md:flex md:flex-col md:h-screen md:sticky md:top-0
             `}>
                 <div className="p-6 border-b border-gray-200 flex justify-between items-center">
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -102,9 +103,9 @@ const ProtectedLayout = () => {
             )}
 
             {/* Main Content */}
-            <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
+            <div className="flex-1 flex flex-col min-h-screen bg-white">
                 {/* Mobile Header */}
-                <header className="bg-white p-4 border-b border-gray-200 flex items-center md:hidden">
+                <header className="bg-white p-4 border-b border-gray-200 flex items-center md:hidden sticky top-0 z-30">
                     <button onClick={toggleMobileMenu} className="text-gray-500 hover:text-gray-900 mr-4">
                         <Menu size={24} />
                     </button>
@@ -114,7 +115,7 @@ const ProtectedLayout = () => {
                     </h1>
                 </header>
 
-                <main className="flex-1 overflow-y-auto p-4 md:p-8">
+                <main className="flex-1 p-4 md:p-8">
                     <Routes>
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/calendar" element={<CalendarGrid />} />

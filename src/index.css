@@ -2,8 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
 body {
-  @apply bg-white text-gray-900;
-  margin: 0;
+  width: 100%;
   min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  /* Prevent horizontal scroll */
+  -webkit-overflow-scrolling: touch;
+  /* Smooth scrolling on iOS */
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: block;
 }
