@@ -5,7 +5,7 @@ import legacy from '@vitejs/plugin-legacy'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    base: '/', // Base URL for Vercel/Netlify deployment
+    base: './', // Relative base path for flexible deployment
     plugins: [
         react(),
         legacy({
