@@ -50,7 +50,7 @@ const MainLayout = ({ children }) => {
 
                 {/* Restored Footer */}
                 <footer className="text-center p-4 text-xs text-slate-500 bg-slate-50 border-t border-slate-100">
-                    Wooooo~ JINI
+                    Wooooo~ JINI (v2.0 - PWA Fix)
                 </footer>
             </div>
 
