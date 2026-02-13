@@ -30,10 +30,19 @@ export default defineConfig({
                         sizes: '512x512',
                         type: 'image/png'
                     }
-                ]
+                ],
+                start_url: '/',
+                scope: '/',
+                display: 'standalone'
             },
             devOptions: {
-                enabled: true
+                enabled: false // Disable SW in dev to prevent caching issues
+            },
+            workbox: {
+                cleanupOutdatedCaches: true,
+                skipWaiting: true,
+                clientsClaim: true,
+                globPatterns: ['**/*.{js,css,html,ico,png,svg}']
             }
         })
     ],
