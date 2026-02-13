@@ -1,0 +1,51 @@
+import React from "react";
+import { format, addMonths, subMonths } from "date-fns";
+import { ko } from "date-fns/locale";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+
+export default function CalendarHeader({ currentDate, onDateChange }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <div className="flex items-center gap-4">
+        <h1 className="text-2xl font-bold text-slate-900">
+          {format(currentDate, "yyyy년 M월", { locale: ko })}
+        </h1>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onDateChange(subMonths(currentDate, 1))}
+            className="h-8 w-8 hover:bg-slate-100"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onDateChange(addMonths(currentDate, 1))}
+            className="h-8 w-8 hover:bg-slate-100"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => onDateChange(new Date())}
+          className="text-sm"
+        >
+          오늘
+        </Button>
+      </div>
+      
+      <Link to={createPageUrl("CreateMeeting")}>
+        <Button className="bg-slate-900 hover:bg-slate-800 text-white shadow-sm">
+          <Plus className="w-4 h-4 mr-2" />
+          미팅 생성
+        </Button>
+      </Link>
+    </div>
+  );
+}

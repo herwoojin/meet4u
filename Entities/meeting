@@ -1,0 +1,98 @@
+{
+  "name": "Meeting",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "미팅 제목"
+    },
+    "description": {
+      "type": "string",
+      "description": "미팅 설명"
+    },
+    "start_datetime": {
+      "type": "string",
+      "format": "date-time",
+      "description": "미팅 시작 시간"
+    },
+    "end_datetime": {
+      "type": "string",
+      "format": "date-time",
+      "description": "미팅 종료 시간"
+    },
+    "location": {
+      "type": "string",
+      "description": "미팅 장소"
+    },
+    "attendees": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "참석자 이메일 목록"
+    },
+    "responses": {
+      "type": "object",
+      "description": "참석자별 실시간 응답 상태",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "attending",
+              "not_attending",
+              "maybe"
+            ],
+            "description": "참석 여부"
+          },
+          "responded_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "응답 시간"
+          }
+        }
+      }
+    },
+    "meeting_type": {
+      "type": "string",
+      "enum": [
+        "online",
+        "offline",
+        "hybrid"
+      ],
+      "default": "online",
+      "description": "미팅 형태"
+    },
+    "is_cancelled": {
+      "type": "boolean",
+      "default": false,
+      "description": "미팅 취소 여부"
+    }
+  },
+  "required": [
+    "title",
+    "start_datetime",
+    "end_datetime"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "attendees": "{{user.email}}"
+        },
+        {
+          "responses.{{user.email}}": {
+            "$exists": true
+          }
+        }
+      ]
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

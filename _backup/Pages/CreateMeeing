@@ -1,0 +1,97 @@
+import React, { useState, useEffect } from "react";
+import { Meeting } from "@/entities/Meeting";
+import { User } from "@/entities/User";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import MeetingForm from "../components/meeting/MeetingForm";
+
+export default function CreateMeeting() {
+  const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState(null);
+  const [initialMeetingData, setInitialMeetingData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        const user = await User.me();
+        setCurrentUser(user);
+        
+        const params = new URLSearchParams(window.location.search);
+        const editId = params.get('edit');
+        const selectedDate = params.get('date');
+
+        if (editId) {
+          const meetingToEdit = (await Meeting.list()).find(m => m.id === editId);
+          if (meetingToEdit && meetingToEdit.created_by === user.email) {
+            setInitialMeetingData(meetingToEdit);
+          } else {
+            navigate(createPageUrl("Dashboard")); // No permission or not found
+          }
+        } else {
+          const defaultAttendees = user ? [user.email] : [];
+          const defaultStart = selectedDate ? new Date(`${selectedDate}T09:00:00`) : new Date();
+          const defaultEnd = new Date(defaultStart.getTime() + 60 * 60 * 1000);
+          
+          setInitialMeetingData({
+            attendees: defaultAttendees,
+            start_datetime: defaultStart.toISOString(),
+            end_datetime: defaultEnd.toISOString()
+          });
+        }
+      } catch (error) {
+        navigate(createPageUrl("Dashboard"));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadInitialData();
+  }, [navigate]);
+
+  const handleSubmit = async (meetingData) => {
+    if (!currentUser) return;
+    
+    setIsSubmitting(true);
+    try {
+      // Ensure creator is an attendee
+      const attendees = [...new Set([...meetingData.attendees, currentUser.email])];
+      const dataToSave = { ...meetingData, attendees };
+
+      if (initialMeetingData?.id) {
+        await Meeting.update(initialMeetingData.id, dataToSave);
+      } else {
+        await Meeting.create(dataToSave);
+      }
+      navigate(createPageUrl("Dashboard"));
+    } catch (error) {
+      console.error("Error saving meeting:", error);
+      alert("미팅 저장 중 오류가 발생했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoading) {
+    return <div className="h-full flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin" /></div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center gap-4 mb-8">
+          <Button variant="ghost" size="icon" onClick={() => navigate(createPageUrl("Dashboard"))}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">{initialMeetingData?.id ? "미팅 수정" : "새 미팅 생성"}</h1>
+            <p className="text-slate-600 mt-1">팀원들과 효율적인 미팅을 계획하세요</p>
+          </div>
+        </div>
+        <MeetingForm meeting={initialMeetingData} onSubmit={handleSubmit} onCancel={() => navigate(createPageUrl("Dashboard"))} isSubmitting={isSubmitting} />
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,171 @@
+
+import React, { useState, useEffect, useCallback } from "react";
+import { Meeting } from "@/entities/Meeting";
+import { User } from "@/entities/User";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import CalendarHeader from "../components/calendar/CalendarHeader";
+import CalendarGrid from "../components/calendar/CalendarGrid";
+import MeetingModal from "../components/meeting/MeetingModal";
+import { Loader2 } from "lucide-react";
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [meetings, setMeetings] = useState([]);
+  const [userMap, setUserMap] = useState(new Map());
+  const [selectedMeeting, setSelectedMeeting] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  const loadUserAndData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const userData = await User.me();
+      
+      // 새 사용자가 처음 로그인했을 때 닉네임이 없으면 기본값 설정
+      if (userData && !userData.nickname) {
+        try {
+          const defaultNickname = userData.full_name || userData.email.split('@')[0];
+          await User.updateMyUserData({ nickname: defaultNickname });
+          const updatedUser = await User.me();
+          setCurrentUser(updatedUser);
+        } catch (error) {
+          console.error("Error setting default nickname:", error);
+          setCurrentUser(userData);
+        }
+      } else {
+        setCurrentUser(userData);
+      }
+
+      // 사용자 정보를 받은 후 미팅 데이터 로드
+      await refreshData();
+
+    } catch (error) {
+      // 로그인되어 있지 않으면 시스템 로그인 페이지로 리디렉션
+      User.loginWithRedirect(window.location.origin + createPageUrl("Dashboard"));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [navigate]);
+  
+  const refreshData = useCallback(async () => {
+    try {
+      const [meetingsData, usersData] = await Promise.all([
+        Meeting.list("-start_datetime"),
+        User.list()
+      ]);
+      
+      setMeetings(meetingsData);
+      setUserMap(new Map(usersData.map(u => [u.email, u])));
+    } catch (error) {
+      console.error("Error loading data:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadUserAndData();
+    
+    // 5분마다 데이터 새로고침
+    const interval = setInterval(() => {
+        // 사용자가 로그인 되어 있을 때만 데이터 새로고침
+        if (User.me()) {
+            refreshData();
+        }
+    }, 300000);
+    return () => clearInterval(interval);
+  }, [loadUserAndData]);
+
+  const handleDateClick = (date) => {
+    const dateString = date.toISOString().split('T')[0];
+    navigate(createPageUrl(`CreateMeeting?date=${dateString}`));
+  };
+
+  const handleMeetingClick = (meeting) => {
+    setSelectedMeeting(meeting);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedMeeting(null);
+    setIsModalOpen(false);
+  };
+
+  const handleEditMeeting = () => {
+    if (selectedMeeting) {
+      navigate(createPageUrl(`CreateMeeting?edit=${selectedMeeting.id}`));
+    }
+  };
+
+  const handleDeleteMeeting = async () => {
+    if (selectedMeeting && window.confirm("정말로 이 미팅을 완전히 삭제하시겠습니까?")) {
+      try {
+        await Meeting.delete(selectedMeeting.id);
+        setIsModalOpen(false);
+        setSelectedMeeting(null);
+        await refreshData();
+      } catch (error) {
+        console.error("Error deleting meeting:", error);
+        alert("미팅 삭제 중 오류가 발생했습니다.");
+      }
+    }
+  };
+  
+  const handleDataChange = useCallback(async () => {
+    await refreshData();
+    if (selectedMeeting) {
+      const freshMeetingData = await Meeting.list();
+      const updatedMeeting = freshMeetingData.find(m => m.id === selectedMeeting.id);
+      setSelectedMeeting(updatedMeeting || null);
+      if (!updatedMeeting) {
+        setIsModalOpen(false);
+      }
+    }
+  }, [refreshData, selectedMeeting]);
+
+  if (isLoading || !currentUser) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-slate-500 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 md:p-8 min-h-screen bg-slate-50">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">
+            안녕하세요, {currentUser?.nickname || currentUser?.full_name || "사용자"}님!
+          </h1>
+          <p className="text-slate-600">오늘의 약속을 확인하고 관리하세요.</p>
+        </div>
+
+        <CalendarHeader currentDate={currentDate} onDateChange={setCurrentDate} />
+        
+        <CalendarGrid
+          currentDate={currentDate}
+          meetings={meetings}
+          onDateClick={handleDateClick}
+          onMeetingClick={handleMeetingClick}
+          currentUser={currentUser}
+          userMap={userMap}
+        />
+
+        {selectedMeeting && (
+            <MeetingModal
+                meeting={selectedMeeting}
+                isOpen={isModalOpen}
+                userMap={userMap}
+                onClose={handleCloseModal}
+                onEdit={handleEditMeeting}
+                onDelete={handleDeleteMeeting}
+                onDataChange={handleDataChange}
+                currentUser={currentUser}
+            />
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,102 @@
+import React, { useState, useEffect } from 'react';
+import { User } from '@/entities/User';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
+
+export default function ProfilePage() {
+  const navigate = useNavigate();
+  const [user, setUser] = useState(null);
+  const [nickname, setNickname] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const currentUser = await User.me();
+        setUser(currentUser);
+        setNickname(currentUser.nickname || '');
+      } catch (error) {
+        console.error("Failed to fetch user", error);
+        navigate(createPageUrl("Dashboard"));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchUser();
+  }, [navigate]);
+
+  const handleSave = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    try {
+      await User.updateMyUserData({ nickname });
+      alert('프로필이 성공적으로 저장되었습니다.');
+    } catch (error) {
+      console.error("Failed to save profile", error);
+      alert('프로필 저장에 실패했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 md:p-8 bg-slate-50 min-h-screen">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center gap-4 mb-8">
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate(createPageUrl("Dashboard"))}
+            >
+                <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">프로필 설정</h1>
+        </div>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>닉네임 변경</CardTitle>
+            <CardDescription>다른 사용자에게 표시될 닉네임을 설정하세요.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="nickname">닉네임</Label>
+              <Input
+                id="nickname"
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="사용할 닉네임을 입력하세요"
+                maxLength="20"
+              />
+            </div>
+            <div className="space-y-2 mt-4">
+              <Label htmlFor="email">이메일</Label>
+              <Input id="email" type="email" value={user.email} disabled />
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={handleSave} disabled={isSaving}>
+              {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              저장
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    </div>
+  );
+}
