@@ -5,7 +5,7 @@ import legacy from '@vitejs/plugin-legacy'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    base: '/meet4u/', // Base URL for GitHub Pages deployment
+    base: '/', // Base URL for Vercel/Netlify deployment
     plugins: [
         react(),
         legacy({
