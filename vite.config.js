@@ -5,7 +5,7 @@ import legacy from '@vitejs/plugin-legacy'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    base: './', // Relative base path for flexible deployment
+    base: '/', // Absolute base path for root deployment
     plugins: [
         react(),
         legacy({
