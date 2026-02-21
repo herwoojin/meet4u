@@ -55,7 +55,9 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                 senderEmail: currentUser.email,
                 senderName: currentUser.displayName || currentUser.email.split('@')[0],
                 timestamp: serverTimestamp(),
-                recipients: attendees.filter(email => email && typeof email === 'string') // Ensure valid strings
+                recipients: attendees
+                    .filter(email => email && typeof email === 'string')
+                    .map(email => email.toLowerCase())
             });
             setNewComment('');
         } catch (error) {
