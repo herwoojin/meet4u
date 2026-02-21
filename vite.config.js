@@ -49,7 +49,21 @@ export default defineConfig({
                 cleanupOutdatedCaches: true,
                 skipWaiting: true,
                 clientsClaim: true,
-                globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+                globPatterns: ['**/*.{html,ico,png,svg}'],
+                runtimeCaching: [
+                    {
+                        urlPattern: /\.(?:js|css)$/,
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'assets-cache',
+                            expiration: {
+                                maxEntries: 50,
+                                maxAgeSeconds: 60 * 60, // 1 hour
+                            },
+                        },
+                    },
+                ],
+                navigateFallback: 'index.html',
             }
         })
     ],

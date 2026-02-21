@@ -5,15 +5,18 @@ import './index.css'
 import { HashRouter } from 'react-router-dom'
 import ErrorBoundary from './Components/ErrorBoundary';
 
-// Register service worker for push notifications (mobile + Chrome compatibility)
+// Force update: clear old caches so mobile gets the latest code
+if ('caches' in window) {
+    caches.keys().then(names => {
+        names.forEach(name => caches.delete(name));
+    });
+}
+
+// Ensure service workers update immediately
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/firebase-messaging-sw.js')
-        .then((registration) => {
-            console.log('Service Worker registered:', registration.scope);
-        })
-        .catch((error) => {
-            console.error('Service Worker registration failed:', error);
-        });
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+        registrations.forEach(reg => reg.update());
+    });
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
