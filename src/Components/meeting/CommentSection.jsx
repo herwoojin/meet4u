@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../lib/firebase';
-import { collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
-import { Send, MessageSquare, Trash2 } from 'lucide-react';
+import { collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { Send, MessageSquare, Trash2, CheckCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
@@ -10,6 +10,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
     const [newComment, setNewComment] = useState('');
     const [loading, setLoading] = useState(true);
     const commentsEndRef = useRef(null);
+    const markedAsRead = useRef(new Set());
 
     useEffect(() => {
         if (!meetingId) return;
@@ -17,13 +18,12 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         const q = query(
             collection(db, 'comments'),
             where('meetingId', '==', meetingId)
-            // orderBy('timestamp', 'asc') // Removed to avoid composite index requirement
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const loadedComments = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
+            const loadedComments = snapshot.docs.map(d => ({
+                id: d.id,
+                ...d.data()
             })).sort((a, b) => {
                 const t1 = a.timestamp?.toMillis() || 0;
                 const t2 = b.timestamp?.toMillis() || 0;
@@ -32,13 +32,28 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
             setComments(loadedComments);
             setLoading(false);
             scrollToBottom();
+
+            // Mark all comments as read by current user
+            if (currentUser?.email) {
+                loadedComments.forEach(comment => {
+                    if (comment.senderEmail !== currentUser.email && !markedAsRead.current.has(comment.id)) {
+                        const readBy = comment.readBy || [];
+                        if (!readBy.includes(currentUser.email.toLowerCase())) {
+                            markedAsRead.current.add(comment.id);
+                            updateDoc(doc(db, 'comments', comment.id), {
+                                readBy: arrayUnion(currentUser.email.toLowerCase())
+                            }).catch(() => { });
+                        }
+                    }
+                });
+            }
         }, (error) => {
             console.error("Error fetching comments:", error);
             setLoading(false);
         });
 
         return () => unsubscribe();
-    }, [meetingId]);
+    }, [meetingId, currentUser]);
 
     const scrollToBottom = () => {
         commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -55,6 +70,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                 senderEmail: currentUser.email,
                 senderName: currentUser.displayName || currentUser.email.split('@')[0],
                 timestamp: serverTimestamp(),
+                readBy: [currentUser.email.toLowerCase()], // Author has read their own comment
                 recipients: attendees
                     .filter(email => email && typeof email === 'string')
                     .map(email => email.toLowerCase())
@@ -76,6 +92,32 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         }
     };
 
+    // Get unique commenters (other than me) for read receipt calculation
+    const getOtherCommenters = () => {
+        const commenters = new Set();
+        comments.forEach(c => {
+            if (c.senderEmail && c.senderEmail !== currentUser?.email) {
+                commenters.add(c.senderEmail.toLowerCase());
+            }
+        });
+        return commenters;
+    };
+
+    // Get read status for a comment written by the current user
+    const getReadStatus = (comment) => {
+        const readBy = (comment.readBy || []).map(e => e.toLowerCase());
+        const otherCommenters = getOtherCommenters();
+
+        if (otherCommenters.size === 0) return null; // No other commenters
+
+        // Filter to only commenters who have read this
+        const readCommenters = [...otherCommenters].filter(email => readBy.includes(email));
+
+        if (readCommenters.length === 0) return null; // No one has read
+        if (readCommenters.length >= otherCommenters.size) return 'all'; // Everyone read
+        return 'some'; // Some have read
+    };
+
     return (
         <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex flex-col h-80">
             <div className="flex items-center gap-2 mb-4 text-gray-900 font-bold border-b border-gray-200 pb-2">
@@ -90,6 +132,8 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                 )}
                 {comments.map((comment) => {
                     const isMe = comment.senderEmail === currentUser?.email;
+                    const readStatus = isMe ? getReadStatus(comment) : null;
+
                     return (
                         <div key={comment.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                             <div className="flex items-center gap-2 mb-1">
@@ -113,6 +157,14 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                                 }`}>
                                 {comment.text}
                             </div>
+                            {/* Read Receipt */}
+                            {isMe && readStatus && (
+                                <div className={`flex items-center gap-1 mt-1 text-[10px] ${readStatus === 'all' ? 'text-blue-500' : 'text-gray-400'
+                                    }`}>
+                                    <CheckCheck size={12} />
+                                    <span>{readStatus === 'all' ? '모두 읽음' : '읽음'}</span>
+                                </div>
+                            )}
                         </div>
                     );
                 })}
