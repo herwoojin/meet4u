@@ -32,7 +32,7 @@ const useCommentNotifications = () => {
                         const senderName = commentData.senderName || 'Anonymous';
 
                         if (Notification.permission === 'granted') {
-                            const notification = new Notification(`New comment from ${senderName}`, {
+                            const notification = new Notification(`${senderName}님의 새 댓글`, {
                                 body: commentData.text,
                                 icon: '/pwa-192x192.png'
                             });

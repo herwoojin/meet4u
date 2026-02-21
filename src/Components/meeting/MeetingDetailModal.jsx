@@ -413,7 +413,10 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                         <CommentSection
                             meetingId={meeting.id}
                             currentUser={currentUser}
-                            attendees={Array.from(new Set([...(meeting.attendeesList || []), ...Object.keys(meeting.responses || {}).map(k => unsanitizeEmail(k))]))}
+                            attendees={Object.entries(meeting.responses || {})
+                                .filter(([, status]) => status === 'attend')
+                                .map(([key]) => unsanitizeEmail(key))
+                            }
                         />
 
                         <button
