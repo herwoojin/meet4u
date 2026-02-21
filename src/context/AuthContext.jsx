@@ -10,6 +10,10 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState(() => {
+        // Check sessionStorage for admin session on init
+        return sessionStorage.getItem('meet4u_admin') === 'true';
+    });
     const [activeChatUser, setActiveChatUser] = useState(null); // { email, name }
 
     const openChat = (user) => {
@@ -25,7 +29,24 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
+        sessionStorage.removeItem('meet4u_admin');
+        setIsAdmin(false);
         return signOut(auth);
+    };
+
+    // Admin login with hardcoded credentials
+    const adminLogin = (id, password) => {
+        if (id === 'admin' && password === 'admin1234') {
+            sessionStorage.setItem('meet4u_admin', 'true');
+            setIsAdmin(true);
+            return true;
+        }
+        return false;
+    };
+
+    const adminLogout = () => {
+        sessionStorage.removeItem('meet4u_admin');
+        setIsAdmin(false);
     };
 
     useEffect(() => {
@@ -45,11 +66,19 @@ export const AuthProvider = ({ children }) => {
                             email: user.email,
                             displayName: user.displayName,
                             photoURL: user.photoURL,
+                            role: 'user',
                             createdAt: new Date().toISOString(),
                             lastSeen: new Date().toISOString(),
                             emailSanitized: user.email.replace(/\./g, '_')
                         });
+                        setIsAdmin(false);
                     } else {
+                        // Check user role from Firestore (or keep sessionStorage admin)
+                        const userData = userSnapshot.data();
+                        if (userData.role === 'admin') {
+                            setIsAdmin(true);
+                        }
+                        // Note: sessionStorage admin status is preserved via useState init
                         // Only update lastSeen and photoURL (if changed) to avoid overwriting custom displayName
                         await setDoc(userDocRef, {
                             lastSeen: new Date().toISOString(),
@@ -72,6 +101,9 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         loading,
+        isAdmin,
+        adminLogin,
+        adminLogout,
         activeChatUser,
         openChat,
         closeChat

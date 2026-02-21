@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Calendar, Home, LogOut, PlusCircle, Settings, X, MapPin } from 'lucide-react';
+import { Calendar, Home, LogOut, PlusCircle, Settings, X, MapPin, Shield } from 'lucide-react';
 
 const SidebarItem = ({ to, icon: Icon, label, onClick }) => {
     const location = useLocation();
@@ -19,7 +19,7 @@ const SidebarItem = ({ to, icon: Icon, label, onClick }) => {
 };
 
 const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
-    const { logout, currentUser } = useAuth();
+    const { logout, currentUser, isAdmin } = useAuth();
 
     return (
         <aside className={`
@@ -43,6 +43,7 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
                 <SidebarItem to="/schedule" icon={PlusCircle} label="미팅 생성" onClick={closeMobileMenu} />
                 <div className="pt-4 mt-4 border-t border-gray-200">
                     <SidebarItem to="/profile" icon={Settings} label="설정" onClick={closeMobileMenu} />
+                    <SidebarItem to="/admin" icon={Shield} label="관리자" onClick={closeMobileMenu} />
                     <a
                         href="https://whereurl.com/"
                         target="_blank"

@@ -9,7 +9,7 @@ import MeetingDetailModal from '../meeting/MeetingDetailModal';
 import { useNavigate } from 'react-router-dom';
 
 const WeeklyCalendar = () => {
-    const { currentUser } = useAuth();
+    const { currentUser, isAdmin } = useAuth();
     const navigate = useNavigate();
     const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 })); // Monday start
     const [meetings, setMeetings] = useState([]);
@@ -35,7 +35,9 @@ const WeeklyCalendar = () => {
     }, [currentUser]);
 
     const getMeetingsForDate = (date) => {
-        return meetings.filter(meeting => meeting.date === format(date, 'yyyy-MM-dd'));
+        return meetings
+            .filter(meeting => !meeting.hidden || isAdmin)
+            .filter(meeting => meeting.date === format(date, 'yyyy-MM-dd'));
     };
 
     const handleEditMeeting = (meeting) => {

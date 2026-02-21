@@ -7,6 +7,7 @@ import MeetingForm from './Components/meeting/MeetingForm';
 import CalendarGrid from './Components/calendar/CalendarGrid';
 import ProfilePage from './Pages/Profile';
 import CreateMeeting from './Pages/CreateMeeting';
+import AdminPage from './Pages/AdminPage';
 import MainLayout from './Components/layout/MainLayout';
 
 const PrivateRoute = ({ children }) => {
@@ -28,6 +29,7 @@ const App = () => {
                                 <Route path="/schedule" element={<MeetingForm />} />
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/create-meeting" element={<CreateMeeting />} />
+                                <Route path="/admin" element={<AdminPage />} />
                                 <Route path="/settings" element={<div className="text-center p-10 text-gray-500">설정 (준비 중)</div>} />
                             </Routes>
                         </MainLayout>

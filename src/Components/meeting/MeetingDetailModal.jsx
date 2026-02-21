@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Clock, Users, Trash2, Edit, Check, HelpCircle, XCircle, AlignLeft } from 'lucide-react';
+import { X, Clock, Users, Trash2, Edit, Check, HelpCircle, XCircle, AlignLeft, EyeOff, Eye } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { deleteDoc, doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { format, isValid } from 'date-fns';
@@ -19,7 +19,7 @@ const unsanitizeEmail = (key) => {
 };
 
 const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
-    const { currentUser } = useAuth();
+    const { currentUser, isAdmin } = useAuth();
 
     if (!meeting) return null;
 
@@ -27,15 +27,13 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
     const responses = meeting.responses || {};
 
     const handleDelete = async () => {
-        if (!isCreator) return;
-        if (window.confirm('정말 이 미팅을 삭제하시겠습니까?')) {
-            try {
-                await deleteDoc(doc(db, "meetings", meeting.id));
-                onClose();
-            } catch (error) {
-                console.error("Error deleting meeting:", error);
-                alert("삭제 중 오류가 발생했습니다.");
-            }
+        if (!isCreator && !isAdmin) return;
+        try {
+            await deleteDoc(doc(db, "meetings", meeting.id));
+            onClose();
+        } catch (error) {
+            console.error("Error deleting meeting:", error);
+            alert("삭제 중 오류가 발생했습니다.");
         }
     };
 
@@ -184,17 +182,15 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
     };
 
     const handleComplete = async () => {
-        if (!isCreator) return;
-        if (window.confirm('이 미팅을 완료 상태로 변경하시겠습니까?')) {
-            try {
-                await updateDoc(doc(db, "meetings", meeting.id), {
-                    status: 'completed'
-                });
-                onClose();
-            } catch (error) {
-                console.error("Error completing meeting:", error);
-                alert("상태 변경 중 오류가 발생했습니다.");
-            }
+        if (!isCreator && !isAdmin) return;
+        try {
+            await updateDoc(doc(db, "meetings", meeting.id), {
+                status: 'completed'
+            });
+            onClose();
+        } catch (error) {
+            console.error("Error completing meeting:", error);
+            alert("상태 변경 중 오류가 발생했습니다.");
         }
     };
 
@@ -203,6 +199,19 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
         return displayString && displayString.length > 0 ? displayString[0].toUpperCase() : "?";
     }
 
+    const handleToggleHide = async () => {
+        if (!isCreator && !isAdmin) return;
+        const newHidden = !meeting.hidden;
+        try {
+            await updateDoc(doc(db, "meetings", meeting.id), {
+                hidden: newHidden
+            });
+            onClose();
+        } catch (error) {
+            console.error("Error toggling hide:", error);
+            alert("상태 변경 중 오류가 발생했습니다.");
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 animate-fade-in" onClick={onClose}>
@@ -214,6 +223,9 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                             <h2 className="text-xl font-bold text-gray-900">{meeting.title}</h2>
                             {meeting.status === 'completed' && (
                                 <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full border border-red-200 font-bold">완료됨</span>
+                            )}
+                            {meeting.hidden && (
+                                <span className="bg-yellow-100 text-yellow-700 text-xs px-2 py-0.5 rounded-full border border-yellow-200 font-bold">숨김</span>
                             )}
                         </div>
                         <div className="flex items-center text-gray-500 mt-2 text-sm">
@@ -360,7 +372,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     {/* Footer Actions (Moved inside content) */}
                     <div className="pt-4 border-t border-gray-100 flex flex-col gap-4">
                         {/* Action Buttons */}
-                        {isCreator && (
+                        {(isCreator || isAdmin) && (
                             <div className="flex flex-wrap gap-2">
                                 <button
                                     onClick={() => onEdit(meeting)}
@@ -377,6 +389,17 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                         <Check size={16} /> 완료
                                     </button>
                                 )}
+                                {/* Hide/Show Button */}
+                                <button
+                                    onClick={handleToggleHide}
+                                    className={`flex items-center gap-1.5 px-4 py-2.5 bg-white border rounded-lg text-sm font-medium transition-colors shadow-sm flex-1 justify-center ${meeting.hidden
+                                        ? 'border-blue-300 text-blue-600 hover:bg-blue-50'
+                                        : 'border-yellow-300 text-yellow-700 hover:bg-yellow-50'
+                                        }`}
+                                >
+                                    {meeting.hidden ? <Eye size={16} /> : <EyeOff size={16} />}
+                                    {meeting.hidden ? '표시' : '숨기기'}
+                                </button>
                                 <button
                                     onClick={handleDelete}
                                     className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-red-200 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm flex-1 justify-center"

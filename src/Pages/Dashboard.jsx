@@ -56,7 +56,7 @@ const MeetingCard = ({ title, time, attendees, status, onJoin }) => (
 )
 
 const Dashboard = () => {
-    const { currentUser } = useAuth();
+    const { currentUser, isAdmin } = useAuth();
     const navigate = useNavigate();
     const [meetings, setMeetings] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -94,7 +94,9 @@ const Dashboard = () => {
         return () => unsubscribe();
     }, [currentUser]);
 
-    const upcomingMeetings = meetings.filter(m => {
+    const visibleMeetings = meetings.filter(m => !m.hidden || isAdmin);
+
+    const upcomingMeetings = visibleMeetings.filter(m => {
         // Simple client-side filtering for upcoming
         const meetingDate = new Date(m.date + 'T' + m.startTime);
         return meetingDate >= new Date();
@@ -160,7 +162,7 @@ const Dashboard = () => {
                         <div className="space-y-4">
                             {loading ? (
                                 <p className="text-gray-400">일정을 불러오는 중...</p>
-                            ) : meetings.filter(m => {
+                            ) : visibleMeetings.filter(m => {
                                 const meetingDate = new Date(m.date + 'T' + m.startTime);
                                 return meetingDate < new Date() || m.status === 'completed';
                             }).length === 0 ? (
@@ -168,7 +170,7 @@ const Dashboard = () => {
                                     <p className="text-gray-400 text-sm">완료된 미팅이 없습니다.</p>
                                 </div>
                             ) : (
-                                meetings.filter(m => {
+                                visibleMeetings.filter(m => {
                                     const meetingDate = new Date(m.date + 'T' + m.startTime);
                                     return meetingDate < new Date() || m.status === 'completed';
                                 }).map(meeting => (

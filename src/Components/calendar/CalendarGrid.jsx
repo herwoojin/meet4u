@@ -9,7 +9,7 @@ import MeetingDetailModal from '../meeting/MeetingDetailModal';
 import { useNavigate } from 'react-router-dom';
 
 const CalendarGrid = () => {
-    const { currentUser } = useAuth();
+    const { currentUser, isAdmin } = useAuth();
     const navigate = useNavigate();
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -67,7 +67,9 @@ const CalendarGrid = () => {
 
 
     const getMeetingsForDate = (date) => {
-        return meetings.filter(meeting => meeting.date === format(date, 'yyyy-MM-dd'));
+        return meetings
+            .filter(meeting => !meeting.hidden || isAdmin)
+            .filter(meeting => meeting.date === format(date, 'yyyy-MM-dd'));
     };
 
     const renderHeader = () => {
