@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import Login from './Components/Login';
 import Dashboard from './Pages/Dashboard';
 import MeetingForm from './Components/meeting/MeetingForm';
@@ -18,24 +19,26 @@ const PrivateRoute = ({ children }) => {
 const App = () => {
     return (
         <AuthProvider>
-            <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/*" element={
-                    <PrivateRoute>
-                        <MainLayout>
-                            <Routes>
-                                <Route path="/" element={<Dashboard />} />
-                                <Route path="/calendar" element={<CalendarGrid />} />
-                                <Route path="/schedule" element={<MeetingForm />} />
-                                <Route path="/profile" element={<ProfilePage />} />
-                                <Route path="/create-meeting" element={<CreateMeeting />} />
-                                <Route path="/admin" element={<AdminPage />} />
-                                <Route path="/settings" element={<div className="text-center p-10 text-gray-500">설정 (준비 중)</div>} />
-                            </Routes>
-                        </MainLayout>
-                    </PrivateRoute>
-                } />
-            </Routes>
+            <ToastProvider>
+                <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/*" element={
+                        <PrivateRoute>
+                            <MainLayout>
+                                <Routes>
+                                    <Route path="/" element={<Dashboard />} />
+                                    <Route path="/calendar" element={<CalendarGrid />} />
+                                    <Route path="/schedule" element={<MeetingForm />} />
+                                    <Route path="/profile" element={<ProfilePage />} />
+                                    <Route path="/create-meeting" element={<CreateMeeting />} />
+                                    <Route path="/admin" element={<AdminPage />} />
+                                    <Route path="/settings" element={<div className="text-center p-10 text-gray-500">설정 (준비 중)</div>} />
+                                </Routes>
+                            </MainLayout>
+                        </PrivateRoute>
+                    } />
+                </Routes>
+            </ToastProvider>
         </AuthProvider>
     );
 };

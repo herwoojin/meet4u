@@ -1,10 +1,12 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const useCommentNotifications = () => {
     const { currentUser } = useAuth();
+    const toast = useToast();
     const isFirstRun = useRef(true);
     const knownIds = useRef(new Set());
 
@@ -13,7 +15,6 @@ const useCommentNotifications = () => {
 
         const userEmail = currentUser.email.toLowerCase();
 
-        // Query comments where current user is in recipients list
         const q = query(
             collection(db, 'comments'),
             where('recipients', 'array-contains', userEmail)
@@ -35,75 +36,58 @@ const useCommentNotifications = () => {
                     // Only notify if the sender is NOT the current user
                     if (commentData.senderEmail?.toLowerCase() !== userEmail) {
                         const senderName = commentData.senderName || '알 수 없음';
-                        const title = `${senderName}님의 새 댓글`;
-                        const options = {
-                            body: commentData.text || '',
-                            icon: '/pwa-192x192.png',
-                            badge: '/pwa-192x192.png',
-                            tag: `comment-${change.doc.id}`,
-                            renotify: true,
-                        };
 
-                        sendNotification(title, options);
+                        // In-app toast notification (always works)
+                        if (toast?.addToast) {
+                            toast.addToast(commentData.text || '', {
+                                title: `💬 ${senderName}님의 새 댓글`,
+                                duration: 5000,
+                            });
+                        }
+
+                        // Also try browser notification (bonus, may not work on all platforms)
+                        sendBrowserNotification(
+                            `${senderName}님의 새 댓글`,
+                            {
+                                body: commentData.text || '',
+                                icon: '/pwa-192x192.png',
+                                badge: '/pwa-192x192.png',
+                                tag: `comment-${change.doc.id}`,
+                                renotify: true,
+                            }
+                        );
                     }
                 }
             });
         });
 
         return () => unsubscribe();
-    }, [currentUser]);
+    }, [currentUser, toast]);
 };
 
-// Send notification using the best available method
-async function sendNotification(title, options) {
-    // Check if Notification API is available
-    if (!('Notification' in window)) {
-        console.warn('This browser does not support notifications');
-        return;
-    }
+// Browser notification (best-effort, may not work on mobile)
+async function sendBrowserNotification(title, options) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
-    // If permission not granted, skip silently
-    if (Notification.permission !== 'granted') {
-        console.log('Notification permission not granted:', Notification.permission);
-        return;
-    }
-
-    // Method 1: Try Service Worker showNotification (works on Chrome + mobile)
-    if ('serviceWorker' in navigator) {
-        try {
-            const registration = await navigator.serviceWorker.ready;
+    try {
+        const registration = await navigator.serviceWorker?.ready;
+        if (registration) {
             await registration.showNotification(title, options);
             return;
-        } catch (e) {
-            console.warn('SW showNotification failed, trying fallback:', e);
         }
-    }
+    } catch (e) { /* fallthrough */ }
 
-    // Method 2: Fallback to Notification constructor (desktop Safari)
     try {
-        const notification = new Notification(title, options);
-        notification.onclick = () => {
-            window.focus();
-            notification.close();
-        };
-    } catch (e) {
-        console.error('All notification methods failed:', e);
-    }
+        new Notification(title, options);
+    } catch (e) { /* ignore */ }
 }
 
-// Export a helper to request permission (must be called from a user gesture like button click)
+// Export permission helper
 export const requestNotificationPermission = async () => {
-    if (!('Notification' in window)) {
-        return 'unsupported';
-    }
-    if (Notification.permission === 'granted') {
-        return 'granted';
-    }
-    if (Notification.permission === 'denied') {
-        return 'denied';
-    }
-    const result = await Notification.requestPermission();
-    return result;
+    if (!('Notification' in window)) return 'unsupported';
+    if (Notification.permission === 'granted') return 'granted';
+    if (Notification.permission === 'denied') return 'denied';
+    return await Notification.requestPermission();
 };
 
 export default useCommentNotifications;
