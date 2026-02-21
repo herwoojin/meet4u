@@ -7,6 +7,17 @@ import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from './CommentSection';
 
+// Helper: convert sanitized email key (dots→underscores) back to real email
+const unsanitizeEmail = (key) => {
+    if (!key) return key;
+    const atIndex = key.indexOf('@');
+    if (atIndex === -1) return key;
+    // Only unsanitize the domain part (after @), where dots were replaced with underscores
+    const localPart = key.substring(0, atIndex);
+    const domainPart = key.substring(atIndex + 1).replace(/_/g, '.');
+    return localPart + '@' + domainPart;
+};
+
 const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
     const { currentUser } = useAuth();
 
@@ -79,7 +90,9 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
     // Fetch user profiles for all attendees
     React.useEffect(() => {
         const fetchUserProfiles = async () => {
-            const allEmails = Array.from(new Set([...(meeting.attendeesList || []), ...Object.keys(meeting.responses || {})]));
+            // Unsanitize response keys (underscores→dots in domain) to get real emails for Firestore lookup
+            const responseKeys = Object.keys(meeting.responses || {}).map(k => unsanitizeEmail(k));
+            const allEmails = Array.from(new Set([...(meeting.attendeesList || []), ...responseKeys]));
             if (allEmails.length === 0) return;
 
             // Firestore 'in' query limit is 10. Chunk the emails.
@@ -144,15 +157,22 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
 
     // Helper to get display name with nickname if available, hiding email
     const getDisplayName = (emailRaw) => {
+        // Unsanitize in case it's a sanitized key from responses
+        const unsanitized = unsanitizeEmail(emailRaw);
+
         // 1. Try to find if this email matches current user (use auth profile)
-        if (currentUser?.email && (currentUser.email === emailRaw || currentUser.email.replace(/\./g, '_') === emailRaw)) {
+        if (currentUser?.email && (
+            currentUser.email === emailRaw ||
+            currentUser.email === unsanitized ||
+            currentUser.email.replace(/\./g, '_') === emailRaw
+        )) {
             return currentUser.displayName || currentUser.email.split('@')[0];
         }
 
         // 2. Try to find in fetched userMap
-        // Check both raw and sanitized versions just to be safe
-        // Prioritize lowercase lookup
-        const lowerEmail = emailRaw.toLowerCase();
+        // Check unsanitized, raw, lowercase, and sanitized versions
+        if (userMap[unsanitized]) return userMap[unsanitized];
+        const lowerEmail = unsanitized.toLowerCase();
         if (userMap[lowerEmail]) return userMap[lowerEmail];
         if (userMap[emailRaw]) return userMap[emailRaw];
 
@@ -160,7 +180,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
         if (userMap[sanitized]) return userMap[sanitized];
 
         // 3. Otherwise return the part before @ as nickname fallback to hide email
-        return emailRaw.split('@')[0];
+        return unsanitized.split('@')[0];
     };
 
     const handleComplete = async () => {
@@ -256,11 +276,11 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                         <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center justify-between">
                             <span>참석자 목록</span>
                             <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                                {new Set([...(meeting.attendeesList || []), ...Object.keys(responses)]).size}명
+                                {new Set([...(meeting.attendeesList || []), ...Object.keys(responses).map(k => unsanitizeEmail(k))]).size}명
                             </span>
                         </h3>
                         <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                            {Array.from(new Set([...(meeting.attendeesList || []), ...Object.keys(responses)])).map((emailRaw, idx) => {
+                            {Array.from(new Set([...(meeting.attendeesList || []), ...Object.keys(responses).map(k => unsanitizeEmail(k))])).map((emailRaw, idx) => {
                                 const displayName = getDisplayName(emailRaw);
                                 const status = getStatusForEmail(emailRaw);
 
@@ -370,7 +390,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                         <CommentSection
                             meetingId={meeting.id}
                             currentUser={currentUser}
-                            attendees={Array.from(new Set([...(meeting.attendeesList || []), ...Object.keys(meeting.responses || {})]))}
+                            attendees={Array.from(new Set([...(meeting.attendeesList || []), ...Object.keys(meeting.responses || {}).map(k => unsanitizeEmail(k))]))}
                         />
 
                         <button
