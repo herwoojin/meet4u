@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, getDocs, doc, updateDoc, query, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { Shield, ShieldOff, Users, Eye, EyeOff, Calendar, Lock, LogOut } from 'lucide-react';
+import { Shield, ShieldOff, Users, Eye, EyeOff, Calendar, Lock, LogOut, BarChart2 } from 'lucide-react';
 import MeetingDetailModal from '../Components/meeting/MeetingDetailModal';
+import AttendanceStats from '../Components/admin/AttendanceStats';
 import { useNavigate } from 'react-router-dom';
 
 const AdminPage = () => {
@@ -162,8 +163,8 @@ const AdminPage = () => {
                 <button
                     onClick={() => setActiveTab('users')}
                     className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'users'
-                            ? 'border-gray-900 text-gray-900'
-                            : 'border-transparent text-gray-400 hover:text-gray-600'
+                        ? 'border-gray-900 text-gray-900'
+                        : 'border-transparent text-gray-400 hover:text-gray-600'
                         }`}
                 >
                     <Users size={16} /> 회원 관리
@@ -171,8 +172,8 @@ const AdminPage = () => {
                 <button
                     onClick={() => setActiveTab('meetings')}
                     className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'meetings'
-                            ? 'border-gray-900 text-gray-900'
-                            : 'border-transparent text-gray-400 hover:text-gray-600'
+                        ? 'border-gray-900 text-gray-900'
+                        : 'border-transparent text-gray-400 hover:text-gray-600'
                         }`}
                 >
                     <Calendar size={16} /> 전체 미팅
@@ -181,6 +182,15 @@ const AdminPage = () => {
                             {meetings.filter(m => m.hidden).length} 숨김
                         </span>
                     )}
+                </button>
+                <button
+                    onClick={() => setActiveTab('stats')}
+                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'stats'
+                        ? 'border-gray-900 text-gray-900'
+                        : 'border-transparent text-gray-400 hover:text-gray-600'
+                        }`}
+                >
+                    <BarChart2 size={16} /> 월별 참석 통계
                 </button>
             </div>
 
@@ -214,8 +224,8 @@ const AdminPage = () => {
                                     <button
                                         onClick={() => toggleAdmin(user.id, user.role)}
                                         className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border shadow-sm ${user.role === 'admin'
-                                                ? 'bg-white text-red-600 border-red-200 hover:bg-red-50'
-                                                : 'bg-white text-purple-600 border-purple-200 hover:bg-purple-50'
+                                            ? 'bg-white text-red-600 border-red-200 hover:bg-red-50'
+                                            : 'bg-white text-purple-600 border-purple-200 hover:bg-purple-50'
                                             }`}
                                     >
                                         {user.role === 'admin' ? (
@@ -245,10 +255,10 @@ const AdminPage = () => {
                                 <div
                                     key={meeting.id}
                                     className={`bg-white p-4 rounded-lg border shadow-sm transition-all hover:shadow-md cursor-pointer ${meeting.hidden
-                                            ? 'border-yellow-200 bg-yellow-50'
-                                            : meeting.status === 'completed'
-                                                ? 'border-red-100 opacity-70'
-                                                : 'border-gray-200'
+                                        ? 'border-yellow-200 bg-yellow-50'
+                                        : meeting.status === 'completed'
+                                            ? 'border-red-100 opacity-70'
+                                            : 'border-gray-200'
                                         }`}
                                     onClick={() => setSelectedMeeting(meeting)}
                                 >
@@ -279,8 +289,8 @@ const AdminPage = () => {
                                                 toggleMeetingHidden(meeting.id, meeting.hidden);
                                             }}
                                             className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border shadow-sm ml-3 shrink-0 ${meeting.hidden
-                                                    ? 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
-                                                    : 'bg-white text-yellow-700 border-yellow-300 hover:bg-yellow-50'
+                                                ? 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
+                                                : 'bg-white text-yellow-700 border-yellow-300 hover:bg-yellow-50'
                                                 }`}
                                         >
                                             {meeting.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -291,6 +301,11 @@ const AdminPage = () => {
                             ))
                     )}
                 </div>
+            )}
+
+            {/* Attendance Stats Tab */}
+            {activeTab === 'stats' && (
+                <AttendanceStats meetings={meetings} users={users} />
             )}
 
             {selectedMeeting && (
