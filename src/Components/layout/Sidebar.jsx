@@ -42,7 +42,7 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
                 <SidebarItem to="/calendar" icon={Calendar} label="월캘린더" onClick={closeMobileMenu} />
                 <SidebarItem to="/schedule" icon={PlusCircle} label="미팅 생성" onClick={closeMobileMenu} />
                 <div className="pt-4 mt-4 border-t border-gray-200">
-                    <SidebarItem to="/profile" icon={Settings} label="설정" onClick={closeMobileMenu} />
+                    <SidebarItem to="/settings" icon={Settings} label="설정" onClick={closeMobileMenu} />
                     <SidebarItem to="/admin" icon={Shield} label="관리자" onClick={closeMobileMenu} />
                     <a
                         href="https://whereurl.com/"
