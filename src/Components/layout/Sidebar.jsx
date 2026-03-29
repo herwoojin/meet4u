@@ -10,7 +10,7 @@ const SidebarItem = ({ to, icon: Icon, label, onClick }) => {
         <Link
             to={to}
             onClick={onClick}
-            className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${isActive ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+            className={`flex items-center space-x-3 p-3 rounded-lg transition-all duration-200 ${isActive ? 'bg-white/90 text-blue-700 shadow-sm font-semibold' : 'text-blue-900/60 hover:bg-white/50 hover:text-blue-800'}`}
         >
             <Icon size={20} />
             <span className="font-medium">{label}</span>
@@ -23,16 +23,16 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
 
     return (
         <aside className={`
-            fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out
+            fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-blue-50 via-indigo-50 to-sky-100 border-r border-blue-100 transform transition-transform duration-300 ease-in-out
             ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
             md:relative md:translate-x-0 md:flex md:flex-col md:h-screen md:sticky md:top-0
         `}>
-            <div className="p-6 border-b border-gray-200 flex justify-between items-center">
-                <Link to="/" className="text-2xl font-bold text-gray-900 flex items-center gap-2" onClick={closeMobileMenu}>
-                    <Calendar className="text-gray-900" />
+            <div className="p-6 border-b border-blue-100/60 flex justify-between items-center">
+                <Link to="/" className="text-2xl font-bold text-blue-800 flex items-center gap-2" onClick={closeMobileMenu}>
+                    <Calendar className="text-blue-600" />
                     PromiseU
                 </Link>
-                <button onClick={toggleMobileMenu} className="md:hidden text-gray-500 hover:text-gray-900">
+                <button onClick={toggleMobileMenu} className="md:hidden text-blue-400 hover:text-blue-700">
                     <X size={24} />
                 </button>
             </div>
@@ -42,14 +42,14 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
                 <SidebarItem to="/calendar" icon={Calendar} label="월캘린더" onClick={closeMobileMenu} />
                 <SidebarItem to="/schedule" icon={PlusCircle} label="미팅 생성" onClick={closeMobileMenu} />
                 <SidebarItem to="/my-dashboard" icon={BarChart3} label="My 대시보드" onClick={closeMobileMenu} />
-                <div className="pt-4 mt-4 border-t border-gray-200">
+                <div className="pt-4 mt-4 border-t border-blue-100/60">
                     <SidebarItem to="/settings" icon={Settings} label="설정" onClick={closeMobileMenu} />
                     <SidebarItem to="/admin" icon={Shield} label="관리자" onClick={closeMobileMenu} />
                     <a
                         href="https://whereurl.com/"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center space-x-3 p-3 rounded-lg transition-colors text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                        className="flex items-center space-x-3 p-3 rounded-lg transition-all duration-200 text-blue-900/60 hover:bg-white/50 hover:text-blue-800"
                         onClick={closeMobileMenu}
                     >
                         <MapPin size={20} />
@@ -58,17 +58,17 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
                 </div>
             </nav>
 
-            <div className="p-4 border-t border-gray-200">
-                <div className="flex items-center gap-3 mb-4 px-2 hover:bg-gray-100 p-2 rounded-lg transition-colors cursor-pointer">
+            <div className="p-4 border-t border-blue-100/60">
+                <div className="flex items-center gap-3 mb-4 px-2 hover:bg-white/50 p-2 rounded-lg transition-all duration-200 cursor-pointer">
                     <Link to="/profile" className="flex items-center gap-3 w-full" onClick={closeMobileMenu}>
                         <img src={currentUser?.photoURL || "https://ui-avatars.com/api/?name=User"} alt="User" className="w-8 h-8 rounded-full" />
                         <div className="flex-1 overflow-hidden">
-                            <p className="text-sm font-medium truncate text-gray-900">{currentUser?.displayName || "사용자"}</p>
-                            <p className="text-xs text-gray-500 truncate">{currentUser?.email}</p>
+                            <p className="text-sm font-medium truncate text-blue-900">{currentUser?.displayName || "사용자"}</p>
+                            <p className="text-xs text-blue-500/70 truncate">{currentUser?.email}</p>
                         </div>
                     </Link>
                 </div>
-                <button onClick={logout} className="w-full flex items-center justify-center space-x-2 p-2 rounded bg-gray-100 hover:bg-gray-200 transition-colors text-sm text-gray-700">
+                <button onClick={logout} className="w-full flex items-center justify-center space-x-2 p-2 rounded-lg bg-white/60 hover:bg-white/90 transition-all duration-200 text-sm text-blue-700 border border-blue-100">
                     <LogOut size={16} />
                     <span>로그아웃</span>
                 </button>
