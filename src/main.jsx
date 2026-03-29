@@ -5,10 +5,15 @@ import './index.css'
 import { HashRouter } from 'react-router-dom'
 import ErrorBoundary from './Components/ErrorBoundary';
 
-// Force update: clear old caches so mobile gets the latest code
+// Clear old workbox/SW caches (but preserve Firestore offline cache)
 if ('caches' in window) {
     caches.keys().then(names => {
-        names.forEach(name => caches.delete(name));
+        names.forEach(name => {
+            // Firestore 캐시는 삭제하지 않음
+            if (!name.startsWith('firestore')) {
+                caches.delete(name);
+            }
+        });
     });
 }
 

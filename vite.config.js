@@ -51,20 +51,22 @@ export default defineConfig({
                 clientsClaim: true,
                 importScripts: ['firebase-messaging-sw-custom.js'], // Added for FCM background push
                 globPatterns: ['**/*.{html,ico,png,svg}'],
+                navigateFallback: 'index.html',
+                navigateFallbackDenylist: [/^\/api/, /^\/\.netlify/],
                 runtimeCaching: [
                     {
-                        urlPattern: /\.(?:js|css)$/,
+                        // JS/CSS만 NetworkFirst로 캐싱 (Firestore/FCM 웹소켓은 건드리지 않음)
+                        urlPattern: ({ url }) => url.origin === self.location.origin && /\.(?:js|css)$/.test(url.pathname),
                         handler: 'NetworkFirst',
                         options: {
                             cacheName: 'assets-cache',
                             expiration: {
                                 maxEntries: 50,
-                                maxAgeSeconds: 60 * 60, // 1 hour
+                                maxAgeSeconds: 60 * 60,
                             },
                         },
                     },
                 ],
-                navigateFallback: 'index.html',
             }
         })
     ],
