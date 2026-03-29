@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import useCommentNotifications, { requestNotificationPermission } from '../../hooks/useCommentNotifications';
+import useAttendanceNotifications from '../../hooks/useAttendanceNotifications';
 import ChatModal from '../chat/ChatModal';
 import Sidebar from './Sidebar';
 import { Menu, Calendar, Bell, BellRing, BellOff } from 'lucide-react';
@@ -13,6 +14,7 @@ const MainLayout = ({ children }) => {
     );
 
     useCommentNotifications();
+    useAttendanceNotifications();
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const closeMobileMenu = () => setIsMobileMenuOpen(false);

@@ -10,6 +10,7 @@ import ProfilePage from './Pages/Profile';
 import CreateMeeting from './Pages/CreateMeeting';
 import AdminPage from './Pages/AdminPage';
 import MainLayout from './Components/layout/MainLayout';
+import Settings from './Pages/Settings';
 
 const PrivateRoute = ({ children }) => {
     const { currentUser } = useAuth();
@@ -32,7 +33,7 @@ const App = () => {
                                     <Route path="/profile" element={<ProfilePage />} />
                                     <Route path="/create-meeting" element={<CreateMeeting />} />
                                     <Route path="/admin" element={<AdminPage />} />
-                                    <Route path="/settings" element={<div className="text-center p-10 text-gray-500">설정 (준비 중)</div>} />
+                                    <Route path="/settings" element={<Settings />} />
                                 </Routes>
                             </MainLayout>
                         </PrivateRoute>
