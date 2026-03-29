@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 
 const Settings = () => {
     const [notifPermission, setNotifPermission] = useState('unsupported');
-    const { user } = useAuth();
+    const { currentUser: user } = useAuth();
 
     useEffect(() => {
         if ('Notification' in window) {
@@ -20,7 +20,7 @@ const Settings = () => {
         }
         
         // FCM 토큰 요청 (알림 권한 요청 포함)
-        const token = await requestFCMToken(user.uid);
+        const token = await requestFCMToken(user.uid, user.email);
         
         setNotifPermission(Notification.permission);
         

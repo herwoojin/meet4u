@@ -38,7 +38,6 @@ export const handler = async (event) => {
 
         // Look up FCM tokens for all recipients (exclude sender)
         const tokens = [];
-        const invalidTokenUsers = [];
 
         const emails = recipientEmails
             .filter(e => e && e !== senderEmail)
@@ -73,59 +72,67 @@ export const handler = async (event) => {
             return { statusCode: 200, headers, body: JSON.stringify({ success: true, sent: 0, reason: 'No FCM tokens found' }) };
         }
 
-        // Send FCM messages
-        const sendResults = await Promise.allSettled(
-            tokens.map(({ token, userId }) =>
-                admin.messaging().send({
-                    token,
-                    data: { type, title, body },
-                    android: { priority: 'high' },
-                    apns: {
-                        headers: { 'apns-priority': '10' },
-                        payload: {
-                            aps: {
-                                alert: { title, body },
-                                sound: 'default',
-                                'content-available': 1,
-                            },
-                        },
+        // Build FCM message for each token and send in batch
+        const messages = tokens.map(({ token }) => ({
+            token,
+            data: { type, title, body },
+            android: { priority: 'high' },
+            apns: {
+                headers: { 'apns-priority': '10' },
+                payload: {
+                    aps: {
+                        alert: { title, body },
+                        sound: 'default',
+                        'content-available': 1,
                     },
-                    webpush: {
-                        headers: { Urgency: 'high' },
-                        notification: {
-                            title,
-                            body,
-                            icon: '/pwa-192x192.png',
-                            badge: '/pwa-192x192.png',
-                        },
-                    },
-                }).catch(err => {
-                    if (err.code === 'messaging/invalid-registration-token' ||
-                        err.code === 'messaging/registration-token-not-registered') {
-                        invalidTokenUsers.push({ userId, token });
-                    }
-                    throw err;
-                })
-            )
-        );
+                },
+            },
+            webpush: {
+                headers: { Urgency: 'high', TTL: '86400' },
+                notification: {
+                    title,
+                    body,
+                    icon: '/pwa-192x192.png',
+                    badge: '/pwa-192x192.png',
+                },
+            },
+        }));
+
+        // sendEach is more efficient than individual send() calls
+        const response = await admin.messaging().sendEach(messages);
+
+        console.log(`FCM sendEach: ${response.successCount} success, ${response.failureCount} failure out of ${messages.length}`);
 
         // Clean up invalid tokens
-        for (const { userId, token } of invalidTokenUsers) {
-            try {
-                await db.collection('users').doc(userId).update({
-                    fcmTokens: admin.firestore.FieldValue.arrayRemove(token),
-                });
-            } catch (e) {
-                console.error('Failed to remove invalid token:', e);
+        const invalidTokens = [];
+        response.responses.forEach((resp, idx) => {
+            if (!resp.success) {
+                const code = resp.error?.code;
+                if (code === 'messaging/invalid-registration-token' ||
+                    code === 'messaging/registration-token-not-registered') {
+                    invalidTokens.push(tokens[idx]);
+                }
+                console.error(`FCM send error [${idx}]:`, resp.error?.code, resp.error?.message);
             }
-        }
+        });
 
-        const successCount = sendResults.filter(r => r.status === 'fulfilled').length;
+        // Remove invalid tokens from Firestore
+        const cleanupPromises = invalidTokens.map(({ userId, token }) =>
+            db.collection('users').doc(userId).update({
+                fcmTokens: admin.firestore.FieldValue.arrayRemove(token),
+            }).catch(e => console.error('Failed to remove invalid token:', e))
+        );
+        await Promise.all(cleanupPromises);
 
         return {
             statusCode: 200,
             headers,
-            body: JSON.stringify({ success: true, sent: successCount, total: tokens.length }),
+            body: JSON.stringify({
+                success: true,
+                sent: response.successCount,
+                failed: response.failureCount,
+                total: messages.length,
+            }),
         };
     } catch (error) {
         console.error('Send notification error:', error);

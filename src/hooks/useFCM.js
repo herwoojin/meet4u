@@ -1,46 +1,97 @@
-import { getToken } from 'firebase/messaging';
+import { useEffect } from 'react';
+import { getToken, onMessage } from 'firebase/messaging';
 import { messaging, db } from '../lib/firebase';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 
 const VAPID_KEY = "BLCZf7PaIXOSY2EU5LU-h4s-fA6k0Str_2kEyKr2gtZzj9HeEBBV5QxPj9VR8Ci7kXoFG4aGZlk-mhlJLKaKx0g";
 
-export const requestFCMToken = async (userId) => {
+/**
+ * 앱 로드 시 자동으로 FCM 토큰을 갱신하고,
+ * 포그라운드 메시지를 수신하여 알림을 표시하는 훅
+ */
+export const useFCM = (user) => {
+    useEffect(() => {
+        if (!user?.uid || !('Notification' in window)) return;
+        if (Notification.permission !== 'granted') return;
+
+        let unsubscribe = null;
+
+        const setup = async () => {
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                const token = await getToken(messaging, {
+                    vapidKey: VAPID_KEY,
+                    serviceWorkerRegistration: registration,
+                });
+
+                if (token) {
+                    // 토큰을 Firestore에 저장 (앱 열 때마다 갱신)
+                    const userRef = doc(db, 'users', user.uid);
+                    await setDoc(userRef, {
+                        fcmTokens: arrayUnion(token),
+                        email: user.email?.toLowerCase(),
+                    }, { merge: true });
+                }
+            } catch (err) {
+                console.error('FCM token refresh failed:', err);
+            }
+
+            // 포그라운드 메시지 핸들러 - 앱이 열려있을 때 알림 표시
+            unsubscribe = onMessage(messaging, (payload) => {
+                console.log('[Foreground] Message received:', payload);
+
+                const title = payload.notification?.title || payload.data?.title || 'Meet4U';
+                const body = payload.notification?.body || payload.data?.body || '새 알림이 도착했습니다.';
+
+                // 브라우저 네이티브 알림 표시
+                if (Notification.permission === 'granted') {
+                    new Notification(title, {
+                        body,
+                        icon: '/pwa-192x192.png',
+                        tag: (payload.data?.type || 'general') + '-' + Date.now(),
+                    });
+                }
+            });
+        };
+
+        setup();
+
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
+    }, [user?.uid]);
+};
+
+/**
+ * 설정 페이지에서 수동으로 FCM 권한 요청 + 토큰 등록
+ */
+export const requestFCMToken = async (userId, email) => {
     if (!userId) return null;
 
     try {
-        console.log('Requesting FCM notification permission...');
         const permission = await Notification.requestPermission();
-        
-        if (permission === 'granted') {
-            console.log('Notification permission granted.');
-            // 현재 등록된 서비스 워커 가져오기 (vite-plugin-pwa가 등록한 워커)
-            const registration = await navigator.serviceWorker.ready;
 
-            const currentToken = await getToken(messaging, { 
+        if (permission === 'granted') {
+            const registration = await navigator.serviceWorker.ready;
+            const currentToken = await getToken(messaging, {
                 vapidKey: VAPID_KEY,
-                serviceWorkerRegistration: registration
+                serviceWorkerRegistration: registration,
             });
 
             if (currentToken) {
-                console.log('FCM Token received by client.');
-                
-                // Firestore users 컬렉션에 토큰 저장 (배열로 저장하여 여러 기기 지원)
                 const userRef = doc(db, 'users', userId);
-                await updateDoc(userRef, {
-                    fcmTokens: arrayUnion(currentToken)
-                });
-                
+                await setDoc(userRef, {
+                    fcmTokens: arrayUnion(currentToken),
+                    email: email?.toLowerCase(),
+                }, { merge: true });
+
                 return currentToken;
-            } else {
-                console.log('No registration token available. Request permission to generate one.');
-                return null;
             }
-        } else {
-            console.log('Unable to get permission to notify.');
             return null;
         }
+        return null;
     } catch (err) {
-        console.error('An error occurred while retrieving token. ', err);
-        return null; // VAPID 키가 입력되지 않으면 에러가 발생합니다.
+        console.error('An error occurred while retrieving token:', err);
+        return null;
     }
 };

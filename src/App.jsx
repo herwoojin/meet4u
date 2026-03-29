@@ -11,15 +11,24 @@ import CreateMeeting from './Pages/CreateMeeting';
 import AdminPage from './Pages/AdminPage';
 import MainLayout from './Components/layout/MainLayout';
 import Settings from './Pages/Settings';
+import { useFCM } from './hooks/useFCM';
 
 const PrivateRoute = ({ children }) => {
     const { currentUser } = useAuth();
     return currentUser ? children : <Navigate to="/login" />;
 };
 
+// FCM 토큰 자동 갱신 + 포그라운드 알림 수신
+const FCMInitializer = () => {
+    const { currentUser } = useAuth();
+    useFCM(currentUser);
+    return null;
+};
+
 const App = () => {
     return (
         <AuthProvider>
+            <FCMInitializer />
             <ToastProvider>
                 <Routes>
                     <Route path="/login" element={<Login />} />
