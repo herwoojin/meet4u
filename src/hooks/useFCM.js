@@ -36,21 +36,10 @@ export const useFCM = (user) => {
                 console.error('FCM token refresh failed:', err);
             }
 
-            // 포그라운드 메시지 핸들러 - 앱이 열려있을 때 알림 표시
+            // 포그라운드 메시지 핸들러 - 앱이 열려있을 때 수신 확인만 (알림 표시 안 함)
+            // 앱이 열려있으면 Firestore 실시간 리스너로 이미 화면에 반영되므로 중복 알림 방지
             unsubscribe = onMessage(messaging, (payload) => {
-                console.log('[Foreground] Message received:', payload);
-
-                const title = payload.notification?.title || payload.data?.title || 'Meet4U';
-                const body = payload.notification?.body || payload.data?.body || '새 알림이 도착했습니다.';
-
-                // 브라우저 네이티브 알림 표시
-                if (Notification.permission === 'granted') {
-                    new Notification(title, {
-                        body,
-                        icon: '/pwa-192x192.png',
-                        tag: (payload.data?.type || 'general') + '-' + Date.now(),
-                    });
-                }
+                console.log('[Foreground] Message received (suppressed notification):', payload);
             });
         };
 

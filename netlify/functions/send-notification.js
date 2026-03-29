@@ -89,12 +89,8 @@ export const handler = async (event) => {
             },
             webpush: {
                 headers: { Urgency: 'high', TTL: '86400' },
-                notification: {
-                    title,
-                    body,
-                    icon: '/pwa-192x192.png',
-                    badge: '/pwa-192x192.png',
-                },
+                // notification 필드 제거 — data-only 메시지로 전송
+                // 브라우저 자동 알림 방지, SW onBackgroundMessage에서만 알림 표시
             },
         }));
 
