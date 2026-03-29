@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, BellRing, BellOff, Settings as SettingsIcon } from 'lucide-react';
-import { requestNotificationPermission } from '../hooks/useCommentNotifications';
+import { requestFCMToken } from '../hooks/useFCM';
+import { useAuth } from '../context/AuthContext';
 
 const Settings = () => {
     const [notifPermission, setNotifPermission] = useState('unsupported');
+    const { user } = useAuth();
 
     useEffect(() => {
         if ('Notification' in window) {
@@ -12,12 +14,22 @@ const Settings = () => {
     }, []);
 
     const handleRequestPermission = async () => {
-        const result = await requestNotificationPermission();
-        setNotifPermission(result);
-        if (result === 'granted') {
-            alert('알림이 활성화되었습니다! 🔔\n참석 및 댓글 알림을 받을 수 있습니다.');
-        } else if (result === 'denied') {
+        if (!user) {
+            alert('로그인이 필요합니다.');
+            return;
+        }
+        
+        // FCM 토큰 요청 (알림 권한 요청 포함)
+        const token = await requestFCMToken(user.uid);
+        
+        setNotifPermission(Notification.permission);
+        
+        if (token) {
+            alert('알림이 활성화되었습니다! 🔔\n앱이 꺼져있어도 참석 및 댓글 알림을 받을 수 있습니다.');
+        } else if (Notification.permission === 'denied') {
             alert('알림이 차단되어 있습니다.\n브라우저 설정(또는 기기 설정)에서 알림을 허용해 주세요.');
+        } else {
+            alert('키 입력 오류 또는 통신 오류로 알림 토큰을 받아오지 못했습니다. VAPID 키가 적용되어 있는지 확인하세요.');
         }
     };
 

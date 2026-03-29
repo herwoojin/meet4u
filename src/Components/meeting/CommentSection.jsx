@@ -63,18 +63,37 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         e.preventDefault();
         if (!newComment.trim() || !currentUser) return;
 
+        const senderName = currentUser.displayName || currentUser.email.split('@')[0];
+        const recipientEmails = attendees
+            .filter(email => email && typeof email === 'string')
+            .map(email => email.toLowerCase());
+
         try {
             await addDoc(collection(db, 'comments'), {
                 meetingId,
                 text: newComment,
                 senderEmail: currentUser.email,
-                senderName: currentUser.displayName || currentUser.email.split('@')[0],
+                senderName,
                 timestamp: serverTimestamp(),
-                readBy: [currentUser.email.toLowerCase()], // Author has read their own comment
-                recipients: attendees
-                    .filter(email => email && typeof email === 'string')
-                    .map(email => email.toLowerCase())
+                readBy: [currentUser.email.toLowerCase()],
+                recipients: recipientEmails
             });
+
+            // Send background push notification to attendees
+            if (recipientEmails.length > 0) {
+                fetch('/.netlify/functions/send-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'comment',
+                        title: `💬 ${senderName}님의 새 댓글`,
+                        body: newComment.length > 100 ? newComment.slice(0, 100) + '...' : newComment,
+                        recipientEmails,
+                        senderEmail: currentUser.email,
+                    }),
+                }).catch(err => console.error('Push notification failed:', err));
+            }
+
             setNewComment('');
         } catch (error) {
             console.error("Error adding comment:", error);

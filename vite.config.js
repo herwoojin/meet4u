@@ -49,6 +49,7 @@ export default defineConfig({
                 cleanupOutdatedCaches: true,
                 skipWaiting: true,
                 clientsClaim: true,
+                importScripts: ['firebase-messaging-sw-custom.js'], // Added for FCM background push
                 globPatterns: ['**/*.{html,ico,png,svg}'],
                 runtimeCaching: [
                     {

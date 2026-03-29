@@ -55,6 +55,35 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
             await updateDoc(doc(db, "meetings", meeting.id), {
                 [`responses.${sanitizedEmail}`]: selectedStatus
             });
+
+            // Send push notification when someone marks "attend"
+            if (selectedStatus === 'attend') {
+                const senderName = currentUser.displayName || currentUser.email.split('@')[0];
+                // Notify existing attendees + meeting creator
+                const existingAttendees = Object.entries(meeting.responses || {})
+                    .filter(([, status]) => status === 'attend')
+                    .map(([key]) => unsanitizeEmail(key));
+                // Also include all attendeesList members
+                const allRecipients = Array.from(new Set([
+                    ...(meeting.attendeesList || []),
+                    ...existingAttendees,
+                ])).map(e => e.toLowerCase());
+
+                if (allRecipients.length > 0) {
+                    fetch('/.netlify/functions/send-notification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'attendance',
+                            title: '🤝 참석 알림',
+                            body: `${senderName}님이 '${meeting.title}'에 참석합니다!`,
+                            recipientEmails: allRecipients,
+                            senderEmail: currentUser.email,
+                        }),
+                    }).catch(err => console.error('Push notification failed:', err));
+                }
+            }
+
             alert("응답이 저장되었습니다.");
         } catch (e) {
             console.error("Response update failed", e);

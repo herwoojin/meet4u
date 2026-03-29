@@ -133,3 +133,6 @@ dist-ssr
 
 # PWA
 dev-dist
+
+# Firebase service account keys (NEVER commit these)
+*-firebase-adminsdk-*.json
