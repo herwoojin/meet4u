@@ -6,6 +6,7 @@ import { format, isValid } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from './CommentSection';
+import ScoreBoard from './ScoreBoard';
 
 // Helper: convert sanitized email key (dots→underscores) back to real email
 const unsanitizeEmail = (key) => {
@@ -437,6 +438,18 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                 </button>
                             </div>
                         )}
+
+                        {/* Score Board */}
+                        <ScoreBoard
+                            meetingId={meeting.id}
+                            attendeeNames={
+                                Array.from(new Set([
+                                    ...(meeting.attendeesList || []),
+                                    ...Object.keys(responses).map(k => unsanitizeEmail(k))
+                                ])).map(email => getDisplayName(email))
+                            }
+                            isEditable={isCreator || isAdmin}
+                        />
 
                         {/* Comment Section */}
                         <CommentSection
