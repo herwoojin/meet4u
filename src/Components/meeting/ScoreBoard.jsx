@@ -1,25 +1,60 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../../lib/firebase';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
-import { Trophy, Plus, Trash2, Save, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Trophy, Plus, Trash2, ChevronDown, ChevronUp, X, Check } from 'lucide-react';
 
 const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
     const [games, setGames] = useState([]);
     const [isOpen, setIsOpen] = useState(false);
-    const [saving, setSaving] = useState(false);
     const [extraPlayers, setExtraPlayers] = useState([]);
     const [newPlayerName, setNewPlayerName] = useState('');
     const [showAddPlayer, setShowAddPlayer] = useState(false);
+    const [autoSaveStatus, setAutoSaveStatus] = useState(null); // null | 'saving' | 'saved'
     const initialLoaded = useRef(false);
+    const skipNextSync = useRef(false);
+    const saveTimer = useRef(null);
 
     // All available players = attendees + extra players
     const allPlayers = [...attendeeNames, ...extraPlayers];
+
+    // Auto-save to Firestore
+    const saveToFirestore = useCallback(async (gamesToSave, extraPlayeresToSave) => {
+        if (!meetingId) return;
+        setAutoSaveStatus('saving');
+        skipNextSync.current = true;
+        try {
+            await updateDoc(doc(db, 'meetings', meetingId), {
+                scoreboard: {
+                    games: gamesToSave,
+                    extraPlayers: extraPlayeresToSave,
+                    updatedAt: new Date().toISOString(),
+                },
+            });
+            setAutoSaveStatus('saved');
+            setTimeout(() => setAutoSaveStatus(null), 1500);
+        } catch (err) {
+            console.error('Scoreboard auto-save failed:', err);
+            setAutoSaveStatus(null);
+        }
+    }, [meetingId]);
+
+    // Debounced auto-save: triggers 500ms after last change
+    const scheduleAutoSave = useCallback((newGames, newExtraPlayers) => {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => {
+            saveToFirestore(newGames, newExtraPlayers);
+        }, 500);
+    }, [saveToFirestore]);
 
     // Load scoreboard from Firestore
     useEffect(() => {
         if (!meetingId) return;
 
         const unsubscribe = onSnapshot(doc(db, 'meetings', meetingId), (docSnap) => {
+            if (skipNextSync.current) {
+                skipNextSync.current = false;
+                return;
+            }
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.scoreboard) {
@@ -33,7 +68,10 @@ const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
             }
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribe();
+            if (saveTimer.current) clearTimeout(saveTimer.current);
+        };
     }, [meetingId]);
 
     const createEmptyGame = () => ({
@@ -45,55 +83,50 @@ const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
     });
 
     const addGame = () => {
-        setGames(prev => [...prev, createEmptyGame()]);
+        const newGame = createEmptyGame();
+        const newGames = [...games, newGame];
+        setGames(newGames);
         setIsOpen(true);
+        scheduleAutoSave(newGames, extraPlayers);
     };
 
     const removeGame = (idx) => {
-        setGames(prev => prev.filter((_, i) => i !== idx));
+        const newGames = games.filter((_, i) => i !== idx);
+        setGames(newGames);
+        scheduleAutoSave(newGames, extraPlayers);
     };
 
     const updateGame = (idx, field, value) => {
-        setGames(prev => prev.map((g, i) => i === idx ? { ...g, [field]: value } : g));
+        const newGames = games.map((g, i) => i === idx ? { ...g, [field]: value } : g);
+        setGames(newGames);
+        scheduleAutoSave(newGames, extraPlayers);
     };
 
     const updateTeamPlayer = (gameIdx, team, playerIdx, value) => {
-        setGames(prev => prev.map((g, i) => {
+        const newGames = games.map((g, i) => {
             if (i !== gameIdx) return g;
             const newTeam = [...g[team]];
             newTeam[playerIdx] = value;
             return { ...g, [team]: newTeam };
-        }));
+        });
+        setGames(newGames);
+        scheduleAutoSave(newGames, extraPlayers);
     };
 
     const addExtraPlayer = () => {
         const name = newPlayerName.trim();
         if (!name || allPlayers.includes(name)) return;
-        setExtraPlayers(prev => [...prev, name]);
+        const newExtra = [...extraPlayers, name];
+        setExtraPlayers(newExtra);
         setNewPlayerName('');
         setShowAddPlayer(false);
+        scheduleAutoSave(games, newExtra);
     };
 
     const removeExtraPlayer = (name) => {
-        setExtraPlayers(prev => prev.filter(p => p !== name));
-    };
-
-    const saveScoreboard = async () => {
-        if (!meetingId) return;
-        setSaving(true);
-        try {
-            await updateDoc(doc(db, 'meetings', meetingId), {
-                scoreboard: {
-                    games,
-                    extraPlayers,
-                    updatedAt: new Date().toISOString(),
-                },
-            });
-        } catch (err) {
-            console.error('Scoreboard save failed:', err);
-            alert('스코어보드 저장 실패');
-        }
-        setSaving(false);
+        const newExtra = extraPlayers.filter(p => p !== name);
+        setExtraPlayers(newExtra);
+        scheduleAutoSave(games, newExtra);
     };
 
     const PlayerDropdown = ({ value, onChange }) => (
@@ -121,7 +154,17 @@ const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
                     <Trophy size={18} className="text-yellow-500" />
                     스코어보드 ({games.length})
                 </div>
-                {isOpen ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+                <div className="flex items-center gap-2">
+                    {autoSaveStatus === 'saving' && (
+                        <span className="text-xs text-gray-400">저장 중...</span>
+                    )}
+                    {autoSaveStatus === 'saved' && (
+                        <span className="text-xs text-green-500 flex items-center gap-0.5">
+                            <Check size={12} /> 저장됨
+                        </span>
+                    )}
+                    {isOpen ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+                </div>
             </button>
 
             {/* Collapsible content */}
@@ -231,23 +274,14 @@ const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
                         </div>
                     ))}
 
-                    {/* Action buttons */}
+                    {/* Add game button */}
                     {isEditable && (
-                        <div className="flex gap-2">
-                            <button
-                                onClick={addGame}
-                                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                            >
-                                <Plus size={16} /> 경기 추가
-                            </button>
-                            <button
-                                onClick={saveScoreboard}
-                                disabled={saving}
-                                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                            >
-                                <Save size={16} /> {saving ? '저장 중...' : '저장'}
-                            </button>
-                        </div>
+                        <button
+                            onClick={addGame}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                            <Plus size={16} /> 경기 추가
+                        </button>
                     )}
                 </div>
             )}
