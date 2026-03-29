@@ -11,6 +11,7 @@ import CreateMeeting from './Pages/CreateMeeting';
 import AdminPage from './Pages/AdminPage';
 import MainLayout from './Components/layout/MainLayout';
 import Settings from './Pages/Settings';
+import MyDashboard from './Pages/MyDashboard';
 import { useFCM } from './hooks/useFCM';
 
 const PrivateRoute = ({ children }) => {
@@ -42,6 +43,7 @@ const App = () => {
                                     <Route path="/profile" element={<ProfilePage />} />
                                     <Route path="/create-meeting" element={<CreateMeeting />} />
                                     <Route path="/admin" element={<AdminPage />} />
+                                    <Route path="/my-dashboard" element={<MyDashboard />} />
                                     <Route path="/settings" element={<Settings />} />
                                 </Routes>
                             </MainLayout>

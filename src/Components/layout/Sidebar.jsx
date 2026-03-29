@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Calendar, Home, LogOut, PlusCircle, Settings, X, MapPin, Shield } from 'lucide-react';
+import { Calendar, Home, LogOut, PlusCircle, Settings, X, MapPin, Shield, BarChart3 } from 'lucide-react';
 
 const SidebarItem = ({ to, icon: Icon, label, onClick }) => {
     const location = useLocation();
@@ -41,6 +41,7 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
                 <SidebarItem to="/" icon={Home} label="주간캘린더" onClick={closeMobileMenu} />
                 <SidebarItem to="/calendar" icon={Calendar} label="월캘린더" onClick={closeMobileMenu} />
                 <SidebarItem to="/schedule" icon={PlusCircle} label="미팅 생성" onClick={closeMobileMenu} />
+                <SidebarItem to="/my-dashboard" icon={BarChart3} label="My 대시보드" onClick={closeMobileMenu} />
                 <div className="pt-4 mt-4 border-t border-gray-200">
                     <SidebarItem to="/settings" icon={Settings} label="설정" onClick={closeMobileMenu} />
                     <SidebarItem to="/admin" icon={Shield} label="관리자" onClick={closeMobileMenu} />
