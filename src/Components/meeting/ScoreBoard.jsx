@@ -76,8 +76,8 @@ const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
 
     const createEmptyGame = () => ({
         id: Date.now(),
-        team1: [allPlayers[0] || '', allPlayers[1] || ''],
-        team2: [allPlayers[2] || '', allPlayers[3] || ''],
+        team1: ['', ''],
+        team2: ['', ''],
         score1: '',
         score2: '',
     });
