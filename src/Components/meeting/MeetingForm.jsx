@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, AlignLeft, CheckCircle, Loader } from 'lucide-react';
+import { Calendar, Clock, MapPin, AlignLeft, CheckCircle, Loader, DollarSign, User } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
@@ -20,7 +20,9 @@ const MeetingForm = () => {
         endTime: '',
         location: '',
         description: '',
-        attendees: ''
+        attendees: '',
+        rentalCost: '',
+        bookedBy: ''
     });
 
     // Check for edit mode on mount
@@ -36,9 +38,9 @@ const MeetingForm = () => {
                 endTime: m.endTime || '',
                 location: m.location || '',
                 description: m.description || '',
-                attendees: m.attendees || '' // Assuming 'attendees' string was saved or we reconstructed it
-                // Note: If we only saved attendeesList array, we might need to join it back to string
-                // For now, let's assume we can map it back if needed, but in original code we only saved attendeesList
+                attendees: m.attendees || '',
+                rentalCost: m.rentalCost !== undefined ? String(m.rentalCost) : '',
+                bookedBy: m.bookedBy || ''
             });
 
             // If attendees is missing but attendeesList exists, join it
@@ -59,6 +61,7 @@ const MeetingForm = () => {
 
         const meetingData = {
             ...formData,
+            rentalCost: formData.rentalCost ? Number(formData.rentalCost) : 0,
             createdBy: currentUser.uid,
             status: 'upcoming',
             attendeesList: []
@@ -177,6 +180,37 @@ const MeetingForm = () => {
                 </div>
 
 
+
+                {/* Rental Cost & Booked By */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-gray-700 mb-2 font-medium flex items-center gap-2">
+                            <DollarSign size={16} /> 대여 금액 (원)
+                        </label>
+                        <input
+                            type="number"
+                            name="rentalCost"
+                            value={formData.rentalCost}
+                            onChange={handleChange}
+                            className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+                            placeholder="예: 30000"
+                            min="0"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-gray-700 mb-2 font-medium flex items-center gap-2">
+                            <User size={16} /> 예약자
+                        </label>
+                        <input
+                            type="text"
+                            name="bookedBy"
+                            value={formData.bookedBy}
+                            onChange={handleChange}
+                            className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+                            placeholder="예: 홍길동"
+                        />
+                    </div>
+                </div>
 
                 {/* Description */}
                 <div>

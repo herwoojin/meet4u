@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Clock, Users, Trash2, Edit, Check, HelpCircle, XCircle, AlignLeft, EyeOff, Eye } from 'lucide-react';
+import { X, Clock, Users, Trash2, Edit, Check, HelpCircle, XCircle, AlignLeft, EyeOff, Eye, DollarSign } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { deleteDoc, doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { format, isValid } from 'date-fns';
@@ -282,6 +282,44 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                             <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                                 {meeting.description}
                             </p>
+                        </div>
+                    )}
+
+                    {/* Rental Cost Info */}
+                    {(meeting.rentalCost > 0 || meeting.bookedBy) && (
+                        <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                            <h3 className="text-xs font-bold text-green-800 mb-2 flex items-center gap-1">
+                                <DollarSign size={14} /> 대여 비용
+                            </h3>
+                            <div className="space-y-1.5">
+                                {meeting.bookedBy && (
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-gray-600">예약자</span>
+                                        <span className="font-bold text-gray-900">{meeting.bookedBy}</span>
+                                    </div>
+                                )}
+                                {meeting.rentalCost > 0 && (
+                                    <>
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-gray-600">대여 금액</span>
+                                            <span className="font-bold text-gray-900">{Number(meeting.rentalCost).toLocaleString()}원</span>
+                                        </div>
+                                        {(() => {
+                                            const attendCount = Object.values(responses).filter(v => v === 'attend').length;
+                                            if (attendCount > 0) {
+                                                const perPerson = Math.ceil(meeting.rentalCost / attendCount);
+                                                return (
+                                                    <div className="flex items-center justify-between text-sm pt-1.5 border-t border-green-200">
+                                                        <span className="text-gray-600">1인당 (÷{attendCount}명)</span>
+                                                        <span className="font-bold text-green-700 text-base">{perPerson.toLocaleString()}원</span>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+                                    </>
+                                )}
+                            </div>
                         </div>
                     )}
 

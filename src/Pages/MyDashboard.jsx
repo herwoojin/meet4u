@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { BarChart3, Trophy, Calendar, TrendingUp, Users, Target } from 'lucide-react';
+import { BarChart3, Trophy, Calendar, TrendingUp, Users, Target, DollarSign, CreditCard } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
@@ -33,6 +33,9 @@ const MyDashboard = () => {
         losses: 0,
         winPartners: {},
         lossOpponents: {},
+        monthCostToPay: 0,
+        monthCostBooked: 0,
+        monthCostDetails: [],
     });
     const [userCreatedAt, setUserCreatedAt] = useState(null);
 
@@ -74,6 +77,10 @@ const MyDashboard = () => {
         let losses = 0;
         const winPartners = {};
         const lossOpponents = {};
+        let monthCostToPay = 0;
+        let monthCostBooked = 0;
+        const monthCostDetails = [];
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
         // Helper: get display name from email key
         const getNameFromEmail = (emailKey) => {
@@ -97,6 +104,31 @@ const MyDashboard = () => {
                 const meetingDate = meeting.date;
                 if (meetingDate >= monthStart) monthAttend++;
                 if (meetingDate >= yearStart) yearAttend++;
+            }
+
+            // Calculate cost for this month's meetings
+            const meetingDate = meeting.date || '';
+            if (meetingDate.startsWith(currentMonth) && meeting.rentalCost > 0) {
+                const attendCount = Object.values(responses).filter(v => v === 'attend').length;
+                const perPerson = attendCount > 0 ? Math.ceil(meeting.rentalCost / attendCount) : 0;
+
+                // If I attended, I need to pay 1/N
+                if (isAttend && attendCount > 0) {
+                    monthCostToPay += perPerson;
+                    monthCostDetails.push({
+                        title: meeting.title,
+                        date: meetingDate,
+                        totalCost: meeting.rentalCost,
+                        attendCount,
+                        myShare: perPerson,
+                    });
+                }
+
+                // If I booked this meeting
+                const myName = currentUser.displayName || email.split('@')[0];
+                if (meeting.bookedBy === myName || meeting.createdBy === currentUser.uid) {
+                    monthCostBooked += meeting.rentalCost;
+                }
             }
 
             // Analyze scoreboard
@@ -158,7 +190,7 @@ const MyDashboard = () => {
             });
         });
 
-        setStats({ monthAttend, yearAttend, totalAttend, totalGames, wins, draws, losses, winPartners, lossOpponents });
+        setStats({ monthAttend, yearAttend, totalAttend, totalGames, wins, draws, losses, winPartners, lossOpponents, monthCostToPay, monthCostBooked, monthCostDetails });
         setLoading(false);
     };
 
@@ -220,6 +252,35 @@ const MyDashboard = () => {
                     <StatCard icon={Target} label="전체 참석" value={stats.totalAttend} color="bg-purple-500" sub={userCreatedAt ? `${formatDate(userCreatedAt)}~` : ''} />
                 </div>
             </div>
+
+            {/* Monthly Cost Stats */}
+            {(stats.monthCostToPay > 0 || stats.monthCostBooked > 0) && (
+                <div>
+                    <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
+                        <DollarSign size={16} className="text-green-500" />
+                        이달 비용 현황 ({new Date().getMonth() + 1}월)
+                    </h2>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                        <StatCard icon={CreditCard} label="내가 낼 금액" value={`${stats.monthCostToPay.toLocaleString()}원`} color="bg-green-500" sub="참석 기준 1/N" />
+                        <StatCard icon={DollarSign} label="내가 예약한 비용" value={`${stats.monthCostBooked.toLocaleString()}원`} color="bg-orange-500" sub="예약자 기준" />
+                    </div>
+                    {stats.monthCostDetails.length > 0 && (
+                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="divide-y divide-gray-50">
+                                {stats.monthCostDetails.map((d, i) => (
+                                    <div key={i} className="flex items-center justify-between px-4 py-3">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-800">{d.title}</p>
+                                            <p className="text-xs text-gray-400">{d.date} · {d.totalCost.toLocaleString()}원 ÷ {d.attendCount}명</p>
+                                        </div>
+                                        <span className="text-sm font-bold text-green-700">{d.myShare.toLocaleString()}원</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Game Stats */}
             <div>
