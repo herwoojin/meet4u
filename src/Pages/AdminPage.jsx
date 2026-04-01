@@ -49,7 +49,10 @@ const CostManagement = ({ meetings, users }) => {
         });
 
         monthMeetings.forEach(m => {
-            const cost = Number(m.rentalCost) || 0;
+            const entries = m.costEntries || [];
+            const cost = entries.length > 0
+                ? entries.reduce((sum, e) => sum + (Number(e.cost) || 0), 0)
+                : (Number(m.rentalCost) || 0);
             if (cost <= 0) return;
 
             totalCost += cost;
@@ -66,6 +69,10 @@ const CostManagement = ({ meetings, users }) => {
                 if (isValid(d)) dateFormatted = format(d, 'MM/dd');
             } catch (e) { /* keep original */ }
 
+            const bookedByNames = entries.length > 0
+                ? entries.filter(e => e.bookedBy).map(e => e.bookedBy).join(', ') || '-'
+                : (m.bookedBy || '-');
+
             meetingCosts.push({
                 id: m.id,
                 title: m.title,
@@ -74,7 +81,8 @@ const CostManagement = ({ meetings, users }) => {
                 cost,
                 attendCount,
                 perPerson,
-                bookedBy: m.bookedBy || '-',
+                bookedBy: bookedByNames,
+                costEntries: entries,
             });
 
             // Assign per-person costs
@@ -93,8 +101,15 @@ const CostManagement = ({ meetings, users }) => {
                 userCosts[key].details.push({ title: m.title, date: dateFormatted, amount: perPerson });
             });
 
-            // Track booked cost
-            if (m.bookedBy) {
+            // Track booked cost per entry
+            if (entries.length > 0) {
+                entries.forEach(entry => {
+                    if (entry.bookedBy) {
+                        const booker = Object.values(userCosts).find(u => u.name === entry.bookedBy);
+                        if (booker) booker.bookedTotal += (Number(entry.cost) || 0);
+                    }
+                });
+            } else if (m.bookedBy) {
                 const booker = Object.values(userCosts).find(u => u.name === m.bookedBy);
                 if (booker) booker.bookedTotal += cost;
             }

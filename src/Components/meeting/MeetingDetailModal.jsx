@@ -286,42 +286,60 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     )}
 
                     {/* Rental Cost Info */}
-                    {(meeting.rentalCost > 0 || meeting.bookedBy) && (
-                        <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-                            <h3 className="text-xs font-bold text-green-800 mb-2 flex items-center gap-1">
-                                <DollarSign size={14} /> 대여 비용
-                            </h3>
-                            <div className="space-y-1.5">
-                                {meeting.bookedBy && (
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-600">예약자</span>
-                                        <span className="font-bold text-gray-900">{meeting.bookedBy}</span>
-                                    </div>
-                                )}
-                                {meeting.rentalCost > 0 && (
-                                    <>
-                                        <div className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-600">대여 금액</span>
-                                            <span className="font-bold text-gray-900">{Number(meeting.rentalCost).toLocaleString()}원</span>
+                    {(() => {
+                        const entries = meeting.costEntries || [];
+                        const totalCost = entries.length > 0
+                            ? entries.reduce((sum, e) => sum + (Number(e.cost) || 0), 0)
+                            : (Number(meeting.rentalCost) || 0);
+                        const hasCost = totalCost > 0 || entries.some(e => e.bookedBy) || meeting.bookedBy;
+                        if (!hasCost) return null;
+
+                        const attendCount = Object.values(responses).filter(v => v === 'attend').length;
+                        const perPerson = attendCount > 0 ? Math.ceil(totalCost / attendCount) : 0;
+
+                        return (
+                            <div className="bg-green-50 p-4 rounded-lg border border-green-100">
+                                <h3 className="text-xs font-bold text-green-800 mb-2 flex items-center gap-1">
+                                    <DollarSign size={14} /> 대여 비용
+                                </h3>
+                                <div className="space-y-1.5">
+                                    {entries.length > 0 ? entries.map((entry, i) => (
+                                        <div key={i} className="flex items-center justify-between text-sm">
+                                            <span className="text-gray-600">{entry.bookedBy || '미지정'}</span>
+                                            <span className="font-bold text-gray-900">{Number(entry.cost).toLocaleString()}원</span>
                                         </div>
-                                        {(() => {
-                                            const attendCount = Object.values(responses).filter(v => v === 'attend').length;
-                                            if (attendCount > 0) {
-                                                const perPerson = Math.ceil(meeting.rentalCost / attendCount);
-                                                return (
-                                                    <div className="flex items-center justify-between text-sm pt-1.5 border-t border-green-200">
-                                                        <span className="text-gray-600">1인당 (÷{attendCount}명)</span>
-                                                        <span className="font-bold text-green-700 text-base">{perPerson.toLocaleString()}원</span>
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
-                                    </>
-                                )}
+                                    )) : (
+                                        <>
+                                            {meeting.bookedBy && (
+                                                <div className="flex items-center justify-between text-sm">
+                                                    <span className="text-gray-600">예약자</span>
+                                                    <span className="font-bold text-gray-900">{meeting.bookedBy}</span>
+                                                </div>
+                                            )}
+                                            {totalCost > 0 && (
+                                                <div className="flex items-center justify-between text-sm">
+                                                    <span className="text-gray-600">대여 금액</span>
+                                                    <span className="font-bold text-gray-900">{totalCost.toLocaleString()}원</span>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                    {entries.length > 1 && (
+                                        <div className="flex items-center justify-between text-sm pt-1 border-t border-green-200">
+                                            <span className="text-gray-600 font-medium">합계</span>
+                                            <span className="font-bold text-gray-900">{totalCost.toLocaleString()}원</span>
+                                        </div>
+                                    )}
+                                    {totalCost > 0 && attendCount > 0 && (
+                                        <div className="flex items-center justify-between text-sm pt-1.5 border-t border-green-200">
+                                            <span className="text-gray-600">1인당 (÷{attendCount}명)</span>
+                                            <span className="font-bold text-green-700 text-base">{perPerson.toLocaleString()}원</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {/* Stats */}
                     <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">

@@ -108,9 +108,14 @@ const MyDashboard = () => {
 
             // Calculate cost for this month's meetings
             const meetingDate = meeting.date || '';
-            if (meetingDate.startsWith(currentMonth) && meeting.rentalCost > 0) {
+            const entries = meeting.costEntries || [];
+            const meetingTotalCost = entries.length > 0
+                ? entries.reduce((sum, e) => sum + (Number(e.cost) || 0), 0)
+                : (Number(meeting.rentalCost) || 0);
+
+            if (meetingDate.startsWith(currentMonth) && meetingTotalCost > 0) {
                 const attendCount = Object.values(responses).filter(v => v === 'attend').length;
-                const perPerson = attendCount > 0 ? Math.ceil(meeting.rentalCost / attendCount) : 0;
+                const perPerson = attendCount > 0 ? Math.ceil(meetingTotalCost / attendCount) : 0;
 
                 // If I attended, I need to pay 1/N
                 if (isAttend && attendCount > 0) {
@@ -118,16 +123,20 @@ const MyDashboard = () => {
                     monthCostDetails.push({
                         title: meeting.title,
                         date: meetingDate,
-                        totalCost: meeting.rentalCost,
+                        totalCost: meetingTotalCost,
                         attendCount,
                         myShare: perPerson,
                     });
                 }
 
-                // If I booked this meeting
+                // If I booked (check costEntries bookedBy or legacy bookedBy)
                 const myName = currentUser.displayName || email.split('@')[0];
-                if (meeting.bookedBy === myName || meeting.createdBy === currentUser.uid) {
-                    monthCostBooked += meeting.rentalCost;
+                if (entries.length > 0) {
+                    entries.forEach(e => {
+                        if (e.bookedBy === myName) monthCostBooked += (Number(e.cost) || 0);
+                    });
+                } else if (meeting.bookedBy === myName || meeting.createdBy === currentUser.uid) {
+                    monthCostBooked += meetingTotalCost;
                 }
             }
 
