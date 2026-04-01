@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { BarChart3, Trophy, Calendar, TrendingUp, Users, Target, DollarSign, CreditCard } from 'lucide-react';
+import { BarChart3, Trophy, Calendar, TrendingUp, Users, Target, DollarSign, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
@@ -33,11 +33,10 @@ const MyDashboard = () => {
         losses: 0,
         winPartners: {},
         lossOpponents: {},
-        monthCostToPay: 0,
-        monthCostBooked: 0,
-        monthCostDetails: [],
     });
     const [userCreatedAt, setUserCreatedAt] = useState(null);
+    const [allMeetings, setAllMeetings] = useState([]);
+    const [costDate, setCostDate] = useState(new Date());
 
     useEffect(() => {
         if (!currentUser?.email) return;
@@ -66,7 +65,8 @@ const MyDashboard = () => {
 
         // Fetch all meetings where this user is an attendee
         const meetingsSnap = await getDocs(collection(db, 'meetings'));
-        const allMeetings = meetingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const fetchedMeetings = meetingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setAllMeetings(fetchedMeetings);
 
         let monthAttend = 0;
         let yearAttend = 0;
@@ -77,10 +77,6 @@ const MyDashboard = () => {
         let losses = 0;
         const winPartners = {};
         const lossOpponents = {};
-        let monthCostToPay = 0;
-        let monthCostBooked = 0;
-        const monthCostDetails = [];
-        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
         // Helper: get display name from email key
         const getNameFromEmail = (emailKey) => {
@@ -104,40 +100,6 @@ const MyDashboard = () => {
                 const meetingDate = meeting.date;
                 if (meetingDate >= monthStart) monthAttend++;
                 if (meetingDate >= yearStart) yearAttend++;
-            }
-
-            // Calculate cost for this month's meetings
-            const meetingDate = meeting.date || '';
-            const entries = meeting.costEntries || [];
-            const meetingTotalCost = entries.length > 0
-                ? entries.reduce((sum, e) => sum + (Number(e.cost) || 0), 0)
-                : (Number(meeting.rentalCost) || 0);
-
-            if (meetingDate.startsWith(currentMonth) && meetingTotalCost > 0) {
-                const attendCount = Object.values(responses).filter(v => v === 'attend').length;
-                const perPerson = attendCount > 0 ? Math.ceil(meetingTotalCost / attendCount) : 0;
-
-                // If I attended, I need to pay 1/N
-                if (isAttend && attendCount > 0) {
-                    monthCostToPay += perPerson;
-                    monthCostDetails.push({
-                        title: meeting.title,
-                        date: meetingDate,
-                        totalCost: meetingTotalCost,
-                        attendCount,
-                        myShare: perPerson,
-                    });
-                }
-
-                // If I booked (check costEntries bookedBy or legacy bookedBy)
-                const myName = currentUser.displayName || email.split('@')[0];
-                if (entries.length > 0) {
-                    entries.forEach(e => {
-                        if (e.bookedBy === myName) monthCostBooked += (Number(e.cost) || 0);
-                    });
-                } else if (meeting.bookedBy === myName || meeting.createdBy === currentUser.uid) {
-                    monthCostBooked += meetingTotalCost;
-                }
             }
 
             // Analyze scoreboard
@@ -199,9 +161,62 @@ const MyDashboard = () => {
             });
         });
 
-        setStats({ monthAttend, yearAttend, totalAttend, totalGames, wins, draws, losses, winPartners, lossOpponents, monthCostToPay, monthCostBooked, monthCostDetails });
+        setStats({ monthAttend, yearAttend, totalAttend, totalGames, wins, draws, losses, winPartners, lossOpponents });
         setLoading(false);
     };
+
+    // Cost stats - calculated per selected month
+    const costStats = useMemo(() => {
+        if (!currentUser?.email || allMeetings.length === 0) {
+            return { costToPay: 0, costBooked: 0, details: [] };
+        }
+        const email = currentUser.email;
+        const sanitizedEmail = email.replace(/\./g, '_');
+        const myName = currentUser.displayName || email.split('@')[0];
+        const selectedMonth = `${costDate.getFullYear()}-${String(costDate.getMonth() + 1).padStart(2, '0')}`;
+
+        let costToPay = 0;
+        let costBooked = 0;
+        const details = [];
+
+        allMeetings.forEach(meeting => {
+            const meetingDate = meeting.date || '';
+            if (!meetingDate.startsWith(selectedMonth)) return;
+
+            const entries = meeting.costEntries || [];
+            const totalCost = entries.length > 0
+                ? entries.reduce((sum, e) => sum + (Number(e.cost) || 0), 0)
+                : (Number(meeting.rentalCost) || 0);
+            if (totalCost <= 0) return;
+
+            const responses = meeting.responses || {};
+            const userResponse = responses[sanitizedEmail] || responses[email];
+            const isAttend = userResponse === 'attend';
+            const attendCount = Object.values(responses).filter(v => v === 'attend').length;
+            const perPerson = attendCount > 0 ? Math.ceil(totalCost / attendCount) : 0;
+
+            if (isAttend && attendCount > 0) {
+                costToPay += perPerson;
+                details.push({
+                    title: meeting.title,
+                    date: meetingDate,
+                    totalCost,
+                    attendCount,
+                    myShare: perPerson,
+                });
+            }
+
+            if (entries.length > 0) {
+                entries.forEach(e => {
+                    if (e.bookedBy === myName) costBooked += (Number(e.cost) || 0);
+                });
+            } else if (meeting.bookedBy === myName || meeting.createdBy === currentUser.uid) {
+                costBooked += totalCost;
+            }
+        });
+
+        return { costToPay, costBooked, details };
+    }, [allMeetings, costDate, currentUser]);
 
     // Chart data
     const wdlData = [
@@ -263,33 +278,66 @@ const MyDashboard = () => {
             </div>
 
             {/* Monthly Cost Stats */}
-            {(stats.monthCostToPay > 0 || stats.monthCostBooked > 0) && (
-                <div>
-                    <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
+            <div>
+                <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
                         <DollarSign size={16} className="text-green-500" />
-                        이달 비용 현황 ({new Date().getMonth() + 1}월)
+                        비용 현황
                     </h2>
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                        <StatCard icon={CreditCard} label="내가 낼 금액" value={`${stats.monthCostToPay.toLocaleString()}원`} color="bg-green-500" sub="참석 기준 1/N" />
-                        <StatCard icon={DollarSign} label="내가 예약한 비용" value={`${stats.monthCostBooked.toLocaleString()}원`} color="bg-orange-500" sub="예약자 기준" />
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCostDate(new Date(costDate.getFullYear(), costDate.getMonth() - 1, 1))}
+                            className="p-1 hover:bg-gray-100 rounded-full transition text-gray-500"
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
+                        <span className="text-sm font-bold text-gray-700 w-24 text-center">
+                            {costDate.getFullYear()}년 {costDate.getMonth() + 1}월
+                        </span>
+                        <button
+                            onClick={() => setCostDate(new Date(costDate.getFullYear(), costDate.getMonth() + 1, 1))}
+                            className="p-1 hover:bg-gray-100 rounded-full transition text-gray-500"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                        {(costDate.getFullYear() !== new Date().getFullYear() || costDate.getMonth() !== new Date().getMonth()) && (
+                            <button
+                                onClick={() => setCostDate(new Date())}
+                                className="text-xs text-blue-600 font-medium hover:text-blue-700 ml-1"
+                            >
+                                이번달
+                            </button>
+                        )}
                     </div>
-                    {stats.monthCostDetails.length > 0 && (
-                        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="divide-y divide-gray-50">
-                                {stats.monthCostDetails.map((d, i) => (
-                                    <div key={i} className="flex items-center justify-between px-4 py-3">
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-800">{d.title}</p>
-                                            <p className="text-xs text-gray-400">{d.date} · {d.totalCost.toLocaleString()}원 ÷ {d.attendCount}명</p>
-                                        </div>
-                                        <span className="text-sm font-bold text-green-700">{d.myShare.toLocaleString()}원</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
                 </div>
-            )}
+                {costStats.costToPay > 0 || costStats.costBooked > 0 ? (
+                    <>
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                            <StatCard icon={CreditCard} label="내가 낼 금액" value={`${costStats.costToPay.toLocaleString()}원`} color="bg-green-500" sub="참석 기준 1/N" />
+                            <StatCard icon={DollarSign} label="내가 예약한 비용" value={`${costStats.costBooked.toLocaleString()}원`} color="bg-orange-500" sub="예약자 기준" />
+                        </div>
+                        {costStats.details.length > 0 && (
+                            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                                <div className="divide-y divide-gray-50">
+                                    {costStats.details.map((d, i) => (
+                                        <div key={i} className="flex items-center justify-between px-4 py-3">
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-800">{d.title}</p>
+                                                <p className="text-xs text-gray-400">{d.date} · {d.totalCost.toLocaleString()}원 ÷ {d.attendCount}명</p>
+                                            </div>
+                                            <span className="text-sm font-bold text-green-700">{d.myShare.toLocaleString()}원</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm text-center">
+                        <p className="text-gray-400 text-sm">해당 월에 비용 내역이 없습니다.</p>
+                    </div>
+                )}
+            </div>
 
             {/* Game Stats */}
             <div>
