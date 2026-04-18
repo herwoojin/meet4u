@@ -38,6 +38,8 @@ const Profile = () => {
     const handleUpdateProfile = async () => {
         if (!newName.trim()) return;
         setLoading(true);
+        const prevLang = userProfile?.preferredLanguage || 'ko';
+        const languageChanged = prevLang !== newLang;
         try {
             // 1. Update Firebase Auth Profile
             await updateProfile(auth.currentUser, {
@@ -53,12 +55,13 @@ const Profile = () => {
                 updatedAt: new Date().toISOString()
             }, { merge: true });
 
-            // Force update userProfile in context by reloading page or relying on user context refetch
-            // But better to just alert
             setIsEditing(false);
-            alert("프로필이 성공적으로 업데이트되었습니다.");
-            // Force reload to reflect changes
-            // window.location.reload(); // Removing reload to prevent race condition with AuthContext sync
+            if (languageChanged) {
+                alert("프로필이 성공적으로 업데이트되었습니다.\n언어 설정을 적용하려면 재로그인 해주세요.");
+                await logout();
+            } else {
+                alert("프로필이 성공적으로 업데이트되었습니다.");
+            }
         } catch (error) {
             console.error("Error updating profile:", error);
             alert("프로필 업데이트에 실패했습니다.");
