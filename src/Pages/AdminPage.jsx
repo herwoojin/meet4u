@@ -115,11 +115,33 @@ const CostManagement = ({ meetings, users }) => {
             }
         });
 
-        const userCostList = Object.values(userCosts)
-            .filter(u => u.totalToPay > 0 || u.bookedTotal > 0)
-            .sort((a, b) => b.totalToPay - a.totalToPay);
+        let userCostList = Object.values(userCosts)
+            .filter(u => u.totalToPay > 0 || u.bookedTotal > 0);
 
-        return { totalCost, meetingCosts, userCostList };
+        let sumBooked = userCostList.reduce((sum, u) => sum + u.bookedTotal, 0);
+        let sumTotalToPay = userCostList.reduce((sum, u) => sum + u.totalToPay, 0);
+
+        const diff = sumBooked - sumTotalToPay;
+        const payingMembers = userCostList.filter(u => u.totalToPay > 0);
+
+        if (diff !== 0 && payingMembers.length > 0) {
+            const isPositive = diff > 0;
+            const absDiff = Math.abs(diff);
+            const diffPerPerson = Math.floor(absDiff / payingMembers.length);
+            let remainder = absDiff % payingMembers.length;
+
+            payingMembers.forEach((u) => {
+                let adjustment = diffPerPerson + (remainder > 0 ? 1 : 0);
+                if (remainder > 0) remainder--;
+                u.totalToPay += isPositive ? adjustment : -adjustment;
+            });
+            
+            sumTotalToPay = userCostList.reduce((sum, u) => sum + u.totalToPay, 0);
+        }
+
+        userCostList.sort((a, b) => b.totalToPay - a.totalToPay);
+
+        return { totalCost, meetingCosts, userCostList, sumBooked, sumTotalToPay };
     }, [meetings, users, selectedYear, selectedMonth]);
 
     return (
@@ -238,6 +260,16 @@ const CostManagement = ({ meetings, users }) => {
                                         </tr>
                                     );
                                 })}
+                                <tr className="bg-gray-50 font-bold border-t-2 border-gray-200">
+                                    <td className="px-5 py-3 text-center">합계</td>
+                                    <td className="px-5 py-3 text-right text-green-700">{monthlyData.sumTotalToPay.toLocaleString()}원</td>
+                                    <td className="px-5 py-3 text-right text-orange-600">{monthlyData.sumBooked.toLocaleString()}원</td>
+                                    <td className="px-5 py-3 text-right text-gray-900">
+                                        {(monthlyData.sumBooked - monthlyData.sumTotalToPay) > 0 
+                                            ? `+${(monthlyData.sumBooked - monthlyData.sumTotalToPay).toLocaleString()}원` 
+                                            : `${(monthlyData.sumBooked - monthlyData.sumTotalToPay).toLocaleString()}원`}
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
