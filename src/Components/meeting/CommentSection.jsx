@@ -1,21 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../../lib/firebase';
 import { collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { Send, MessageSquare, Trash2, CheckCheck } from 'lucide-react';
+import { Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
 
+// BCP 47 locales for Web Speech API (SpeechRecognition / SpeechSynthesis)
+const SPEECH_LOCALE = {
+    'ko': 'ko-KR',
+    'en': 'en-US',
+    'zh-CN': 'zh-CN',
+    'ja': 'ja-JP',
+    'ru': 'ru-RU',
+    'es': 'es-ES',
+    'vi': 'vi-VN',
+    'mn': 'mn-MN',
+    'ar': 'ar-SA',
+    'fr': 'fr-FR',
+};
+
 const CommentSection = ({ meetingId, currentUser, attendees }) => {
     const { userProfile } = useAuth();
     const myLang = userProfile?.preferredLanguage || 'ko';
-    
+
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState('');
     const [loading, setLoading] = useState(true);
+    const [isRecording, setIsRecording] = useState(false);
+    const [speakingId, setSpeakingId] = useState(null);
     const commentsEndRef = useRef(null);
     const markedAsRead = useRef(new Set());
     const translatingRef = useRef(new Set());
+    const recognitionRef = useRef(null);
+    const recordingBaseRef = useRef('');
 
     useEffect(() => {
         if (!meetingId) return;
@@ -103,6 +121,81 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
 
     const scrollToBottom = () => {
         commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    // Clean up any ongoing recognition/speech on unmount
+    useEffect(() => {
+        return () => {
+            try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
+            if (typeof window !== 'undefined' && window.speechSynthesis) {
+                window.speechSynthesis.cancel();
+            }
+        };
+    }, []);
+
+    // Speech-to-text: dictate in user's preferred language
+    const toggleRecording = () => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('이 브라우저에서는 음성 입력을 지원하지 않습니다. Chrome 또는 Edge를 사용해주세요.');
+            return;
+        }
+
+        if (isRecording) {
+            try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
+            setIsRecording(false);
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = SPEECH_LOCALE[myLang] || 'ko-KR';
+        recognition.interimResults = true;
+        recognition.continuous = true;
+
+        recordingBaseRef.current = newComment ? newComment.trimEnd() + ' ' : '';
+
+        recognition.onresult = (event) => {
+            let transcript = '';
+            for (let i = 0; i < event.results.length; i++) {
+                transcript += event.results[i][0].transcript;
+            }
+            setNewComment(recordingBaseRef.current + transcript);
+        };
+        recognition.onerror = (e) => {
+            console.error('Speech recognition error:', e);
+            setIsRecording(false);
+        };
+        recognition.onend = () => setIsRecording(false);
+
+        try {
+            recognition.start();
+            recognitionRef.current = recognition;
+            setIsRecording(true);
+        } catch (err) {
+            console.error('Failed to start recognition:', err);
+            setIsRecording(false);
+        }
+    };
+
+    // Text-to-speech: play a comment aloud in its source language
+    const speakComment = (commentId, text, lang) => {
+        if (typeof window === 'undefined' || !window.speechSynthesis) {
+            alert('이 브라우저에서는 음성 재생을 지원하지 않습니다.');
+            return;
+        }
+        const synth = window.speechSynthesis;
+        if (speakingId === commentId) {
+            synth.cancel();
+            setSpeakingId(null);
+            return;
+        }
+        synth.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = SPEECH_LOCALE[lang] || 'ko-KR';
+        utter.onend = () => setSpeakingId(null);
+        utter.onerror = () => setSpeakingId(null);
+        setSpeakingId(commentId);
+        synth.speak(utter);
     };
 
     const handleSubmit = async (e) => {
@@ -227,21 +320,34 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                                     {comment.timestamp ? format(comment.timestamp.toDate(), 'a h:mm', { locale: ko }) : '방금 전'}
                                 </span>
                             </div>
-                            <div className={`px-3 py-2 rounded-lg text-sm max-w-[85%] break-words ${isMe
-                                ? 'bg-blue-600 text-white rounded-tr-none'
-                                : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
-                                }`}>
-                                {displayText}
-                                {isTranslated && (
-                                    <div className="text-[9px] text-gray-400 mt-1 flex items-center gap-1 border-t border-gray-100 pt-1">
-                                        번역됨 (원문: {comment.text})
-                                    </div>
-                                )}
-                                {isTranslating && (
-                                    <div className="text-[9px] text-gray-300 mt-1 italic">
-                                        번역 중...
-                                    </div>
-                                )}
+                            <div className={`flex items-start gap-1.5 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                <div className={`px-3 py-2 rounded-lg text-sm break-words ${isMe
+                                    ? 'bg-blue-600 text-white rounded-tr-none'
+                                    : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
+                                    }`}>
+                                    {displayText}
+                                    {isTranslated && (
+                                        <div className="text-[9px] text-gray-400 mt-1 flex items-center gap-1 border-t border-gray-100 pt-1">
+                                            번역됨 (원문: {comment.text})
+                                        </div>
+                                    )}
+                                    {isTranslating && (
+                                        <div className="text-[9px] text-gray-300 mt-1 italic">
+                                            번역 중...
+                                        </div>
+                                    )}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => speakComment(comment.id, comment.text, comment.sourceLanguage || 'ko')}
+                                    className={`shrink-0 p-1.5 rounded-full transition-colors ${speakingId === comment.id
+                                        ? 'bg-blue-100 text-blue-600 animate-pulse'
+                                        : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+                                        }`}
+                                    title={speakingId === comment.id ? '재생 중지' : '원문 소리내어 듣기'}
+                                >
+                                    {speakingId === comment.id ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                                </button>
                             </div>
                             {/* Read Receipt */}
                             {isMe && readStatus && (
@@ -262,9 +368,23 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                     type="text"
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    placeholder="댓글을 입력하세요..."
+                    placeholder={isRecording ? '듣는 중... 말씀해주세요' : '댓글을 입력하세요...'}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                <button
+                    type="button"
+                    onClick={toggleRecording}
+                    className={`relative p-2 rounded-lg transition-all shadow-sm ${isRecording
+                        ? 'bg-gradient-to-br from-red-500 to-pink-600 text-white ring-2 ring-red-300 animate-pulse'
+                        : 'bg-gradient-to-br from-orange-400 to-red-500 text-white hover:from-orange-500 hover:to-red-600'
+                        }`}
+                    title={isRecording ? '녹음 중지' : '음성으로 입력'}
+                >
+                    <Mic size={18} />
+                    {isRecording && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-white animate-ping"></span>
+                    )}
+                </button>
                 <button
                     type="submit"
                     disabled={!newComment.trim()}
