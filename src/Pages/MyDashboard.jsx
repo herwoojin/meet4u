@@ -7,6 +7,16 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
+// Helper: convert sanitized email key back to real email (matches AdminPage logic)
+const unsanitizeEmail = (key) => {
+    if (!key) return key;
+    const atIndex = key.indexOf('@');
+    if (atIndex === -1) return key;
+    const localPart = key.substring(0, atIndex);
+    const domainPart = key.substring(atIndex + 1).replace(/_/g, '.');
+    return localPart + '@' + domainPart;
+};
+
 const StatCard = ({ icon: Icon, label, value, color, sub }) => (
     <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
         <div className="flex items-center gap-2 mb-2">
@@ -36,6 +46,7 @@ const MyDashboard = () => {
     });
     const [userCreatedAt, setUserCreatedAt] = useState(null);
     const [allMeetings, setAllMeetings] = useState([]);
+    const [allUsers, setAllUsers] = useState([]);
     const [costDate, setCostDate] = useState(new Date());
 
     useEffect(() => {
@@ -67,6 +78,14 @@ const MyDashboard = () => {
         const meetingsSnap = await getDocs(collection(db, 'meetings'));
         const fetchedMeetings = meetingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         setAllMeetings(fetchedMeetings);
+
+        // Fetch all users so cost calculation can mirror AdminPage (settlement across all members)
+        try {
+            const usersSnap = await getDocs(collection(db, 'users'));
+            setAllUsers(usersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } catch (e) {
+            console.error('Error fetching users:', e);
+        }
 
         let monthAttend = 0;
         let yearAttend = 0;
@@ -165,19 +184,29 @@ const MyDashboard = () => {
         setLoading(false);
     };
 
-    // Cost stats - calculated per selected month
+    // Cost stats - mirrors AdminPage's monthlyData calculation so the total matches
     const costStats = useMemo(() => {
         if (!currentUser?.email || allMeetings.length === 0) {
-            return { costToPay: 0, costBooked: 0, details: [] };
+            return { costToPay: 0, costBooked: 0, details: [], adjustment: 0 };
         }
-        const email = currentUser.email;
-        const sanitizedEmail = email.replace(/\./g, '_');
-        const myName = currentUser.displayName || email.split('@')[0];
+        const myEmailLower = currentUser.email.toLowerCase();
+        const sanitizedEmail = currentUser.email.replace(/\./g, '_');
         const selectedMonth = `${costDate.getFullYear()}-${String(costDate.getMonth() + 1).padStart(2, '0')}`;
 
-        let costToPay = 0;
-        let costBooked = 0;
-        const details = [];
+        // Initialize userCosts from all registered users (matches AdminPage)
+        const userCosts = {};
+        allUsers.forEach(u => {
+            if (u.email) {
+                userCosts[u.email.toLowerCase()] = {
+                    name: u.displayName || u.email.split('@')[0],
+                    email: u.email,
+                    totalToPay: 0,
+                    bookedTotal: 0,
+                };
+            }
+        });
+
+        const myDetails = [];
 
         allMeetings.forEach(meeting => {
             const meetingDate = meeting.date || '';
@@ -190,14 +219,15 @@ const MyDashboard = () => {
             if (totalCost <= 0) return;
 
             const responses = meeting.responses || {};
-            const userResponse = responses[sanitizedEmail] || responses[email];
-            const isAttend = userResponse === 'attend';
-            const attendCount = Object.values(responses).filter(v => v === 'attend').length;
+            const attendeeKeys = Object.entries(responses)
+                .filter(([, status]) => status === 'attend')
+                .map(([key]) => key);
+            const attendCount = attendeeKeys.length;
             const perPerson = attendCount > 0 ? Math.ceil(totalCost / attendCount) : 0;
 
-            if (isAttend && attendCount > 0) {
-                costToPay += perPerson;
-                details.push({
+            const iAttend = attendeeKeys.includes(sanitizedEmail) || attendeeKeys.includes(currentUser.email);
+            if (iAttend && perPerson > 0) {
+                myDetails.push({
                     title: meeting.title,
                     date: meetingDate,
                     totalCost,
@@ -206,17 +236,67 @@ const MyDashboard = () => {
                 });
             }
 
+            // Distribute per-person cost to every attendee
+            attendeeKeys.forEach(key => {
+                const keyEmail = unsanitizeEmail(key).toLowerCase();
+                if (!userCosts[keyEmail]) {
+                    userCosts[keyEmail] = {
+                        name: keyEmail.split('@')[0],
+                        email: keyEmail,
+                        totalToPay: 0,
+                        bookedTotal: 0,
+                    };
+                }
+                userCosts[keyEmail].totalToPay += perPerson;
+            });
+
+            // Track booked amount
             if (entries.length > 0) {
-                entries.forEach(e => {
-                    if (e.bookedBy === myName) costBooked += (Number(e.cost) || 0);
+                entries.forEach(entry => {
+                    if (entry.bookedBy) {
+                        const booker = Object.values(userCosts).find(u => u.name === entry.bookedBy);
+                        if (booker) booker.bookedTotal += (Number(entry.cost) || 0);
+                    }
                 });
-            } else if (meeting.bookedBy === myName || meeting.createdBy === currentUser.uid) {
-                costBooked += totalCost;
+            } else if (meeting.bookedBy) {
+                const booker = Object.values(userCosts).find(u => u.name === meeting.bookedBy);
+                if (booker) booker.bookedTotal += totalCost;
             }
         });
 
-        return { costToPay, costBooked, details };
-    }, [allMeetings, costDate, currentUser]);
+        const userCostList = Object.values(userCosts)
+            .filter(u => u.totalToPay > 0 || u.bookedTotal > 0);
+
+        let sumBooked = userCostList.reduce((sum, u) => sum + u.bookedTotal, 0);
+        let sumTotalToPay = userCostList.reduce((sum, u) => sum + u.totalToPay, 0);
+
+        const diff = sumBooked - sumTotalToPay;
+        const payingMembers = userCostList.filter(u => u.totalToPay > 0);
+        let myAdjustment = 0;
+
+        if (diff !== 0 && payingMembers.length > 0) {
+            const isPositive = diff > 0;
+            const absDiff = Math.abs(diff);
+            const diffPerPerson = Math.floor(absDiff / payingMembers.length);
+            let remainder = absDiff % payingMembers.length;
+
+            payingMembers.forEach((u) => {
+                const share = diffPerPerson + (remainder > 0 ? 1 : 0);
+                if (remainder > 0) remainder--;
+                const signed = isPositive ? share : -share;
+                u.totalToPay += signed;
+                if (u.email.toLowerCase() === myEmailLower) {
+                    myAdjustment = signed;
+                }
+            });
+        }
+
+        const me = userCostList.find(u => u.email.toLowerCase() === myEmailLower);
+        const costToPay = me?.totalToPay || 0;
+        const costBooked = me?.bookedTotal || 0;
+
+        return { costToPay, costBooked, details: myDetails, adjustment: myAdjustment };
+    }, [allMeetings, allUsers, costDate, currentUser]);
 
     // Chart data
     const wdlData = [
@@ -316,7 +396,7 @@ const MyDashboard = () => {
                             <StatCard icon={CreditCard} label="내가 낼 금액" value={`${costStats.costToPay.toLocaleString()}원`} color="bg-green-500" sub="참석 기준 1/N" />
                             <StatCard icon={DollarSign} label="내가 예약한 비용" value={`${costStats.costBooked.toLocaleString()}원`} color="bg-orange-500" sub="예약자 기준" />
                         </div>
-                        {costStats.details.length > 0 && (
+                        {(costStats.details.length > 0 || costStats.adjustment !== 0) && (
                             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
                                 <div className="divide-y divide-gray-50">
                                     {costStats.details.map((d, i) => (
@@ -328,6 +408,17 @@ const MyDashboard = () => {
                                             <span className="text-sm font-bold text-green-700">{d.myShare.toLocaleString()}원</span>
                                         </div>
                                     ))}
+                                    {costStats.adjustment !== 0 && (
+                                        <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
+                                            <div>
+                                                <p className="text-sm font-medium text-gray-700">정산 조정</p>
+                                                <p className="text-xs text-gray-400">월 총 대여비와 예약 비용 정산</p>
+                                            </div>
+                                            <span className={`text-sm font-bold ${costStats.adjustment > 0 ? 'text-green-700' : 'text-red-500'}`}>
+                                                {costStats.adjustment > 0 ? '+' : ''}{costStats.adjustment.toLocaleString()}원
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}

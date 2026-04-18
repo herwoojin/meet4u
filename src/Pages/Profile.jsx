@@ -1,22 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, User, Mail, Edit2, Save, X } from 'lucide-react';
+import { LogOut, User, Mail, Edit2, Save, X, Globe } from 'lucide-react';
 import { updateProfile } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
+const SUPPORTED_LANGUAGES = [
+    { code: 'ko', label: '한국어(Korean)' },
+    { code: 'en', label: 'English(영어)' },
+    { code: 'zh-CN', label: '中文(Chinese)' },
+    { code: 'ja', label: '日本語(Japanese)' },
+    { code: 'ru', label: 'Русский(Russian)' },
+    { code: 'es', label: 'Español(Spanish)' },
+    { code: 'vi', label: 'Tiếng Việt(Vietnamese)' },
+    { code: 'mn', label: 'Монгол(Mongolian)' },
+    { code: 'ar', label: 'العربية(Arabic)' },
+    { code: 'fr', label: 'Français(French)' },
+];
+
 const Profile = () => {
-    const { currentUser, logout } = useAuth();
+    const { currentUser, userProfile, logout } = useAuth();
     const [isEditing, setIsEditing] = useState(false);
     const [newName, setNewName] = useState(currentUser?.displayName || "");
+    const [newLang, setNewLang] = useState(userProfile?.preferredLanguage || "ko");
     const [loading, setLoading] = useState(false);
 
-    // Update local state when currentUser changes
+    // Update local state when currentUser/userProfile changes
     useEffect(() => {
         if (currentUser?.displayName) {
             setNewName(currentUser.displayName);
         }
-    }, [currentUser]);
+        if (userProfile?.preferredLanguage) {
+            setNewLang(userProfile.preferredLanguage);
+        }
+    }, [currentUser, userProfile]);
 
     const handleUpdateProfile = async () => {
         if (!newName.trim()) return;
@@ -31,10 +48,13 @@ const Profile = () => {
             await setDoc(doc(db, "users", currentUser.uid), {
                 email: currentUser.email,
                 displayName: newName,
+                preferredLanguage: newLang,
                 photoURL: currentUser.photoURL,
                 updatedAt: new Date().toISOString()
             }, { merge: true });
 
+            // Force update userProfile in context by reloading page or relying on user context refetch
+            // But better to just alert
             setIsEditing(false);
             alert("프로필이 성공적으로 업데이트되었습니다.");
             // Force reload to reflect changes
@@ -66,37 +86,63 @@ const Profile = () => {
                         <div>
                             <div className="flex items-center gap-3">
                                 {isEditing ? (
-                                    <div className="flex items-center gap-2 w-full max-w-sm">
-                                        <input
-                                            type="text"
-                                            value={newName}
-                                            onChange={(e) => setNewName(e.target.value)}
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            placeholder="닉네임을 입력하세요"
-                                        />
-                                        <button
-                                            onClick={handleUpdateProfile}
-                                            disabled={loading}
-                                            className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                                        >
-                                            <Save size={20} />
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setIsEditing(false);
-                                                setNewName(currentUser?.displayName || "");
-                                            }}
-                                            className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
-                                        >
-                                            <X size={20} />
-                                        </button>
+                                    <div className="flex flex-col gap-2 w-full max-w-sm">
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="text"
+                                                value={newName}
+                                                onChange={(e) => setNewName(e.target.value)}
+                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                                placeholder="닉네임을 입력하세요"
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <Globe className="text-gray-400" size={16} />
+                                            <select
+                                                value={newLang}
+                                                onChange={(e) => setNewLang(e.target.value)}
+                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm h-10"
+                                                style={{ WebkitAppearance: 'auto' }}
+                                            >
+                                                {SUPPORTED_LANGUAGES.map(lang => (
+                                                    <option key={lang.code} value={lang.code}>
+                                                        {lang.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="flex gap-2 mt-2">
+                                            <button
+                                                onClick={handleUpdateProfile}
+                                                disabled={loading}
+                                                className="flex-1 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
+                                            >
+                                                <Save size={18} className="mr-1" /> 저장
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setIsEditing(false);
+                                                    setNewName(currentUser?.displayName || "");
+                                                    setNewLang(userProfile?.preferredLanguage || "ko");
+                                                }}
+                                                className="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"
+                                            >
+                                                <X size={20} />
+                                            </button>
+                                        </div>
                                     </div>
                                 ) : (
                                     <>
-                                        <h3 className="text-2xl font-bold text-gray-900">{currentUser?.displayName || "사용자 이름"}</h3>
+                                        <div>
+                                            <h3 className="text-2xl font-bold text-gray-900">{currentUser?.displayName || "사용자 이름"}</h3>
+                                            <div className="flex items-center mt-1 text-sm text-gray-600 font-medium">
+                                                <Globe className="text-blue-500 mr-1.5" size={14} />
+                                                선호 언어: {SUPPORTED_LANGUAGES.find(l => l.code === (userProfile?.preferredLanguage || 'ko'))?.label || '한국어'}
+                                            </div>
+                                        </div>
                                         <button
                                             onClick={() => setIsEditing(true)}
-                                            className="text-gray-400 hover:text-blue-600 transition-colors"
+                                            className="text-gray-400 hover:text-blue-600 transition-colors ml-auto self-start mt-2"
                                         >
                                             <Edit2 size={18} />
                                         </button>

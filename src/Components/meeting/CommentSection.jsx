@@ -4,13 +4,18 @@ import { collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDo
 import { Send, MessageSquare, Trash2, CheckCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { useAuth } from '../../context/AuthContext';
 
 const CommentSection = ({ meetingId, currentUser, attendees }) => {
+    const { userProfile } = useAuth();
+    const myLang = userProfile?.preferredLanguage || 'ko';
+    
     const [comments, setComments] = useState([]);
     const [newComment, setNewComment] = useState('');
     const [loading, setLoading] = useState(true);
     const commentsEndRef = useRef(null);
     const markedAsRead = useRef(new Set());
+    const translatingRef = useRef(new Set());
 
     useEffect(() => {
         if (!meetingId) return;
@@ -55,6 +60,47 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         return () => unsubscribe();
     }, [meetingId, currentUser]);
 
+    // Background translation processor
+    useEffect(() => {
+        if (!currentUser) return;
+        
+        comments.forEach(async (comment) => {
+            const isMe = comment.senderEmail === currentUser.email;
+            if (isMe) return;
+
+            const srcLang = comment.sourceLanguage || 'ko';
+            // Same language → no translation needed
+            if (srcLang === myLang) return;
+
+            // If we already have the translation for myLang, skip
+            if (comment.translations && comment.translations[myLang]) return;
+
+            // Avoid duplicate calls
+            if (translatingRef.current.has(comment.id)) return;
+            translatingRef.current.add(comment.id);
+
+            try {
+                const res = await fetch('/.netlify/functions/translate-comment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: comment.text, sourceLang: srcLang, targetLang: myLang })
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.translatedText) {
+                        await updateDoc(doc(db, 'comments', comment.id), {
+                            [`translations.${myLang}`]: data.translatedText
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Translation fail:", err);
+                translatingRef.current.delete(comment.id); // allow retry later
+            }
+        });
+    }, [comments, myLang, currentUser]);
+
     const scrollToBottom = () => {
         commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
@@ -74,6 +120,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                 text: newComment,
                 senderEmail: currentUser.email,
                 senderName,
+                sourceLanguage: myLang,
                 timestamp: serverTimestamp(),
                 readBy: [currentUser.email.toLowerCase()],
                 recipients: recipientEmails
@@ -139,9 +186,16 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
 
     return (
         <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex flex-col h-80">
-            <div className="flex items-center gap-2 mb-4 text-gray-900 font-bold border-b border-gray-200 pb-2">
-                <MessageSquare size={18} className="text-gray-700" />
-                댓글 ({comments.length})
+            <div className="flex items-center justify-between mb-4 text-gray-900 font-bold border-b border-gray-200 pb-2">
+                <div className="flex items-center gap-2">
+                    <MessageSquare size={18} className="text-gray-700" />
+                    댓글 ({comments.length})
+                </div>
+                {myLang !== 'ko' && (
+                    <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100">
+                        번역 활성화됨
+                    </span>
+                )}
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
@@ -152,6 +206,9 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                 {comments.map((comment) => {
                     const isMe = comment.senderEmail === currentUser?.email;
                     const readStatus = isMe ? getReadStatus(comment) : null;
+                    const isTranslated = !isMe && comment.translations && comment.translations[myLang] && comment.translations[myLang] !== comment.text;
+                    const isTranslating = !isMe && !comment.translations?.[myLang];
+                    const displayText = isMe ? comment.text : (comment.translations?.[myLang] || comment.text);
 
                     return (
                         <div key={comment.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
@@ -174,7 +231,17 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                                 ? 'bg-blue-600 text-white rounded-tr-none'
                                 : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
                                 }`}>
-                                {comment.text}
+                                {displayText}
+                                {isTranslated && (
+                                    <div className="text-[9px] text-gray-400 mt-1 flex items-center gap-1 border-t border-gray-100 pt-1">
+                                        번역됨 (원문: {comment.text})
+                                    </div>
+                                )}
+                                {isTranslating && (
+                                    <div className="text-[9px] text-gray-300 mt-1 italic">
+                                        번역 중...
+                                    </div>
+                                )}
                             </div>
                             {/* Read Receipt */}
                             {isMe && readStatus && (

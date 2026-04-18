@@ -9,6 +9,7 @@ export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
+    const [userProfile, setUserProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState(() => {
         // Check sessionStorage for admin session on init
@@ -49,10 +50,20 @@ export const AuthProvider = ({ children }) => {
         setIsAdmin(false);
     };
 
+    const updateUserProfile = async (patch) => {
+        if (!currentUser?.uid) return;
+        await setDoc(doc(db, 'users', currentUser.uid), patch, { merge: true });
+        setUserProfile(prev => ({ ...(prev || {}), ...patch }));
+    };
+
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             setCurrentUser(user);
-            setLoading(false);
+            if (!user) {
+                setUserProfile(null);
+                setLoading(false);
+                return;
+            }
 
             if (user) {
                 try {
@@ -62,22 +73,26 @@ export const AuthProvider = ({ children }) => {
 
                     if (!userSnapshot.exists()) {
                         // Create new user profile if it doesn't exist
-                        await setDoc(userDocRef, {
+                        const newProfile = {
                             email: user.email,
                             displayName: user.displayName,
                             photoURL: user.photoURL,
                             role: 'user',
+                            preferredLanguage: 'ko',
                             createdAt: new Date().toISOString(),
                             lastSeen: new Date().toISOString(),
                             emailSanitized: user.email.replace(/\./g, '_')
-                        });
+                        };
+                        await setDoc(userDocRef, newProfile);
+                        setUserProfile(newProfile);
                         setIsAdmin(false);
                     } else {
-                        // Check user role from Firestore (or keep sessionStorage admin)
                         const userData = userSnapshot.data();
                         if (userData.role === 'admin') {
                             setIsAdmin(true);
                         }
+                        setUserProfile(userData);
+                        
                         // Note: sessionStorage admin status is preserved via useState init
                         // Only update lastSeen and photoURL (if changed) to avoid overwriting custom displayName
                         await setDoc(userDocRef, {
@@ -91,6 +106,7 @@ export const AuthProvider = ({ children }) => {
                     console.error("Error syncing user profile:", error);
                 }
             }
+            setLoading(false);
         });
 
         return unsubscribe;
@@ -98,6 +114,7 @@ export const AuthProvider = ({ children }) => {
 
     const value = {
         currentUser,
+        userProfile,
         login,
         logout,
         loading,
