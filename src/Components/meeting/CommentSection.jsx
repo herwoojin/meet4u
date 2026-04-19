@@ -157,11 +157,18 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         recordingBaseRef.current = newComment ? newComment.trimEnd() + ' ' : '';
 
         recognition.onresult = (event) => {
-            let transcript = '';
-            for (let i = 0; i < event.results.length; i++) {
-                transcript += event.results[i][0].transcript;
+            let finalTranscript = '';
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const result = event.results[i];
+                const transcript = result[0]?.transcript || '';
+                if (result.isFinal) finalTranscript += transcript;
+                else interimTranscript += transcript;
             }
-            setNewComment(recordingBaseRef.current + transcript);
+            if (finalTranscript) {
+                recordingBaseRef.current += finalTranscript;
+            }
+            setNewComment(recordingBaseRef.current + interimTranscript);
         };
         recognition.onerror = (e) => {
             console.error('Speech recognition error:', e);
