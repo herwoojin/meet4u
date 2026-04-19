@@ -149,26 +149,27 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
             return;
         }
 
+        // Android Chrome의 continuous 모드는 확정 세그먼트를 중복 재방출하는
+        // 버그가 있어 모바일에서는 단발 세션으로 동작시킨다.
+        const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
+
         const recognition = new SpeechRecognition();
         recognition.lang = SPEECH_LOCALE[myLang] || 'ko-KR';
         recognition.interimResults = true;
-        recognition.continuous = true;
+        recognition.continuous = !isMobile;
 
-        recordingBaseRef.current = newComment ? newComment.trimEnd() + ' ' : '';
+        recordingBaseRef.current = newComment ? newComment.trimEnd() + (newComment ? ' ' : '') : '';
 
         recognition.onresult = (event) => {
-            let finalTranscript = '';
-            let interimTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
+            let finalText = '';
+            let interimText = '';
+            for (let i = 0; i < event.results.length; i++) {
                 const result = event.results[i];
                 const transcript = result[0]?.transcript || '';
-                if (result.isFinal) finalTranscript += transcript;
-                else interimTranscript += transcript;
+                if (result.isFinal) finalText += transcript;
+                else interimText += transcript;
             }
-            if (finalTranscript) {
-                recordingBaseRef.current += finalTranscript;
-            }
-            setNewComment(recordingBaseRef.current + interimTranscript);
+            setNewComment(recordingBaseRef.current + finalText + interimText);
         };
         recognition.onerror = (e) => {
             console.error('Speech recognition error:', e);
