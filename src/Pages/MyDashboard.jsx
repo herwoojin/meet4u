@@ -105,10 +105,7 @@ const MyDashboard = () => {
             return emailKey.split('@')[0];
         };
 
-        // Build a user map for display names from all meetings' attendees
-        const userNames = {};
-
-        allMeetings.forEach(meeting => {
+        fetchedMeetings.forEach(meeting => {
             const responses = meeting.responses || {};
 
             // Check if user attended this meeting
