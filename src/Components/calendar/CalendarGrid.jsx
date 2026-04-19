@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
-import { ko } from 'date-fns/locale';
+import { ko, enUS, zhCN } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Loader, Users } from 'lucide-react';
 import { db } from '../../lib/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import MeetingDetailModal from '../meeting/MeetingDetailModal';
 import { useNavigate } from 'react-router-dom';
 
+const DATE_FNS_LOCALES = { ko, en: enUS, zh: zhCN };
+
 const CalendarGrid = () => {
+    const { t, i18n } = useTranslation();
+    const dateLocale = DATE_FNS_LOCALES[i18n.language?.split('-')[0]] || ko;
     const { currentUser, isAdmin } = useAuth();
     const navigate = useNavigate();
     const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -28,7 +33,6 @@ const CalendarGrid = () => {
     };
 
     const handleEditMeeting = (meeting) => {
-        // Navigate to schedule page with state to populate form
         setSelectedMeeting(null);
         navigate('/schedule', { state: { meetingToEdit: meeting } });
     };
@@ -51,20 +55,17 @@ const CalendarGrid = () => {
                 setLoading(false);
             } catch (err) {
                 console.error("CalendarGrid: Data processing error", err);
-                setError("데이터 처리 중 오류가 발생했습니다.");
+                setError(t('calendar.dataError'));
                 setLoading(false);
             }
         }, (error) => {
             console.error("CalendarGrid: Firestore error", error);
-            setError("데이터를 불러오는 중 오류가 발생했습니다.");
+            setError(t('calendar.loadError'));
             setLoading(false);
         });
 
         return () => unsubscribe();
-    }, [currentUser]);
-
-    // Update selectedMeeting when meetings data changes (e.g. after RSVP)
-
+    }, [currentUser, t]);
 
     const getMeetingsForDate = (date) => {
         return meetings
@@ -73,18 +74,17 @@ const CalendarGrid = () => {
     };
 
     const renderHeader = () => {
-        const dateFormat = "yyyy년 M월";
         return (
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">
-                    {format(currentMonth, dateFormat, { locale: ko })}
+                    {format(currentMonth, t('dashboard.weekHeaderFormat'), { locale: dateLocale })}
                 </h2>
                 <div className="flex space-x-2">
                     <button onClick={prevMonth} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-600">
                         <ChevronLeft size={20} />
                     </button>
                     <button onClick={() => setCurrentMonth(new Date())} className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm font-medium text-gray-700">
-                        오늘
+                        {t('dashboard.today')}
                     </button>
                     <button onClick={nextMonth} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-600">
                         <ChevronRight size={20} />
@@ -93,7 +93,7 @@ const CalendarGrid = () => {
                         onClick={() => navigate('/schedule')}
                         className="ml-4 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2"
                     >
-                        + 미팅 생성
+                        {t('calendar.createMeetingBtn')}
                     </button>
                 </div>
             </div>
@@ -102,12 +102,11 @@ const CalendarGrid = () => {
 
     const renderDays = () => {
         const days = [];
-        const dateFormat = "eeee"; // Monday, Tuesday...
+        const dateFormat = "eeee";
         const startDate = startOfWeek(currentMonth);
 
         for (let i = 0; i < 7; i++) {
-            const dayName = format(eachDayOfInterval({ start: startDate, end: endOfWeek(currentMonth) })[i], dateFormat, { locale: ko });
-            // Custom styling for Sunday (Red) and Saturday (Blue)
+            const dayName = format(eachDayOfInterval({ start: startDate, end: endOfWeek(currentMonth) })[i], dateFormat, { locale: dateLocale });
             let textColor = "text-gray-500";
             if (i === 0) textColor = "text-red-500";
             if (i === 6) textColor = "text-blue-500";
@@ -138,7 +137,6 @@ const CalendarGrid = () => {
                         const isToday = isSameDay(date, new Date());
                         const dailyMeetings = getMeetingsForDate(date);
 
-                        // Specific date colors
                         const dayOfWeek = date.getDay();
                         let dateColor = "text-gray-900";
                         if (!isCurrentMonth) dateColor = "text-gray-300";
@@ -196,20 +194,20 @@ const CalendarGrid = () => {
             );
         } catch (err) {
             console.error("CalendarGrid: Render error", err);
-            return <div className="p-4 text-red-500 text-center">캘린더 렌더링 오류: {err.message}</div>;
+            return <div className="p-4 text-red-500 text-center">{t('calendar.renderError', { msg: err.message })}</div>;
         }
     };
 
     if (error) {
         return (
             <div className="flex flex-col min-h-full bg-white p-6 rounded-xl shadow-sm border border-gray-200 justify-center items-center">
-                <div className="text-red-500 mb-4 font-bold">오류가 발생했습니다</div>
+                <div className="text-red-500 mb-4 font-bold">{t('calendar.errorTitle')}</div>
                 <div className="text-gray-600 mb-4 text-sm">{error}</div>
                 <button
                     onClick={() => window.location.reload()}
                     className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm text-gray-700 transition-colors"
                 >
-                    새로고침
+                    {t('calendar.refresh')}
                 </button>
             </div>
         );

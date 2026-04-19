@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { db } from '../../lib/firebase';
 import { collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX } from 'lucide-react';
@@ -21,6 +22,7 @@ const SPEECH_LOCALE = {
 };
 
 const CommentSection = ({ meetingId, currentUser, attendees }) => {
+    const { t } = useTranslation();
     const { userProfile } = useAuth();
     const myLang = userProfile?.preferredLanguage || 'ko';
 
@@ -137,7 +139,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
     const toggleRecording = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            alert('이 브라우저에서는 음성 입력을 지원하지 않습니다. Chrome 또는 Edge를 사용해주세요.');
+            alert(t('meeting.voiceUnsupportedInput'));
             return;
         }
 
@@ -180,7 +182,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
     // Text-to-speech: play a comment aloud in its source language
     const speakComment = (commentId, text, lang) => {
         if (typeof window === 'undefined' || !window.speechSynthesis) {
-            alert('이 브라우저에서는 음성 재생을 지원하지 않습니다.');
+            alert(t('meeting.voiceUnsupportedPlay'));
             return;
         }
         const synth = window.speechSynthesis;
@@ -242,12 +244,12 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
     };
 
     const handleDelete = async (commentId) => {
-        if (!window.confirm("댓글을 삭제하시겠습니까?")) return;
+        if (!window.confirm(t('meeting.confirmDeleteComment'))) return;
         try {
             await deleteDoc(doc(db, "comments", commentId));
         } catch (error) {
             console.error("Error deleting comment:", error);
-            alert("댓글 삭제 실패");
+            alert(t('meeting.deleteCommentFailed'));
         }
     };
 
@@ -282,19 +284,19 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
             <div className="flex items-center justify-between mb-4 text-gray-900 font-bold border-b border-gray-200 pb-2">
                 <div className="flex items-center gap-2">
                     <MessageSquare size={18} className="text-gray-700" />
-                    댓글 ({comments.length})
+                    {t('meeting.commentsCount', { count: comments.length })}
                 </div>
                 {myLang !== 'ko' && (
                     <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100">
-                        번역 활성화됨
+                        {t('meeting.translationEnabled')}
                     </span>
                 )}
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
-                {loading && <p className="text-center text-gray-400 text-sm">로딩 중...</p>}
+                {loading && <p className="text-center text-gray-400 text-sm">{t('common.loading')}</p>}
                 {!loading && comments.length === 0 && (
-                    <p className="text-center text-gray-400 text-sm py-10">첫 번째 댓글을 남겨보세요!</p>
+                    <p className="text-center text-gray-400 text-sm py-10">{t('meeting.noCommentsYet')}</p>
                 )}
                 {comments.map((comment) => {
                     const isMe = comment.senderEmail === currentUser?.email;
@@ -328,12 +330,12 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                                     {displayText}
                                     {isTranslated && (
                                         <div className="text-[9px] text-gray-400 mt-1 flex items-center gap-1 border-t border-gray-100 pt-1">
-                                            번역됨 (원문: {comment.text})
+                                            {t('meeting.translated')} ({t('meeting.original')}: {comment.text})
                                         </div>
                                     )}
                                     {isTranslating && (
                                         <div className="text-[9px] text-gray-300 mt-1 italic">
-                                            번역 중...
+                                            {t('meeting.translating')}
                                         </div>
                                     )}
                                 </div>
@@ -344,7 +346,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                                         ? 'bg-blue-100 text-blue-600 animate-pulse'
                                         : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
                                         }`}
-                                    title={speakingId === comment.id ? '재생 중지' : '원문 소리내어 듣기'}
+                                    title={speakingId === comment.id ? t('meeting.ttsStop') : t('meeting.ttsPlay')}
                                 >
                                     {speakingId === comment.id ? <VolumeX size={14} /> : <Volume2 size={14} />}
                                 </button>
@@ -354,7 +356,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                                 <div className={`flex items-center gap-1 mt-1 text-[10px] ${readStatus === 'all' ? 'text-blue-500' : 'text-gray-400'
                                     }`}>
                                     <CheckCheck size={12} />
-                                    <span>{readStatus === 'all' ? '모두 읽음' : '읽음'}</span>
+                                    <span>{readStatus === 'all' ? t('meeting.allRead') : t('meeting.someRead')}</span>
                                 </div>
                             )}
                         </div>
@@ -368,7 +370,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                     type="text"
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    placeholder={isRecording ? '듣는 중... 말씀해주세요' : '댓글을 입력하세요...'}
+                    placeholder={isRecording ? t('meeting.voiceListening') : t('meeting.commentPlaceholder')}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button
@@ -378,7 +380,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                         ? 'bg-gradient-to-br from-red-500 to-pink-600 text-white ring-2 ring-red-300 animate-pulse'
                         : 'bg-gradient-to-br from-orange-400 to-red-500 text-white hover:from-orange-500 hover:to-red-600'
                         }`}
-                    title={isRecording ? '녹음 중지' : '음성으로 입력'}
+                    title={isRecording ? t('meeting.micStop') : t('meeting.micStart')}
                 >
                     <Mic size={18} />
                     {isRecording && (

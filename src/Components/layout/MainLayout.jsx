@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import useCommentNotifications, { requestNotificationPermission } from '../../hooks/useCommentNotifications';
 import useAttendanceNotifications from '../../hooks/useAttendanceNotifications';
 import ChatModal from '../chat/ChatModal';
 import Sidebar from './Sidebar';
+import LanguageSwitcher from './LanguageSwitcher';
 import { Menu, Calendar, Bell, BellRing, BellOff } from 'lucide-react';
 
 const MainLayout = ({ children }) => {
+    const { t } = useTranslation();
     const { activeChatUser, closeChat } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [notifPermission, setNotifPermission] = useState(
@@ -46,33 +49,36 @@ const MainLayout = ({ children }) => {
                         </button>
                         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                             <Calendar className="text-gray-900" size={20} />
-                            PromiseU
+                            {t('app.name')}
                         </h1>
                     </div>
-                    {notifPermission !== 'unsupported' && (
-                        <button
-                            onClick={async () => {
-                                const result = await requestNotificationPermission();
-                                setNotifPermission(result);
-                                if (result === 'granted') {
-                                    alert('알림이 활성화되었습니다! 🔔');
-                                } else if (result === 'denied') {
-                                    alert('알림이 차단되어 있습니다. 브라우저 설정에서 알림을 허용해 주세요.');
-                                }
-                            }}
-                            className={`p-2 rounded-lg transition-colors ${notifPermission === 'granted'
-                                    ? 'text-green-600 bg-green-50'
-                                    : notifPermission === 'denied'
-                                        ? 'text-red-400 bg-red-50'
-                                        : 'text-blue-600 bg-blue-50 animate-pulse'
-                                }`}
-                            title={notifPermission === 'granted' ? '알림 활성화됨' : '알림 켜기'}
-                        >
-                            {notifPermission === 'granted' ? <BellRing size={20} /> :
-                                notifPermission === 'denied' ? <BellOff size={20} /> :
-                                    <Bell size={20} />}
-                        </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        <LanguageSwitcher compact />
+                        {notifPermission !== 'unsupported' && (
+                            <button
+                                onClick={async () => {
+                                    const result = await requestNotificationPermission();
+                                    setNotifPermission(result);
+                                    if (result === 'granted') {
+                                        alert(t('notification.enabled'));
+                                    } else if (result === 'denied') {
+                                        alert(t('notification.blocked'));
+                                    }
+                                }}
+                                className={`p-2 rounded-lg transition-colors ${notifPermission === 'granted'
+                                        ? 'text-green-600 bg-green-50'
+                                        : notifPermission === 'denied'
+                                            ? 'text-red-400 bg-red-50'
+                                            : 'text-blue-600 bg-blue-50 animate-pulse'
+                                    }`}
+                                title={notifPermission === 'granted' ? t('notification.activated') : t('notification.turnOn')}
+                            >
+                                {notifPermission === 'granted' ? <BellRing size={20} /> :
+                                    notifPermission === 'denied' ? <BellOff size={20} /> :
+                                        <Bell size={20} />}
+                            </button>
+                        )}
+                    </div>
                 </header>
 
                 <main className="flex-1 p-4 md:p-8">
@@ -81,7 +87,7 @@ const MainLayout = ({ children }) => {
 
                 {/* Restored Footer */}
                 <footer className="text-center p-4 text-xs text-slate-500 bg-slate-50 border-t border-slate-100">
-                    Wooooo~ JINI (v2.0 - PWA Fix)
+                    {t('app.footer')}
                 </footer>
             </div>
 

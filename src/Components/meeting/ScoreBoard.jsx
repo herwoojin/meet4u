@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { db } from '../../lib/firebase';
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { Trophy, Plus, Trash2, ChevronDown, ChevronUp, X, Check } from 'lucide-react';
 
 const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
+    const { t } = useTranslation();
     const [games, setGames] = useState([]);
     const [isOpen, setIsOpen] = useState(false);
     const [extraPlayers, setExtraPlayers] = useState([]);
@@ -136,7 +138,7 @@ const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
             disabled={!isEditable}
             className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:text-gray-500 appearance-none"
         >
-            <option value="">선택</option>
+            <option value="">{t('scoreboard.select')}</option>
             {allPlayers.map((name, i) => (
                 <option key={i} value={name}>{name}</option>
             ))}
@@ -152,15 +154,15 @@ const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
             >
                 <div className="flex items-center gap-2 text-gray-900 font-bold">
                     <Trophy size={18} className="text-yellow-500" />
-                    스코어보드 ({games.length})
+                    {t('scoreboard.title')} ({games.length})
                 </div>
                 <div className="flex items-center gap-2">
                     {autoSaveStatus === 'saving' && (
-                        <span className="text-xs text-gray-400">저장 중...</span>
+                        <span className="text-xs text-gray-400">{t('scoreboard.saving')}</span>
                     )}
                     {autoSaveStatus === 'saved' && (
                         <span className="text-xs text-green-500 flex items-center gap-0.5">
-                            <Check size={12} /> 저장됨
+                            <Check size={12} /> {t('scoreboard.saved')}
                         </span>
                     )}
                     {isOpen ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
@@ -188,19 +190,19 @@ const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
                                         value={newPlayerName}
                                         onChange={(e) => setNewPlayerName(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && addExtraPlayer()}
-                                        placeholder="이름"
+                                        placeholder={t('scoreboard.namePlaceholder')}
                                         className="w-20 px-2 py-1 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400"
                                         autoFocus
                                     />
-                                    <button onClick={addExtraPlayer} className="text-xs text-blue-600 font-bold px-1">추가</button>
-                                    <button onClick={() => { setShowAddPlayer(false); setNewPlayerName(''); }} className="text-xs text-gray-400 px-1">취소</button>
+                                    <button onClick={addExtraPlayer} className="text-xs text-blue-600 font-bold px-1">{t('scoreboard.addBtn')}</button>
+                                    <button onClick={() => { setShowAddPlayer(false); setNewPlayerName(''); }} className="text-xs text-gray-400 px-1">{t('scoreboard.cancelBtn')}</button>
                                 </div>
                             ) : (
                                 <button
                                     onClick={() => setShowAddPlayer(true)}
                                     className="inline-flex items-center gap-0.5 text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded-full border border-dashed border-gray-300 hover:border-blue-400"
                                 >
-                                    <Plus size={12} /> 참석자 추가
+                                    <Plus size={12} /> {t('scoreboard.addAttendee')}
                                 </button>
                             )}
                         </div>
@@ -208,13 +210,13 @@ const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
 
                     {/* Game cards */}
                     {games.length === 0 && (
-                        <p className="text-center text-gray-400 text-sm py-4">경기 결과를 추가해보세요!</p>
+                        <p className="text-center text-gray-400 text-sm py-4">{t('scoreboard.noGames')}</p>
                     )}
 
                     {games.map((game, idx) => (
                         <div key={game.id || idx} className="bg-white rounded-lg border border-gray-200 p-3 space-y-2">
                             <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-gray-500">경기 {idx + 1}</span>
+                                <span className="text-xs font-bold text-gray-500">{t('scoreboard.gameNum', { num: idx + 1 })}</span>
                                 {isEditable && (
                                     <button onClick={() => removeGame(idx)} className="text-gray-300 hover:text-red-500 transition-colors">
                                         <Trash2 size={14} />
@@ -261,13 +263,13 @@ const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
                             {game.score1 !== '' && game.score2 !== '' && (
                                 <div className="text-center">
                                     {Number(game.score1) > Number(game.score2) && (
-                                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">팀1 승리</span>
+                                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{t('scoreboard.team1Win')}</span>
                                     )}
                                     {Number(game.score1) < Number(game.score2) && (
-                                        <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">팀2 승리</span>
+                                        <span className="text-xs font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{t('scoreboard.team2Win')}</span>
                                     )}
                                     {Number(game.score1) === Number(game.score2) && (
-                                        <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">무승부</span>
+                                        <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{t('scoreboard.draw')}</span>
                                     )}
                                 </div>
                             )}
@@ -280,7 +282,7 @@ const ScoreBoard = ({ meetingId, attendeeNames, isEditable }) => {
                             onClick={addGame}
                             className="w-full flex items-center justify-center gap-1.5 py-2 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                            <Plus size={16} /> 경기 추가
+                            <Plus size={16} /> {t('scoreboard.addGame')}
                         </button>
                     )}
                 </div>

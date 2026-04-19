@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { db } from '../lib/firebase';
 import { collection, getDocs, doc, updateDoc, query, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -19,6 +20,7 @@ const unsanitizeEmail = (key) => {
 };
 
 const CostManagement = ({ meetings, users }) => {
+    const { t } = useTranslation();
     const [currentDate, setCurrentDate] = useState(new Date());
     const selectedYear = currentDate.getFullYear();
     const selectedMonth = currentDate.getMonth();
@@ -153,7 +155,7 @@ const CostManagement = ({ meetings, users }) => {
                         <ChevronLeft size={20} />
                     </button>
                     <h2 className="text-xl font-bold text-gray-800 w-32 text-center">
-                        {format(currentDate, 'yyyy년 M월')}
+                        {format(currentDate, t('admin.dateFormat'))}
                     </h2>
                     <button onClick={() => setCurrentDate(new Date(selectedYear, selectedMonth + 1, 1))} className="p-2 hover:bg-gray-100 rounded-full transition text-gray-600">
                         <ChevronRight size={20} />
@@ -163,7 +165,7 @@ const CostManagement = ({ meetings, users }) => {
                     onClick={() => setCurrentDate(new Date())}
                     className="px-4 py-2 text-sm font-medium bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition"
                 >
-                    이번 달 보기
+                    {t('admin.thisMonthBtn')}
                 </button>
             </div>
 
@@ -173,8 +175,8 @@ const CostManagement = ({ meetings, users }) => {
                     <DollarSign size={24} />
                 </div>
                 <div>
-                    <p className="text-sm font-medium text-gray-500">이 달 총 대여 비용</p>
-                    <p className="text-2xl font-bold text-gray-900">{monthlyData.totalCost.toLocaleString()}원</p>
+                    <p className="text-sm font-medium text-gray-500">{t('admin.totalMonthlyCost')}</p>
+                    <p className="text-2xl font-bold text-gray-900">{monthlyData.totalCost.toLocaleString()}{t('common.won')}</p>
                 </div>
             </div>
 
@@ -183,22 +185,22 @@ const CostManagement = ({ meetings, users }) => {
                 <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
                     <h3 className="font-bold text-gray-800 flex items-center gap-2">
                         <Calendar size={18} className="text-green-600" />
-                        일정별 비용 현황
+                        {t('admin.meetingCosts')}
                     </h3>
                 </div>
                 {monthlyData.meetingCosts.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500">해당 월에 비용이 등록된 일정이 없습니다.</div>
+                    <div className="p-8 text-center text-gray-500">{t('admin.noCostsMonth')}</div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
                                 <tr>
-                                    <th className="px-4 py-3">날짜</th>
-                                    <th className="px-4 py-3">일정명</th>
-                                    <th className="px-4 py-3 text-right">대여비</th>
-                                    <th className="px-4 py-3 text-center">참석</th>
-                                    <th className="px-4 py-3 text-right">1인당</th>
-                                    <th className="px-4 py-3">예약자</th>
+                                    <th className="px-4 py-3">{t('admin.dateCol')}</th>
+                                    <th className="px-4 py-3">{t('admin.meetingCol')}</th>
+                                    <th className="px-4 py-3 text-right">{t('admin.rentalCostCol')}</th>
+                                    <th className="px-4 py-3 text-center">{t('admin.attendCol')}</th>
+                                    <th className="px-4 py-3 text-right">{t('admin.perPerson')}</th>
+                                    <th className="px-4 py-3">{t('admin.booker')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -206,15 +208,15 @@ const CostManagement = ({ meetings, users }) => {
                                     <tr key={m.id} className="hover:bg-gray-50">
                                         <td className="px-4 py-3 font-medium text-gray-900">{m.date}</td>
                                         <td className="px-4 py-3 text-gray-800">{m.title}</td>
-                                        <td className="px-4 py-3 text-right font-bold text-gray-900">{m.cost.toLocaleString()}원</td>
-                                        <td className="px-4 py-3 text-center text-purple-600 font-bold">{m.attendCount}명</td>
-                                        <td className="px-4 py-3 text-right font-bold text-green-700">{m.perPerson.toLocaleString()}원</td>
+                                        <td className="px-4 py-3 text-right font-bold text-gray-900">{m.cost.toLocaleString()}{t('common.won')}</td>
+                                        <td className="px-4 py-3 text-center text-purple-600 font-bold">{m.attendCount}{t('admin.attendSuffix')}</td>
+                                        <td className="px-4 py-3 text-right font-bold text-green-700">{m.perPerson.toLocaleString()}{t('common.won')}</td>
                                         <td className="px-4 py-3 text-gray-600">{m.bookedBy}</td>
                                     </tr>
                                 ))}
                                 <tr className="bg-gray-50 font-bold">
-                                    <td className="px-4 py-3" colSpan="2">합계</td>
-                                    <td className="px-4 py-3 text-right text-gray-900">{monthlyData.totalCost.toLocaleString()}원</td>
+                                    <td className="px-4 py-3" colSpan="2">{t('admin.sumLabel')}</td>
+                                    <td className="px-4 py-3 text-right text-gray-900">{monthlyData.totalCost.toLocaleString()}{t('common.won')}</td>
                                     <td colSpan="3"></td>
                                 </tr>
                             </tbody>
@@ -228,20 +230,20 @@ const CostManagement = ({ meetings, users }) => {
                 <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
                     <h3 className="font-bold text-gray-800 flex items-center gap-2">
                         <Users size={18} className="text-blue-600" />
-                        회원별 지불 금액
+                        {t('admin.memberCosts')}
                     </h3>
                 </div>
                 {monthlyData.userCostList.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500">비용 데이터가 없습니다.</div>
+                    <div className="p-8 text-center text-gray-500">{t('admin.noCostData')}</div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
                                 <tr>
-                                    <th className="px-5 py-3">이름</th>
-                                    <th className="px-5 py-3 text-right">지불 금액</th>
-                                    <th className="px-5 py-3 text-right">예약 비용</th>
-                                    <th className="px-5 py-3 text-right">정산 (예약-지불)</th>
+                                    <th className="px-5 py-3">{t('admin.name')}</th>
+                                    <th className="px-5 py-3 text-right">{t('admin.paidAmount')}</th>
+                                    <th className="px-5 py-3 text-right">{t('admin.bookedAmount')}</th>
+                                    <th className="px-5 py-3 text-right">{t('admin.settlement')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -252,22 +254,22 @@ const CostManagement = ({ meetings, users }) => {
                                             <td className="px-5 py-3">
                                                 <span className="font-medium text-gray-800">{u.name}</span>
                                             </td>
-                                            <td className="px-5 py-3 text-right font-bold text-green-700">{u.totalToPay.toLocaleString()}원</td>
-                                            <td className="px-5 py-3 text-right font-bold text-orange-600">{u.bookedTotal > 0 ? `${u.bookedTotal.toLocaleString()}원` : '-'}</td>
+                                            <td className="px-5 py-3 text-right font-bold text-green-700">{u.totalToPay.toLocaleString()}{t('common.won')}</td>
+                                            <td className="px-5 py-3 text-right font-bold text-orange-600">{u.bookedTotal > 0 ? `${u.bookedTotal.toLocaleString()}${t('common.won')}` : '-'}</td>
                                             <td className={`px-5 py-3 text-right font-bold ${settlement > 0 ? 'text-blue-600' : settlement < 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                                                {settlement > 0 ? `+${settlement.toLocaleString()}원` : settlement < 0 ? `${settlement.toLocaleString()}원` : '-'}
+                                                {settlement > 0 ? `+${settlement.toLocaleString()}${t('common.won')}` : settlement < 0 ? `${settlement.toLocaleString()}${t('common.won')}` : '-'}
                                             </td>
                                         </tr>
                                     );
                                 })}
                                 <tr className="bg-gray-50 font-bold border-t-2 border-gray-200">
-                                    <td className="px-5 py-3 text-center">합계</td>
-                                    <td className="px-5 py-3 text-right text-green-700">{monthlyData.sumTotalToPay.toLocaleString()}원</td>
-                                    <td className="px-5 py-3 text-right text-orange-600">{monthlyData.sumBooked.toLocaleString()}원</td>
+                                    <td className="px-5 py-3 text-center">{t('admin.sumLabel')}</td>
+                                    <td className="px-5 py-3 text-right text-green-700">{monthlyData.sumTotalToPay.toLocaleString()}{t('common.won')}</td>
+                                    <td className="px-5 py-3 text-right text-orange-600">{monthlyData.sumBooked.toLocaleString()}{t('common.won')}</td>
                                     <td className="px-5 py-3 text-right text-gray-900">
-                                        {(monthlyData.sumBooked - monthlyData.sumTotalToPay) > 0 
-                                            ? `+${(monthlyData.sumBooked - monthlyData.sumTotalToPay).toLocaleString()}원` 
-                                            : `${(monthlyData.sumBooked - monthlyData.sumTotalToPay).toLocaleString()}원`}
+                                        {(monthlyData.sumBooked - monthlyData.sumTotalToPay) > 0
+                                            ? `+${(monthlyData.sumBooked - monthlyData.sumTotalToPay).toLocaleString()}${t('common.won')}`
+                                            : `${(monthlyData.sumBooked - monthlyData.sumTotalToPay).toLocaleString()}${t('common.won')}`}
                                     </td>
                                 </tr>
                             </tbody>
@@ -280,6 +282,7 @@ const CostManagement = ({ meetings, users }) => {
 };
 
 const AdminPage = () => {
+    const { t } = useTranslation();
     const { currentUser, isAdmin, adminLogin, adminLogout } = useAuth();
     const navigate = useNavigate();
     const [users, setUsers] = useState([]);
@@ -334,7 +337,7 @@ const AdminPage = () => {
             setAdminId('');
             setAdminPw('');
         } else {
-            setLoginError('관리자 ID 또는 비밀번호가 올바르지 않습니다.');
+            setLoginError(t('admin.loginError'));
         }
     };
 
@@ -347,7 +350,7 @@ const AdminPage = () => {
             ));
         } catch (error) {
             console.error('Error updating role:', error);
-            alert('권한 변경 실패');
+            alert(t('admin.roleChangeFailed'));
         }
     };
 
@@ -356,7 +359,7 @@ const AdminPage = () => {
             await updateDoc(doc(db, 'meetings', meetingId), { hidden: !currentHidden });
         } catch (error) {
             console.error('Error toggling meeting visibility:', error);
-            alert('상태 변경 실패');
+            alert(t('admin.hideFailed'));
         }
     };
 
@@ -374,29 +377,29 @@ const AdminPage = () => {
                         <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <Lock className="text-purple-600" size={32} />
                         </div>
-                        <h2 className="text-2xl font-bold text-gray-900">관리자 모드</h2>
-                        <p className="text-gray-500 text-sm mt-1">관리자 계정으로 로그인하세요</p>
+                        <h2 className="text-2xl font-bold text-gray-900">{t('admin.title')}</h2>
+                        <p className="text-gray-500 text-sm mt-1">{t('admin.loginSubtitle')}</p>
                     </div>
                     <form onSubmit={handleAdminLogin} className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">관리자 ID</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.adminId')}</label>
                             <input
                                 type="text"
                                 value={adminId}
                                 onChange={(e) => setAdminId(e.target.value)}
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all text-gray-900"
-                                placeholder="관리자 ID를 입력하세요"
+                                placeholder={t('admin.adminIdPlaceholder')}
                                 autoComplete="off"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('login.adminPassword')}</label>
                             <input
                                 type="password"
                                 value={adminPw}
                                 onChange={(e) => setAdminPw(e.target.value)}
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all text-gray-900"
-                                placeholder="비밀번호를 입력하세요"
+                                placeholder={t('admin.adminPwPlaceholder')}
                             />
                         </div>
                         {loginError && (
@@ -406,7 +409,7 @@ const AdminPage = () => {
                             type="submit"
                             className="w-full py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-md"
                         >
-                            로그인
+                            {t('admin.loginBtn')}
                         </button>
                     </form>
                 </div>
@@ -419,14 +422,14 @@ const AdminPage = () => {
         <div className="max-w-4xl mx-auto">
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h2 className="text-3xl font-bold text-gray-900">관리자</h2>
-                    <p className="text-gray-500">회원 관리 및 전체 미팅을 확인할 수 있습니다.</p>
+                    <h2 className="text-3xl font-bold text-gray-900">{t('admin.pageTitle')}</h2>
+                    <p className="text-gray-500">{t('admin.pageSubtitle')}</p>
                 </div>
                 <button
                     onClick={adminLogout}
                     className="flex items-center gap-1.5 px-4 py-2 bg-white border border-red-200 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm"
                 >
-                    <LogOut size={16} /> 관리자 로그아웃
+                    <LogOut size={16} /> {t('admin.adminLogout')}
                 </button>
             </div>
 
@@ -439,7 +442,7 @@ const AdminPage = () => {
                         : 'border-transparent text-gray-400 hover:text-gray-600'
                         }`}
                 >
-                    <Users size={16} /> 회원 관리
+                    <Users size={16} /> {t('admin.tabUsers')}
                 </button>
                 <button
                     onClick={() => setActiveTab('meetings')}
@@ -448,10 +451,10 @@ const AdminPage = () => {
                         : 'border-transparent text-gray-400 hover:text-gray-600'
                         }`}
                 >
-                    <Calendar size={16} /> 전체 미팅
+                    <Calendar size={16} /> {t('admin.tabMeetings')}
                     {meetings.filter(m => m.hidden).length > 0 && (
                         <span className="bg-yellow-100 text-yellow-700 text-xs px-1.5 py-0.5 rounded-full">
-                            {meetings.filter(m => m.hidden).length} 숨김
+                            {meetings.filter(m => m.hidden).length} {t('admin.hiddenBadge')}
                         </span>
                     )}
                 </button>
@@ -462,7 +465,7 @@ const AdminPage = () => {
                         : 'border-transparent text-gray-400 hover:text-gray-600'
                         }`}
                 >
-                    <BarChart2 size={16} /> 월별 참석 통계
+                    <BarChart2 size={16} /> {t('admin.tabStats')}
                 </button>
                 <button
                     onClick={() => setActiveTab('costs')}
@@ -471,7 +474,7 @@ const AdminPage = () => {
                         : 'border-transparent text-gray-400 hover:text-gray-600'
                         }`}
                 >
-                    <DollarSign size={16} /> 월별 비용 관리
+                    <DollarSign size={16} /> {t('admin.tabCosts')}
                 </button>
             </div>
 
@@ -479,7 +482,7 @@ const AdminPage = () => {
             {activeTab === 'users' && (
                 <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                     {loading ? (
-                        <div className="p-10 text-center text-gray-400">로딩 중...</div>
+                        <div className="p-10 text-center text-gray-400">{t('admin.loading')}</div>
                     ) : (
                         <div className="divide-y divide-gray-100">
                             {users.map(user => (
@@ -492,10 +495,10 @@ const AdminPage = () => {
                                         />
                                         <div className="min-w-0">
                                             <div className="flex items-center gap-2">
-                                                <p className="font-medium text-gray-900 truncate">{user.displayName || '이름 없음'}</p>
+                                                <p className="font-medium text-gray-900 truncate">{user.displayName || t('admin.unnamed')}</p>
                                                 {user.role === 'admin' && (
                                                     <span className="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-bold border border-purple-200">
-                                                        관리자
+                                                        {t('admin.adminBadge')}
                                                     </span>
                                                 )}
                                             </div>
@@ -510,9 +513,9 @@ const AdminPage = () => {
                                             }`}
                                     >
                                         {user.role === 'admin' ? (
-                                            <><ShieldOff size={14} /> 해제</>
+                                            <><ShieldOff size={14} /> {t('admin.revokeAdmin')}</>
                                         ) : (
-                                            <><Shield size={14} /> 관리자 지정</>
+                                            <><Shield size={14} /> {t('admin.makeAdmin')}</>
                                         )}
                                     </button>
                                 </div>
@@ -527,7 +530,7 @@ const AdminPage = () => {
                 <div className="space-y-3">
                     {meetings.length === 0 ? (
                         <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-100">
-                            <p className="text-gray-500">생성된 미팅이 없습니다.</p>
+                            <p className="text-gray-500">{t('admin.noMeetings')}</p>
                         </div>
                     ) : (
                         meetings
@@ -551,12 +554,12 @@ const AdminPage = () => {
                                                 </h4>
                                                 {meeting.hidden && (
                                                     <span className="bg-yellow-100 text-yellow-700 text-xs px-1.5 py-0.5 rounded-full border border-yellow-200 font-bold shrink-0">
-                                                        숨김
+                                                        {t('admin.hiddenBadge')}
                                                     </span>
                                                 )}
                                                 {meeting.status === 'completed' && (
                                                     <span className="bg-red-100 text-red-700 text-xs px-1.5 py-0.5 rounded-full border border-red-200 font-bold shrink-0">
-                                                        완료
+                                                        {t('admin.completedBadge')}
                                                     </span>
                                                 )}
                                             </div>
@@ -575,7 +578,7 @@ const AdminPage = () => {
                                                 }`}
                                         >
                                             {meeting.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
-                                            {meeting.hidden ? '표시' : '숨기기'}
+                                            {meeting.hidden ? t('admin.showBtn') : t('admin.hideBtn')}
                                         </button>
                                     </div>
                                 </div>

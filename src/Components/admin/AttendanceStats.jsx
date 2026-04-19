@@ -1,12 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { format, parseISO, isValid } from 'date-fns';
-import { ko } from 'date-fns/locale';
+import { useTranslation } from 'react-i18next';
+import { format, isValid } from 'date-fns';
+import { ko, enUS, zhCN } from 'date-fns/locale';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
 } from 'recharts';
 import { Calendar, Users as UsersIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const COLORS = ['#8b5cf6', '#a78bfa', '#c4b5fd', '#ede9fe'];
+const DATE_FNS_LOCALES = { ko, en: enUS, zh: zhCN };
 
 // Helper: convert sanitized email key (dots→underscores) back to real email
 const unsanitizeEmail = (key) => {
@@ -19,6 +21,8 @@ const unsanitizeEmail = (key) => {
 };
 
 const AttendanceStats = ({ meetings, users }) => {
+    const { t, i18n } = useTranslation();
+    const dateLocale = DATE_FNS_LOCALES[i18n.language?.split('-')[0]] || ko;
     // Current selected month
     const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -86,7 +90,7 @@ const AttendanceStats = ({ meetings, users }) => {
                 const d = new Date(m.date);
                 if (isValid(d)) {
                     dateFormatted = format(d, 'MM/dd');
-                    dayOfWeek = format(d, 'EEEE', { locale: ko });
+                    dayOfWeek = format(d, 'EEEE', { locale: dateLocale });
                 }
             } catch (e) {
                 console.warn("Invalid date format:", m.date);
@@ -109,7 +113,7 @@ const AttendanceStats = ({ meetings, users }) => {
             .sort((a, b) => b.count - a.count);
 
         return { meetingDetails, chartData, totalMeetings: monthlyMeetings.length };
-    }, [monthlyMeetings, users]);
+    }, [monthlyMeetings, users, dateLocale]);
 
     const handlePrevMonth = () => {
         setCurrentDate(new Date(selectedYear, selectedMonth - 1, 1));
@@ -132,7 +136,7 @@ const AttendanceStats = ({ meetings, users }) => {
                         <ChevronLeft size={20} />
                     </button>
                     <h2 className="text-xl font-bold text-gray-800 w-32 text-center">
-                        {format(currentDate, 'yyyy년 M월')}
+                        {format(currentDate, t('stats.dateFormat'), { locale: dateLocale })}
                     </h2>
                     <button onClick={handleNextMonth} className="p-2 hover:bg-gray-100 rounded-full transition text-gray-600">
                         <ChevronRight size={20} />
@@ -142,7 +146,7 @@ const AttendanceStats = ({ meetings, users }) => {
                     onClick={handleCurrentMonth}
                     className="px-4 py-2 text-sm font-medium bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition"
                 >
-                    이번 달 보기
+                    {t('stats.thisMonthBtn')}
                 </button>
             </div>
 
@@ -153,8 +157,8 @@ const AttendanceStats = ({ meetings, users }) => {
                         <Calendar size={24} />
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-gray-500">이 달의 일정</p>
-                        <p className="text-2xl font-bold text-gray-900">{stats.totalMeetings}회</p>
+                        <p className="text-sm font-medium text-gray-500">{t('stats.monthlyMeetings')}</p>
+                        <p className="text-2xl font-bold text-gray-900">{stats.totalMeetings}{t('stats.meetingsSuffix')}</p>
                     </div>
                 </div>
                 <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm flex items-center gap-4">
@@ -162,9 +166,9 @@ const AttendanceStats = ({ meetings, users }) => {
                         <UsersIcon size={24} />
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-gray-500">누적 참석자</p>
+                        <p className="text-sm font-medium text-gray-500">{t('stats.cumulativeAttendees')}</p>
                         <p className="text-2xl font-bold text-gray-900">
-                            {stats.chartData.reduce((acc, curr) => acc + curr.count, 0)}명
+                            {stats.chartData.reduce((acc, curr) => acc + curr.count, 0)}{t('stats.peopleSuffix')}
                         </p>
                     </div>
                 </div>
@@ -175,20 +179,20 @@ const AttendanceStats = ({ meetings, users }) => {
                 <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
                     <h3 className="font-bold text-gray-800 flex items-center gap-2">
                         <Calendar size={18} className="text-purple-600" />
-                        일정별 참석 현황
+                        {t('stats.meetingAttendanceTitle')}
                     </h3>
                 </div>
                 {stats.meetingDetails.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500">해당 월에 일정이 없습니다.</div>
+                    <div className="p-8 text-center text-gray-500">{t('stats.noMeetingsMonth')}</div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
                                 <tr>
-                                    <th className="px-5 py-3 w-24">날짜</th>
-                                    <th className="px-5 py-3 w-20">요일</th>
-                                    <th className="px-5 py-3 min-w-[150px]">일정명</th>
-                                    <th className="px-5 py-3">참석자 ({stats.totalMeetings > 0 ? '명' : ''})</th>
+                                    <th className="px-5 py-3 w-24">{t('stats.dateCol')}</th>
+                                    <th className="px-5 py-3 w-20">{t('stats.dayCol')}</th>
+                                    <th className="px-5 py-3 min-w-[150px]">{t('stats.meetingCol')}</th>
+                                    <th className="px-5 py-3">{t('stats.attendeesCol')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -199,13 +203,13 @@ const AttendanceStats = ({ meetings, users }) => {
                                         <td className="px-5 py-3 text-gray-800">{m.title}</td>
                                         <td className="px-5 py-3">
                                             <div className="flex flex-wrap gap-1.5 align-middle items-center">
-                                                <span className="font-bold text-purple-600 mr-2">[{m.attendeesCount}명]</span>
+                                                <span className="font-bold text-purple-600 mr-2">[{m.attendeesCount}{t('stats.peopleSuffix')}]</span>
                                                 {m.attendees.map((attendee, idx) => (
                                                     <span key={idx} className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full text-xs">
                                                         {attendee}
                                                     </span>
                                                 ))}
-                                                {m.attendeesCount === 0 && <span className="text-gray-400 text-xs italic">참석자 없음</span>}
+                                                {m.attendeesCount === 0 && <span className="text-gray-400 text-xs italic">{t('stats.noAttendees')}</span>}
                                             </div>
                                         </td>
                                     </tr>
@@ -224,12 +228,12 @@ const AttendanceStats = ({ meetings, users }) => {
                     <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
                             <UsersIcon size={18} className="text-blue-600" />
-                            회원별 참석 그래프
+                            {t('stats.memberAttendanceGraph')}
                         </h3>
                     </div>
                     <div className="p-5 flex-1 min-h-[300px]">
                         {stats.chartData.length === 0 ? (
-                            <div className="h-full flex items-center justify-center text-gray-500 text-sm">참석 데이터가 없습니다.</div>
+                            <div className="h-full flex items-center justify-center text-gray-500 text-sm">{t('stats.noAttendanceData')}</div>
                         ) : (
                             <ResponsiveContainer width="100%" height={300}>
                                 <BarChart data={stats.chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -240,7 +244,7 @@ const AttendanceStats = ({ meetings, users }) => {
                                         cursor={{ fill: '#F3F4F6' }}
                                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
                                     />
-                                    <Bar dataKey="count" name="참석 횟수" radius={[4, 4, 0, 0]}>
+                                    <Bar dataKey="count" name={t('stats.attendanceCountLabel')} radius={[4, 4, 0, 0]}>
                                         {stats.chartData.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
@@ -256,20 +260,20 @@ const AttendanceStats = ({ meetings, users }) => {
                     <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
                             <UsersIcon size={18} className="text-green-600" />
-                            회원별 참석 횟수 상세 ({stats.chartData.length}명)
+                            {t('stats.memberDetailTitle', { count: stats.chartData.length })}
                         </h3>
                     </div>
                     <div className="overflow-y-auto max-h-[350px]">
                         {stats.chartData.length === 0 ? (
-                            <div className="p-8 text-center text-gray-500">참석 데이터가 없습니다.</div>
+                            <div className="p-8 text-center text-gray-500">{t('stats.noAttendanceData')}</div>
                         ) : (
                             <table className="w-full text-sm text-left">
                                 <thead className="text-xs text-gray-500 uppercase bg-gray-50 sticky top-0 z-10 border-b">
                                     <tr>
-                                        <th className="px-5 py-3 w-16 text-center">순위</th>
-                                        <th className="px-5 py-3">이름</th>
-                                        <th className="px-5 py-3 text-center">참석 횟수</th>
-                                        <th className="px-5 py-3 text-right">출석률</th>
+                                        <th className="px-5 py-3 w-16 text-center">{t('stats.rankCol')}</th>
+                                        <th className="px-5 py-3">{t('stats.nameCol')}</th>
+                                        <th className="px-5 py-3 text-center">{t('stats.attendTimesCol')}</th>
+                                        <th className="px-5 py-3 text-right">{t('stats.attendanceRate')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -283,7 +287,7 @@ const AttendanceStats = ({ meetings, users }) => {
                                                 <p className="text-xs text-gray-400 truncate w-32">{user.email}</p>
                                             </td>
                                             <td className="px-5 py-3 text-center font-bold text-purple-600">
-                                                {user.count}회
+                                                {user.count}{t('stats.timesSuffix')}
                                             </td>
                                             <td className="px-5 py-3 text-right text-gray-600">
                                                 {stats.totalMeetings > 0

@@ -1,12 +1,15 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Clock, Users, Trash2, Edit, Check, HelpCircle, XCircle, AlignLeft, EyeOff, Eye, DollarSign } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { deleteDoc, doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { format, isValid } from 'date-fns';
-import { ko } from 'date-fns/locale';
+import { ko, enUS, zhCN } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from './CommentSection';
 import ScoreBoard from './ScoreBoard';
+
+const DATE_FNS_LOCALES = { ko, en: enUS, zh: zhCN };
 
 // Helper: convert sanitized email key (dots→underscores) back to real email
 const unsanitizeEmail = (key) => {
@@ -20,7 +23,9 @@ const unsanitizeEmail = (key) => {
 };
 
 const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
+    const { t, i18n } = useTranslation();
     const { currentUser, isAdmin } = useAuth();
+    const dateLocale = DATE_FNS_LOCALES[i18n.language?.split('-')[0]] || ko;
 
     if (!meeting) return null;
 
@@ -34,7 +39,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
             onClose();
         } catch (error) {
             console.error("Error deleting meeting:", error);
-            alert("삭제 중 오류가 발생했습니다.");
+            alert(t('meeting.deleteError'));
         }
     };
 
@@ -76,8 +81,8 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             type: 'attendance',
-                            title: '🤝 참석 알림',
-                            body: `${senderName}님이 '${meeting.title}'에 참석합니다!`,
+                            title: t('meeting.attendanceNotifTitle'),
+                            body: t('meeting.attendanceNotifBody', { name: senderName, title: meeting.title }),
                             recipientEmails: allRecipients,
                             senderEmail: currentUser.email,
                         }),
@@ -85,10 +90,10 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                 }
             }
 
-            alert("응답이 저장되었습니다.");
+            alert(t('meeting.responseSaved'));
         } catch (e) {
             console.error("Response update failed", e);
-            alert("응답 저장 실패");
+            alert(t('meeting.responseSaveFailed'));
         }
     };
 
@@ -102,11 +107,11 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
         return responses[sanitized] || responses[email];
     };
 
-    let formattedDate = "날짜 오류";
+    let formattedDate = t('meeting.dateError');
     try {
         const dateObj = new Date(meeting.date);
         if (isValid(dateObj)) {
-            formattedDate = format(dateObj, 'yyyy년 M월 d일 (eeee)', { locale: ko });
+            formattedDate = format(dateObj, t('meeting.dateFormat'), { locale: dateLocale });
         }
     } catch (e) {
         console.error("Date formatting error:", e);
@@ -220,7 +225,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
             onClose();
         } catch (error) {
             console.error("Error completing meeting:", error);
-            alert("상태 변경 중 오류가 발생했습니다.");
+            alert(t('meeting.statusChangeError'));
         }
     };
 
@@ -239,7 +244,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
             onClose();
         } catch (error) {
             console.error("Error toggling hide:", error);
-            alert("상태 변경 중 오류가 발생했습니다.");
+            alert(t('meeting.statusChangeError'));
         }
     };
 
@@ -252,10 +257,10 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                         <div className="flex items-center gap-2">
                             <h2 className="text-xl font-bold text-gray-900">{meeting.title}</h2>
                             {meeting.status === 'completed' && (
-                                <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full border border-red-200 font-bold">완료됨</span>
+                                <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full border border-red-200 font-bold">{t('meeting.completed')}</span>
                             )}
                             {meeting.hidden && (
-                                <span className="bg-yellow-100 text-yellow-700 text-xs px-2 py-0.5 rounded-full border border-yellow-200 font-bold">숨김</span>
+                                <span className="bg-yellow-100 text-yellow-700 text-xs px-2 py-0.5 rounded-full border border-yellow-200 font-bold">{t('meeting.hidden')}</span>
                             )}
                         </div>
                         <div className="flex items-center text-gray-500 mt-2 text-sm">
@@ -277,7 +282,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     {meeting.description && (
                         <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
                             <h3 className="text-xs font-bold text-blue-800 mb-1 flex items-center gap-1">
-                                <AlignLeft size={14} /> 설명
+                                <AlignLeft size={14} /> {t('meeting.description')}
                             </h3>
                             <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                                 {meeting.description}
@@ -300,40 +305,40 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                         return (
                             <div className="bg-green-50 p-4 rounded-lg border border-green-100">
                                 <h3 className="text-xs font-bold text-green-800 mb-2 flex items-center gap-1">
-                                    <DollarSign size={14} /> 대여 비용
+                                    <DollarSign size={14} /> {t('meeting.rentalCost')}
                                 </h3>
                                 <div className="space-y-1.5">
                                     {entries.length > 0 ? entries.map((entry, i) => (
                                         <div key={i} className="flex items-center justify-between text-sm">
-                                            <span className="text-gray-600">{entry.bookedBy || '미지정'}</span>
-                                            <span className="font-bold text-gray-900">{Number(entry.cost).toLocaleString()}원</span>
+                                            <span className="text-gray-600">{entry.bookedBy || t('meeting.unassigned')}</span>
+                                            <span className="font-bold text-gray-900">{Number(entry.cost).toLocaleString()}{t('common.won')}</span>
                                         </div>
                                     )) : (
                                         <>
                                             {meeting.bookedBy && (
                                                 <div className="flex items-center justify-between text-sm">
-                                                    <span className="text-gray-600">예약자</span>
+                                                    <span className="text-gray-600">{t('meeting.bookedBy')}</span>
                                                     <span className="font-bold text-gray-900">{meeting.bookedBy}</span>
                                                 </div>
                                             )}
                                             {totalCost > 0 && (
                                                 <div className="flex items-center justify-between text-sm">
-                                                    <span className="text-gray-600">대여 금액</span>
-                                                    <span className="font-bold text-gray-900">{totalCost.toLocaleString()}원</span>
+                                                    <span className="text-gray-600">{t('meeting.rentalAmount')}</span>
+                                                    <span className="font-bold text-gray-900">{totalCost.toLocaleString()}{t('common.won')}</span>
                                                 </div>
                                             )}
                                         </>
                                     )}
                                     {entries.length > 1 && (
                                         <div className="flex items-center justify-between text-sm pt-1 border-t border-green-200">
-                                            <span className="text-gray-600 font-medium">합계</span>
-                                            <span className="font-bold text-gray-900">{totalCost.toLocaleString()}원</span>
+                                            <span className="text-gray-600 font-medium">{t('meeting.sumLabel')}</span>
+                                            <span className="font-bold text-gray-900">{totalCost.toLocaleString()}{t('common.won')}</span>
                                         </div>
                                     )}
                                     {totalCost > 0 && attendCount > 0 && (
                                         <div className="flex items-center justify-between text-sm pt-1.5 border-t border-green-200">
-                                            <span className="text-gray-600">1인당 (÷{attendCount}명)</span>
-                                            <span className="font-bold text-green-700 text-base">{perPerson.toLocaleString()}원</span>
+                                            <span className="text-gray-600">{t('meeting.perPersonLabel', { count: attendCount })}</span>
+                                            <span className="font-bold text-green-700 text-base">{perPerson.toLocaleString()}{t('common.won')}</span>
                                         </div>
                                     )}
                                 </div>
@@ -345,26 +350,26 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
                         <div className="flex items-center gap-2 mb-4 text-gray-900 font-bold border-b border-gray-200 pb-2">
                             <Users size={18} className="text-gray-700" />
-                            실시간 참석 현황
+                            {t('meeting.attendanceTitle')}
                         </div>
                         <div className="grid grid-cols-4 gap-2 text-center">
                             <div>
                                 <div className="text-2xl font-bold text-green-600">{getResponseCount('attend')}</div>
-                                <div className="text-xs text-gray-500 font-medium mt-1">참석</div>
+                                <div className="text-xs text-gray-500 font-medium mt-1">{t('meeting.attend')}</div>
                             </div>
                             <div>
                                 <div className="text-2xl font-bold text-orange-500">{getResponseCount('maybe')}</div>
-                                <div className="text-xs text-gray-500 font-medium mt-1">미정</div>
+                                <div className="text-xs text-gray-500 font-medium mt-1">{t('meeting.maybe')}</div>
                             </div>
                             <div>
                                 <div className="text-2xl font-bold text-red-500">{getResponseCount('decline')}</div>
-                                <div className="text-xs text-gray-500 font-medium mt-1">불참</div>
+                                <div className="text-xs text-gray-500 font-medium mt-1">{t('meeting.decline')}</div>
                             </div>
                             <div>
                                 <div className="text-2xl font-bold text-gray-400">
                                     {Math.max(0, (meeting.attendeesList?.length || 0) - Object.keys(responses).length)}
                                 </div>
-                                <div className="text-xs text-gray-500 font-medium mt-1">미응답</div>
+                                <div className="text-xs text-gray-500 font-medium mt-1">{t('meeting.noResponse')}</div>
                             </div>
                         </div>
                     </div>
@@ -372,9 +377,9 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     {/* Attendees List */}
                     <div>
                         <h3 className="text-sm font-bold text-gray-900 mb-3 flex items-center justify-between">
-                            <span>참석자 목록</span>
+                            <span>{t('meeting.attendeesList')}</span>
                             <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                                {new Set([...(meeting.attendeesList || []), ...Object.keys(responses).map(k => unsanitizeEmail(k))]).size}명
+                                {new Set([...(meeting.attendeesList || []), ...Object.keys(responses).map(k => unsanitizeEmail(k))]).size}{t('meeting.peopleSuffix')}
                             </span>
                         </h3>
                         <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
@@ -384,10 +389,10 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
 
                                 let statusBadge;
                                 switch (status) {
-                                    case 'attend': statusBadge = <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full border border-green-200 font-medium">참석</span>; break;
-                                    case 'maybe': statusBadge = <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full border border-orange-200 font-medium">미정</span>; break;
-                                    case 'decline': statusBadge = <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full border border-red-200 font-medium">불참</span>; break;
-                                    default: statusBadge = <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full border border-gray-200">미응답</span>;
+                                    case 'attend': statusBadge = <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full border border-green-200 font-medium">{t('meeting.attend')}</span>; break;
+                                    case 'maybe': statusBadge = <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full border border-orange-200 font-medium">{t('meeting.maybe')}</span>; break;
+                                    case 'decline': statusBadge = <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full border border-red-200 font-medium">{t('meeting.decline')}</span>; break;
+                                    default: statusBadge = <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full border border-gray-200">{t('meeting.noResponse')}</span>;
                                 }
 
                                 return (
@@ -411,7 +416,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     {/* Response Actions */}
                     {meeting.status !== 'completed' && (
                         <div>
-                            <h3 className="text-sm font-bold text-gray-900 mb-3">참석 여부 응답</h3>
+                            <h3 className="text-sm font-bold text-gray-900 mb-3">{t('meeting.responseTitle')}</h3>
                             <div className="grid grid-cols-3 gap-3 mb-4">
                                 <button
                                     onClick={() => setSelectedStatus('attend')}
@@ -420,7 +425,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                         : 'bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:border-green-200 hover:text-green-700'
                                         }`}
                                 >
-                                    <Check size={16} /> 참석
+                                    <Check size={16} /> {t('meeting.attend')}
                                 </button>
                                 <button
                                     onClick={() => setSelectedStatus('maybe')}
@@ -429,7 +434,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                         : 'bg-white text-gray-700 border-gray-200 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-700'
                                         }`}
                                 >
-                                    <HelpCircle size={16} /> 미정
+                                    <HelpCircle size={16} /> {t('meeting.maybe')}
                                 </button>
                                 <button
                                     onClick={() => setSelectedStatus('decline')}
@@ -438,7 +443,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                         : 'bg-white text-gray-700 border-gray-200 hover:bg-red-50 hover:border-red-200 hover:text-red-700'
                                         }`}
                                 >
-                                    <XCircle size={16} /> 불참
+                                    <XCircle size={16} /> {t('meeting.decline')}
                                 </button>
                             </div>
                             <button
@@ -450,7 +455,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                         : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg'
                                     }`}
                             >
-                                <Check size={18} /> 응답 저장하기
+                                <Check size={18} /> {t('meeting.saveResponse')}
                             </button>
                         </div>
                     )}
@@ -464,7 +469,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                     onClick={() => onEdit(meeting)}
                                     className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm flex-1 justify-center"
                                 >
-                                    <Edit size={16} className="text-gray-500" /> 수정
+                                    <Edit size={16} className="text-gray-500" /> {t('meeting.editBtn')}
                                 </button>
                                 {/* Complete Button */}
                                 {meeting.status !== 'completed' && (
@@ -472,7 +477,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                         onClick={handleComplete}
                                         className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-green-300 rounded-lg text-sm font-medium text-green-700 hover:bg-green-50 transition-colors shadow-sm flex-1 justify-center"
                                     >
-                                        <Check size={16} /> 완료
+                                        <Check size={16} /> {t('meeting.completeBtn')}
                                     </button>
                                 )}
                                 {/* Hide/Show Button */}
@@ -484,13 +489,13 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                         }`}
                                 >
                                     {meeting.hidden ? <Eye size={16} /> : <EyeOff size={16} />}
-                                    {meeting.hidden ? '표시' : '숨기기'}
+                                    {meeting.hidden ? t('meeting.showBtn') : t('meeting.hideBtn')}
                                 </button>
                                 <button
                                     onClick={handleDelete}
                                     className="flex items-center gap-1.5 px-4 py-2.5 bg-white border border-red-200 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm flex-1 justify-center"
                                 >
-                                    <Trash2 size={16} /> 삭제
+                                    <Trash2 size={16} /> {t('meeting.deleteBtn')}
                                 </button>
                             </div>
                         )}
@@ -521,7 +526,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                             onClick={onClose}
                             className="w-full py-3 bg-gray-100 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-200 transition-colors mt-2"
                         >
-                            닫기
+                            {t('meeting.closeBtn')}
                         </button>
                     </div>
                 </div>

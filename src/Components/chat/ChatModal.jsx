@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Send } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, setDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
@@ -6,6 +7,7 @@ import { format } from 'date-fns';
 import { useAuth } from '../../context/AuthContext';
 
 const ChatModal = ({ onClose, targetUserEmail, targetUserName }) => {
+    const { t } = useTranslation();
     const { currentUser } = useAuth();
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
@@ -122,7 +124,7 @@ const ChatModal = ({ onClose, targetUserEmail, targetUserName }) => {
                             type="text"
                             value={newMessage}
                             onChange={(e) => setNewMessage(e.target.value)}
-                            placeholder="메시지 입력..."
+                            placeholder={t('chat.messagePlaceholder')}
                             className="flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-sm"
                         />
                         <button

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Calendar, Clock, MapPin, AlignLeft, Loader, DollarSign, User, Plus, Trash2, Search, ChevronDown } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, getDocs } from 'firebase/firestore';
@@ -7,6 +8,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 // Searchable user dropdown component
 const UserSearchDropdown = ({ value, onChange, users }) => {
+    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const ref = useRef(null);
@@ -32,7 +34,7 @@ const UserSearchDropdown = ({ value, onChange, users }) => {
                 className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-left text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none flex items-center justify-between"
             >
                 <span className={value ? 'text-gray-900' : 'text-gray-400'}>
-                    {value || '회원 선택'}
+                    {value || t('meeting.selectMember')}
                 </span>
                 <ChevronDown size={16} className="text-gray-400" />
             </button>
@@ -45,7 +47,7 @@ const UserSearchDropdown = ({ value, onChange, users }) => {
                                 type="text"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="이름 또는 이메일 검색..."
+                                placeholder={t('meeting.searchMember')}
                                 className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-400 outline-none"
                                 autoFocus
                             />
@@ -53,7 +55,7 @@ const UserSearchDropdown = ({ value, onChange, users }) => {
                     </div>
                     <div className="overflow-y-auto max-h-48">
                         {filtered.length === 0 ? (
-                            <div className="p-3 text-sm text-gray-400 text-center">검색 결과 없음</div>
+                            <div className="p-3 text-sm text-gray-400 text-center">{t('meeting.noSearchResults')}</div>
                         ) : (
                             filtered.map(u => (
                                 <button
@@ -72,7 +74,7 @@ const UserSearchDropdown = ({ value, onChange, users }) => {
                                         className="w-7 h-7 rounded-full border border-gray-200"
                                     />
                                     <div className="min-w-0">
-                                        <p className="text-sm font-medium text-gray-900 truncate">{u.displayName || '이름 없음'}</p>
+                                        <p className="text-sm font-medium text-gray-900 truncate">{u.displayName || t('meeting.noName')}</p>
                                         <p className="text-xs text-gray-400 truncate">{u.email}</p>
                                     </div>
                                 </button>
@@ -86,6 +88,7 @@ const UserSearchDropdown = ({ value, onChange, users }) => {
 };
 
 const MeetingForm = () => {
+    const { t } = useTranslation();
     const { currentUser } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -192,18 +195,18 @@ const MeetingForm = () => {
                     ...meetingData,
                     updatedAt: serverTimestamp()
                 });
-                alert('미팅이 성공적으로 수정되었습니다!');
+                alert(t('meeting.meetingEditSuccess'));
             } else {
                 await addDoc(collection(db, "meetings"), {
                     ...meetingData,
                     createdAt: serverTimestamp()
                 });
-                alert('미팅이 성공적으로 생성되었습니다!');
+                alert(t('meeting.meetingCreateSuccess'));
             }
             navigate('/');
         } catch (error) {
             console.error("Error saving meeting: ", error);
-            alert("오류가 발생했습니다: " + error.message);
+            alert(t('meeting.errorOccurred') + ": " + error.message);
         } finally {
             setLoading(false);
         }
@@ -211,19 +214,19 @@ const MeetingForm = () => {
 
     return (
         <div className="max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">{isEditing ? '미팅 수정' : '새 미팅 예약'}</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-6">{isEditing ? t('meeting.editTitle') : t('meeting.newTitle')}</h2>
             <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl border border-gray-200 space-y-6 shadow-sm">
 
                 {/* Title */}
                 <div>
-                    <label className="block text-gray-700 mb-2 font-medium">미팅 제목</label>
+                    <label className="block text-gray-700 mb-2 font-medium">{t('meeting.titleLabel')}</label>
                     <input
                         type="text"
                         name="title"
                         value={formData.title}
                         onChange={handleChange}
                         className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                        placeholder="예: 주간 기획 회의"
+                        placeholder={t('meeting.titlePlaceholder')}
                         required
                     />
                 </div>
@@ -232,7 +235,7 @@ const MeetingForm = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="block text-gray-700 mb-2 font-medium flex items-center gap-2">
-                            <Calendar size={16} /> 날짜
+                            <Calendar size={16} /> {t('meeting.dateLabel')}
                         </label>
                         <input
                             type="date"
@@ -245,7 +248,7 @@ const MeetingForm = () => {
                     </div>
                     <div>
                         <label className="block text-gray-700 mb-2 font-medium flex items-center gap-2">
-                            <Clock size={16} /> 시작 시간
+                            <Clock size={16} /> {t('meeting.startTime')}
                         </label>
                         <select
                             name="startTime"
@@ -254,7 +257,7 @@ const MeetingForm = () => {
                             className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
                             required
                         >
-                            <option value="">선택</option>
+                            <option value="">{t('meeting.selectOption')}</option>
                             {Array.from({ length: 24 }).map((_, i) => {
                                 const time = `${String(i).padStart(2, '0')}:00`;
                                 return <option key={time} value={time}>{time}</option>;
@@ -263,7 +266,7 @@ const MeetingForm = () => {
                     </div>
                     <div>
                         <label className="block text-gray-700 mb-2 font-medium flex items-center gap-2">
-                            <Clock size={16} /> 종료 시간
+                            <Clock size={16} /> {t('meeting.endTime')}
                         </label>
                         <select
                             name="endTime"
@@ -272,7 +275,7 @@ const MeetingForm = () => {
                             className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
                             required
                         >
-                            <option value="">선택</option>
+                            <option value="">{t('meeting.selectOption')}</option>
                             {Array.from({ length: 24 }).map((_, i) => {
                                 const time = `${String(i).padStart(2, '0')}:00`;
                                 return <option key={time} value={time}>{time}</option>;
@@ -284,7 +287,7 @@ const MeetingForm = () => {
                 {/* Location */}
                 <div>
                     <label className="block text-gray-700 mb-2 font-medium flex items-center gap-2">
-                        <MapPin size={16} /> 장소
+                        <MapPin size={16} /> {t('meeting.location')}
                     </label>
                     <input
                         type="text"
@@ -292,14 +295,14 @@ const MeetingForm = () => {
                         value={formData.location}
                         onChange={handleChange}
                         className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder="예: 회의실 A 또는 Zoom 링크"
+                        placeholder={t('meeting.locationPlaceholder')}
                     />
                 </div>
 
                 {/* Cost Entries */}
                 <div>
                     <label className="block text-gray-700 mb-2 font-medium flex items-center gap-2">
-                        <DollarSign size={16} /> 대여 비용
+                        <DollarSign size={16} /> {t('meeting.rentalCostLabel')}
                     </label>
                     <div className="space-y-3">
                         {costEntries.map((entry, idx) => (
@@ -307,18 +310,18 @@ const MeetingForm = () => {
                                 <div className="flex-1 space-y-2">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                         <div>
-                                            <label className="block text-xs text-gray-500 mb-1">금액 (원)</label>
+                                            <label className="block text-xs text-gray-500 mb-1">{t('meeting.costAmount')}</label>
                                             <input
                                                 type="number"
                                                 value={entry.cost}
                                                 onChange={(e) => updateCostEntry(idx, 'cost', e.target.value)}
                                                 className="w-full bg-white border border-gray-300 rounded-lg p-2.5 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                                placeholder="예: 30000"
+                                                placeholder={t('meeting.costAmountPlaceholder')}
                                                 min="0"
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs text-gray-500 mb-1">예약자</label>
+                                            <label className="block text-xs text-gray-500 mb-1">{t('meeting.bookedByLabel')}</label>
                                             <UserSearchDropdown
                                                 value={entry.bookedBy}
                                                 onChange={(v) => updateCostEntry(idx, 'bookedBy', v)}
@@ -341,13 +344,13 @@ const MeetingForm = () => {
                             onClick={addCostEntry}
                             className="w-full flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium text-gray-600 bg-gray-50 border border-dashed border-gray-300 rounded-lg hover:bg-gray-100 hover:border-gray-400 transition-colors"
                         >
-                            <Plus size={16} /> 비용 항목 추가
+                            <Plus size={16} /> {t('meeting.addCostEntry')}
                         </button>
                     </div>
                     {costEntries.length > 0 && (
                         <div className="mt-2 text-right text-sm text-gray-500">
-                            합계: <span className="font-bold text-gray-900">
-                                {costEntries.reduce((sum, e) => sum + (Number(e.cost) || 0), 0).toLocaleString()}원
+                            {t('meeting.totalLabel')}: <span className="font-bold text-gray-900">
+                                {costEntries.reduce((sum, e) => sum + (Number(e.cost) || 0), 0).toLocaleString()}{t('common.won')}
                             </span>
                         </div>
                     )}
@@ -356,7 +359,7 @@ const MeetingForm = () => {
                 {/* Description */}
                 <div>
                     <label className="block text-gray-700 mb-2 font-medium flex items-center gap-2">
-                        <AlignLeft size={16} /> 설명
+                        <AlignLeft size={16} /> {t('meeting.description')}
                     </label>
                     <textarea
                         name="description"
@@ -364,7 +367,7 @@ const MeetingForm = () => {
                         onChange={handleChange}
                         rows="4"
                         className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                        placeholder="회의 안건 및 메모..."
+                        placeholder={t('meeting.descPlaceholder')}
                     ></textarea>
                 </div>
 
@@ -376,10 +379,10 @@ const MeetingForm = () => {
                 >
                     {loading ? (
                         <span className="flex items-center justify-center gap-2">
-                            <Loader className="animate-spin" size={20} /> 처리 중...
+                            <Loader className="animate-spin" size={20} /> {t('meeting.processing')}
                         </span>
                     ) : (
-                        isEditing ? '미팅 수정 완료' : '미팅 예약하기'
+                        isEditing ? t('meeting.completeEdit') : t('meeting.bookMeeting')
                     )}
                 </button>
             </form>

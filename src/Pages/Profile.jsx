@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, User, Mail, Edit2, Save, X, Globe } from 'lucide-react';
 import { updateProfile } from 'firebase/auth';
@@ -19,6 +20,7 @@ const SUPPORTED_LANGUAGES = [
 ];
 
 const Profile = () => {
+    const { t } = useTranslation();
     const { currentUser, userProfile, logout } = useAuth();
     const [isEditing, setIsEditing] = useState(false);
     const [newName, setNewName] = useState(currentUser?.displayName || "");
@@ -57,14 +59,14 @@ const Profile = () => {
 
             setIsEditing(false);
             if (languageChanged) {
-                alert("프로필이 성공적으로 업데이트되었습니다.\n언어 설정을 적용하려면 재로그인 해주세요.");
+                alert(`${t('profile.updated')}\n${t('profile.relogin')}`);
                 await logout();
             } else {
-                alert("프로필이 성공적으로 업데이트되었습니다.");
+                alert(t('profile.updated'));
             }
         } catch (error) {
             console.error("Error updating profile:", error);
-            alert("프로필 업데이트에 실패했습니다.");
+            alert(t('profile.updateFailed'));
         } finally {
             setLoading(false);
         }
@@ -72,7 +74,7 @@ const Profile = () => {
 
     return (
         <div className="max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold text-gray-900 mb-8">내 프로필</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-8">{t('profile.title')}</h2>
 
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="h-32 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
@@ -96,7 +98,7 @@ const Profile = () => {
                                                 value={newName}
                                                 onChange={(e) => setNewName(e.target.value)}
                                                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                placeholder="닉네임을 입력하세요"
+                                                placeholder={t('profile.nickname')}
                                             />
                                         </div>
                                         <div className="flex items-center gap-2 mt-1">
@@ -120,7 +122,7 @@ const Profile = () => {
                                                 disabled={loading}
                                                 className="flex-1 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
                                             >
-                                                <Save size={18} className="mr-1" /> 저장
+                                                <Save size={18} className="mr-1" /> {t('common.save')}
                                             </button>
                                             <button
                                                 onClick={() => {
@@ -137,10 +139,10 @@ const Profile = () => {
                                 ) : (
                                     <>
                                         <div>
-                                            <h3 className="text-2xl font-bold text-gray-900">{currentUser?.displayName || "사용자 이름"}</h3>
+                                            <h3 className="text-2xl font-bold text-gray-900">{currentUser?.displayName || t('nav.user')}</h3>
                                             <div className="flex items-center mt-1 text-sm text-gray-600 font-medium">
                                                 <Globe className="text-blue-500 mr-1.5" size={14} />
-                                                선호 언어: {SUPPORTED_LANGUAGES.find(l => l.code === (userProfile?.preferredLanguage || 'ko'))?.label || '한국어'}
+                                                {t('profile.preferredLanguage')}: {SUPPORTED_LANGUAGES.find(l => l.code === (userProfile?.preferredLanguage || 'ko'))?.label || '한국어'}
                                             </div>
                                         </div>
                                         <button
@@ -152,14 +154,14 @@ const Profile = () => {
                                     </>
                                 )}
                             </div>
-                            <p className="text-gray-500 mt-1">가입일: {new Date(currentUser?.metadata?.creationTime).toLocaleDateString()}</p>
+                            <p className="text-gray-500 mt-1">{t('profile.joinDate')}: {new Date(currentUser?.metadata?.creationTime).toLocaleDateString()}</p>
                         </div>
 
                         <div className="space-y-4">
                             <div className="flex items-center space-x-3 text-gray-700 p-4 bg-gray-50 rounded-lg border border-gray-100">
                                 <Mail className="text-blue-500" size={20} />
                                 <div>
-                                    <p className="text-xs text-gray-500 uppercase font-semibold">이메일</p>
+                                    <p className="text-xs text-gray-500 uppercase font-semibold">{t('profile.email')}</p>
                                     <p className="font-medium">{currentUser?.email}</p>
                                 </div>
                             </div>
@@ -167,7 +169,7 @@ const Profile = () => {
                             <div className="flex items-center space-x-3 text-gray-700 p-4 bg-gray-50 rounded-lg border border-gray-100">
                                 <User className="text-purple-500" size={20} />
                                 <div>
-                                    <p className="text-xs text-gray-500 uppercase font-semibold">사용자 ID</p>
+                                    <p className="text-xs text-gray-500 uppercase font-semibold">{t('profile.userId')}</p>
                                     <p className="font-mono text-sm">{currentUser?.uid}</p>
                                 </div>
                             </div>
@@ -179,7 +181,7 @@ const Profile = () => {
                                 className="w-full flex items-center justify-center space-x-2 bg-red-50 hover:bg-red-100 text-red-600 py-3 rounded-lg transition-colors border border-red-100"
                             >
                                 <LogOut size={20} />
-                                <span className="font-semibold">로그아웃</span>
+                                <span className="font-semibold">{t('nav.logout')}</span>
                             </button>
                         </div>
                     </div>

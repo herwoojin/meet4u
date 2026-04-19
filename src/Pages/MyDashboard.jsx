@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -31,6 +32,7 @@ const StatCard = ({ icon: Icon, label, value, color, sub }) => (
 );
 
 const MyDashboard = () => {
+    const { t } = useTranslation();
     const { currentUser } = useAuth();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
@@ -300,18 +302,18 @@ const MyDashboard = () => {
 
     // Chart data
     const wdlData = [
-        { name: '승', value: stats.wins, color: '#3b82f6' },
-        { name: '무', value: stats.draws, color: '#9ca3af' },
-        { name: '패', value: stats.losses, color: '#ef4444' },
+        { name: t('myDashboard.wins'), value: stats.wins, color: '#3b82f6' },
+        { name: t('myDashboard.draws'), value: stats.draws, color: '#9ca3af' },
+        { name: t('myDashboard.losses'), value: stats.losses, color: '#ef4444' },
     ].filter(d => d.value > 0);
 
     const winPartnerData = Object.entries(stats.winPartners)
         .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => ({ name: name || '없음', count }));
+        .map(([name, count]) => ({ name: name || '-', count }));
 
     const lossOpponentData = Object.entries(stats.lossOpponents)
         .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => ({ name: name || '없음', count }));
+        .map(([name, count]) => ({ name: name || '-', count }));
 
     const winRate = stats.totalGames > 0 ? Math.round((stats.wins / stats.totalGames) * 100) : 0;
 
@@ -337,10 +339,10 @@ const MyDashboard = () => {
             <div>
                 <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                     <BarChart3 className="text-blue-600" size={28} />
-                    My 대시보드
+                    {t('myDashboard.title')}
                 </h1>
                 <p className="text-gray-500 mt-1 text-sm">
-                    {currentUser?.displayName || currentUser?.email?.split('@')[0]}님의 활동 통계
+                    {t('myDashboard.activityStats', { name: currentUser?.displayName || currentUser?.email?.split('@')[0] })}
                 </p>
             </div>
 
@@ -348,12 +350,12 @@ const MyDashboard = () => {
             <div>
                 <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
                     <Calendar size={16} className="text-blue-500" />
-                    참석 현황
+                    {t('myDashboard.attendanceStatus')}
                 </h2>
                 <div className="grid grid-cols-3 gap-3">
-                    <StatCard icon={Calendar} label="이달 참석" value={stats.monthAttend} color="bg-blue-500" sub={`${new Date().getMonth() + 1}월`} />
-                    <StatCard icon={TrendingUp} label="올해 참석" value={stats.yearAttend} color="bg-green-500" sub={`${new Date().getFullYear()}년`} />
-                    <StatCard icon={Target} label="전체 참석" value={stats.totalAttend} color="bg-purple-500" sub={userCreatedAt ? `${formatDate(userCreatedAt)}~` : ''} />
+                    <StatCard icon={Calendar} label={t('myDashboard.monthAttend')} value={stats.monthAttend} color="bg-blue-500" sub={`${new Date().getMonth() + 1}${t('common.month')}`} />
+                    <StatCard icon={TrendingUp} label={t('myDashboard.yearAttend')} value={stats.yearAttend} color="bg-green-500" sub={`${new Date().getFullYear()}${t('common.year')}`} />
+                    <StatCard icon={Target} label={t('myDashboard.totalAttend')} value={stats.totalAttend} color="bg-purple-500" sub={userCreatedAt ? `${formatDate(userCreatedAt)}~` : ''} />
                 </div>
             </div>
 
@@ -362,7 +364,7 @@ const MyDashboard = () => {
                 <div className="flex items-center justify-between mb-3">
                     <h2 className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
                         <DollarSign size={16} className="text-green-500" />
-                        비용 현황
+                        {t('myDashboard.costStatus')}
                     </h2>
                     <div className="flex items-center gap-2">
                         <button
@@ -372,7 +374,7 @@ const MyDashboard = () => {
                             <ChevronLeft size={16} />
                         </button>
                         <span className="text-sm font-bold text-gray-700 w-24 text-center">
-                            {costDate.getFullYear()}년 {costDate.getMonth() + 1}월
+                            {costDate.getFullYear()}{t('common.year')} {costDate.getMonth() + 1}{t('common.month')}
                         </span>
                         <button
                             onClick={() => setCostDate(new Date(costDate.getFullYear(), costDate.getMonth() + 1, 1))}
@@ -385,7 +387,7 @@ const MyDashboard = () => {
                                 onClick={() => setCostDate(new Date())}
                                 className="text-xs text-blue-600 font-medium hover:text-blue-700 ml-1"
                             >
-                                이번달
+                                {t('common.thisMonth')}
                             </button>
                         )}
                     </div>
@@ -393,8 +395,8 @@ const MyDashboard = () => {
                 {costStats.costToPay > 0 || costStats.costBooked > 0 ? (
                     <>
                         <div className="grid grid-cols-2 gap-3 mb-3">
-                            <StatCard icon={CreditCard} label="내가 낼 금액" value={`${costStats.costToPay.toLocaleString()}원`} color="bg-green-500" sub="참석 기준 1/N" />
-                            <StatCard icon={DollarSign} label="내가 예약한 비용" value={`${costStats.costBooked.toLocaleString()}원`} color="bg-orange-500" sub="예약자 기준" />
+                            <StatCard icon={CreditCard} label={t('myDashboard.costToPay')} value={`${costStats.costToPay.toLocaleString()}${t('common.won')}`} color="bg-green-500" sub={t('myDashboard.attendBasis')} />
+                            <StatCard icon={DollarSign} label={t('myDashboard.costBooked')} value={`${costStats.costBooked.toLocaleString()}${t('common.won')}`} color="bg-orange-500" sub={t('myDashboard.bookerBasis')} />
                         </div>
                         {(costStats.details.length > 0 || costStats.adjustment !== 0) && (
                             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -403,19 +405,19 @@ const MyDashboard = () => {
                                         <div key={i} className="flex items-center justify-between px-4 py-3">
                                             <div>
                                                 <p className="text-sm font-medium text-gray-800">{d.title}</p>
-                                                <p className="text-xs text-gray-400">{d.date} · {d.totalCost.toLocaleString()}원 ÷ {d.attendCount}명</p>
+                                                <p className="text-xs text-gray-400">{d.date} · {d.totalCost.toLocaleString()}{t('common.won')} ÷ {d.attendCount}{t('common.people')}</p>
                                             </div>
-                                            <span className="text-sm font-bold text-green-700">{d.myShare.toLocaleString()}원</span>
+                                            <span className="text-sm font-bold text-green-700">{d.myShare.toLocaleString()}{t('common.won')}</span>
                                         </div>
                                     ))}
                                     {costStats.adjustment !== 0 && (
                                         <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
                                             <div>
-                                                <p className="text-sm font-medium text-gray-700">정산 조정</p>
-                                                <p className="text-xs text-gray-400">월 총 대여비와 예약 비용 정산</p>
+                                                <p className="text-sm font-medium text-gray-700">{t('myDashboard.settlementAdjustment')}</p>
+                                                <p className="text-xs text-gray-400">{t('myDashboard.settlementDesc')}</p>
                                             </div>
                                             <span className={`text-sm font-bold ${costStats.adjustment > 0 ? 'text-green-700' : 'text-red-500'}`}>
-                                                {costStats.adjustment > 0 ? '+' : ''}{costStats.adjustment.toLocaleString()}원
+                                                {costStats.adjustment > 0 ? '+' : ''}{costStats.adjustment.toLocaleString()}{t('common.won')}
                                             </span>
                                         </div>
                                     )}
@@ -425,7 +427,7 @@ const MyDashboard = () => {
                     </>
                 ) : (
                     <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm text-center">
-                        <p className="text-gray-400 text-sm">해당 월에 비용 내역이 없습니다.</p>
+                        <p className="text-gray-400 text-sm">{t('myDashboard.noCostThisMonth')}</p>
                     </div>
                 )}
             </div>
@@ -434,20 +436,20 @@ const MyDashboard = () => {
             <div>
                 <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
                     <Trophy size={16} className="text-yellow-500" />
-                    경기 통계
+                    {t('myDashboard.gameStats')}
                 </h2>
                 <div className="grid grid-cols-4 gap-3">
-                    <StatCard icon={Target} label="참여 경기" value={stats.totalGames} color="bg-gray-500" />
+                    <StatCard icon={Target} label={t('myDashboard.gamesPlayed')} value={stats.totalGames} color="bg-gray-500" />
                     <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                        <div className="text-xs font-medium text-gray-500 mb-1">승</div>
+                        <div className="text-xs font-medium text-gray-500 mb-1">{t('myDashboard.wins')}</div>
                         <div className="text-2xl font-bold text-blue-600">{stats.wins}</div>
                     </div>
                     <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                        <div className="text-xs font-medium text-gray-500 mb-1">무</div>
+                        <div className="text-xs font-medium text-gray-500 mb-1">{t('myDashboard.draws')}</div>
                         <div className="text-2xl font-bold text-gray-500">{stats.draws}</div>
                     </div>
                     <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                        <div className="text-xs font-medium text-gray-500 mb-1">패</div>
+                        <div className="text-xs font-medium text-gray-500 mb-1">{t('myDashboard.losses')}</div>
                         <div className="text-2xl font-bold text-red-500">{stats.losses}</div>
                     </div>
                 </div>
@@ -456,7 +458,7 @@ const MyDashboard = () => {
             {/* Win Rate Donut */}
             {stats.totalGames > 0 && (
                 <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-                    <h3 className="text-sm font-bold text-gray-700 mb-4">승률</h3>
+                    <h3 className="text-sm font-bold text-gray-700 mb-4">{t('myDashboard.winRate')}</h3>
                     <div className="flex items-center justify-center gap-6">
                         <div className="relative w-32 h-32">
                             <ResponsiveContainer width="100%" height="100%">
@@ -486,7 +488,7 @@ const MyDashboard = () => {
                                 <div key={i} className="flex items-center gap-2">
                                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }}></div>
                                     <span className="text-sm text-gray-600">{d.name}</span>
-                                    <span className="text-sm font-bold text-gray-900">{d.value}경기</span>
+                                    <span className="text-sm font-bold text-gray-900">{d.value}{t('myDashboard.gamesSuffix')}</span>
                                 </div>
                             ))}
                         </div>
@@ -499,9 +501,9 @@ const MyDashboard = () => {
                 <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
                     <h3 className="text-sm font-bold text-gray-700 mb-1 flex items-center gap-1.5">
                         <Users size={16} className="text-blue-500" />
-                        승리 시 파트너 비율
+                        {t('myDashboard.winPartners')}
                     </h3>
-                    <p className="text-xs text-gray-400 mb-4">내가 이긴 경기에서 함께한 파트너</p>
+                    <p className="text-xs text-gray-400 mb-4">{t('myDashboard.winPartnersDesc')}</p>
                     <div className="flex items-center gap-4">
                         <div className="w-28 h-28 shrink-0">
                             <ResponsiveContainer width="100%" height="100%">
@@ -529,7 +531,7 @@ const MyDashboard = () => {
                                     <div key={i} className="flex items-center gap-2">
                                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
                                         <span className="text-xs text-gray-700 truncate flex-1">{d.name}</span>
-                                        <span className="text-xs font-bold text-gray-900 shrink-0">{d.count}승</span>
+                                        <span className="text-xs font-bold text-gray-900 shrink-0">{d.count}{t('myDashboard.winsSuffix')}</span>
                                         <span className="text-xs text-gray-400 shrink-0">{pct}%</span>
                                     </div>
                                 );
@@ -544,9 +546,9 @@ const MyDashboard = () => {
                 <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
                     <h3 className="text-sm font-bold text-gray-700 mb-1 flex items-center gap-1.5">
                         <Target size={16} className="text-red-500" />
-                        패배 시 상대 비율
+                        {t('myDashboard.lossOpponents')}
                     </h3>
-                    <p className="text-xs text-gray-400 mb-4">내가 진 경기의 상대편 선수</p>
+                    <p className="text-xs text-gray-400 mb-4">{t('myDashboard.lossOpponentsDesc')}</p>
                     <div className="space-y-2">
                         {lossOpponentData.map((d, i) => {
                             const pct = Math.round((d.count / (stats.losses * 2)) * 100);
@@ -554,7 +556,7 @@ const MyDashboard = () => {
                                 <div key={i}>
                                     <div className="flex items-center justify-between mb-1">
                                         <span className="text-xs text-gray-700">{d.name}</span>
-                                        <span className="text-xs font-bold text-gray-500">{d.count}회 ({pct}%)</span>
+                                        <span className="text-xs font-bold text-gray-500">{d.count}{t('myDashboard.timesSuffix')} ({pct}%)</span>
                                     </div>
                                     <div className="w-full bg-gray-100 rounded-full h-2">
                                         <div
@@ -576,8 +578,8 @@ const MyDashboard = () => {
             {stats.totalGames === 0 && stats.totalAttend === 0 && (
                 <div className="bg-white rounded-xl border border-gray-100 p-8 shadow-sm text-center">
                     <Trophy size={40} className="text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-400 text-sm">아직 참석 및 경기 기록이 없습니다.</p>
-                    <p className="text-gray-300 text-xs mt-1">모임에 참석하고 스코어보드에 경기를 기록해보세요!</p>
+                    <p className="text-gray-400 text-sm">{t('myDashboard.noRecords')}</p>
+                    <p className="text-gray-300 text-xs mt-1">{t('myDashboard.joinMeetings')}</p>
                 </div>
             )}
         </div>

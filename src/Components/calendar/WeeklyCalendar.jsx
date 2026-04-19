@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isSameDay } from 'date-fns';
-import { ko } from 'date-fns/locale';
+import { ko, enUS, zhCN } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Users, Clock } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
@@ -8,7 +9,11 @@ import { useAuth } from '../../context/AuthContext';
 import MeetingDetailModal from '../meeting/MeetingDetailModal';
 import { useNavigate } from 'react-router-dom';
 
+const DATE_FNS_LOCALES = { ko, en: enUS, zh: zhCN };
+
 const WeeklyCalendar = () => {
+    const { t, i18n } = useTranslation();
+    const dateLocale = DATE_FNS_LOCALES[i18n.language?.split('-')[0]] || ko;
     const { currentUser, isAdmin } = useAuth();
     const navigate = useNavigate();
     const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 })); // Monday start
@@ -55,7 +60,7 @@ const WeeklyCalendar = () => {
         if (daysWithMeetings.length === 0) {
             return (
                 <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-100">
-                    <p className="text-gray-400 text-sm">이번 주 일정이 없습니다.</p>
+                    <p className="text-gray-400 text-sm">{t('dashboard.noWeekMeetings')}</p>
                 </div>
             );
         }
@@ -63,8 +68,8 @@ const WeeklyCalendar = () => {
         return daysWithMeetings.map((date) => {
             const dailyMeetings = getMeetingsForDate(date);
             const isToday = isSameDay(date, new Date());
-            const dayName = format(date, 'EEEE', { locale: ko });
-            const dateStr = format(date, 'M월 d일');
+            const dayName = format(date, 'EEEE', { locale: dateLocale });
+            const dateStr = format(date, t('dashboard.dayDateFormat'), { locale: dateLocale });
             const dayOfWeek = date.getDay(); // 0=Sun, 6=Sat
 
             return (
@@ -74,7 +79,7 @@ const WeeklyCalendar = () => {
                             <span className={`font-bold text-lg ${dayOfWeek === 0 || dayOfWeek === 6 ? 'text-red-600' : 'text-gray-900'}`}>{dayName}</span>
                             <span className="font-bold text-gray-800 text-sm">{dateStr}</span>
                         </div>
-                        {isToday && <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold">오늘</span>}
+                        {isToday && <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold">{t('dashboard.today')}</span>}
                     </div>
 
                     <div className="space-y-2">
@@ -113,11 +118,11 @@ const WeeklyCalendar = () => {
         <div className="w-full">
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-gray-900">
-                    {format(currentWeekStart, 'yyyy년 M월', { locale: ko })}
+                    {format(currentWeekStart, t('dashboard.weekHeaderFormat'), { locale: dateLocale })}
                 </h2>
                 <div className="flex items-center gap-2">
                     <button onClick={prevWeek} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600"><ChevronLeft size={20} /></button>
-                    <button onClick={goToToday} className="px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700">오늘</button>
+                    <button onClick={goToToday} className="px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700">{t('dashboard.today')}</button>
                     <button onClick={nextWeek} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600"><ChevronRight size={20} /></button>
                 </div>
             </div>

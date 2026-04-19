@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
+import LanguageSwitcher from './LanguageSwitcher';
 import { Calendar, Home, LogOut, PlusCircle, Settings, X, MapPin, Shield, BarChart3 } from 'lucide-react';
 
 const SidebarItem = ({ to, icon: Icon, label, onClick }) => {
@@ -19,7 +21,8 @@ const SidebarItem = ({ to, icon: Icon, label, onClick }) => {
 };
 
 const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
-    const { logout, currentUser, isAdmin } = useAuth();
+    const { t } = useTranslation();
+    const { logout, currentUser } = useAuth();
 
     return (
         <aside className={`
@@ -30,21 +33,25 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
             <div className="p-6 border-b border-blue-100/60 flex justify-between items-center">
                 <Link to="/" className="text-2xl font-bold text-blue-800 flex items-center gap-2" onClick={closeMobileMenu}>
                     <Calendar className="text-blue-600" />
-                    PromiseU
+                    {t('app.name')}
                 </Link>
                 <button onClick={toggleMobileMenu} className="md:hidden text-blue-400 hover:text-blue-700">
                     <X size={24} />
                 </button>
             </div>
 
+            <div className="px-4 pt-3 hidden md:flex justify-end">
+                <LanguageSwitcher compact />
+            </div>
+
             <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-                <SidebarItem to="/" icon={Home} label="주간캘린더" onClick={closeMobileMenu} />
-                <SidebarItem to="/calendar" icon={Calendar} label="월캘린더" onClick={closeMobileMenu} />
-                <SidebarItem to="/schedule" icon={PlusCircle} label="미팅 생성" onClick={closeMobileMenu} />
-                <SidebarItem to="/my-dashboard" icon={BarChart3} label="My 대시보드" onClick={closeMobileMenu} />
+                <SidebarItem to="/" icon={Home} label={t('nav.weeklyCalendar')} onClick={closeMobileMenu} />
+                <SidebarItem to="/calendar" icon={Calendar} label={t('nav.monthlyCalendar')} onClick={closeMobileMenu} />
+                <SidebarItem to="/schedule" icon={PlusCircle} label={t('nav.createMeeting')} onClick={closeMobileMenu} />
+                <SidebarItem to="/my-dashboard" icon={BarChart3} label={t('nav.myDashboard')} onClick={closeMobileMenu} />
                 <div className="pt-4 mt-4 border-t border-blue-100/60">
-                    <SidebarItem to="/settings" icon={Settings} label="설정" onClick={closeMobileMenu} />
-                    <SidebarItem to="/admin" icon={Shield} label="관리자" onClick={closeMobileMenu} />
+                    <SidebarItem to="/settings" icon={Settings} label={t('nav.settings')} onClick={closeMobileMenu} />
+                    <SidebarItem to="/admin" icon={Shield} label={t('nav.admin')} onClick={closeMobileMenu} />
                     <a
                         href="https://whereurl.com/"
                         target="_blank"
@@ -53,7 +60,7 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
                         onClick={closeMobileMenu}
                     >
                         <MapPin size={20} />
-                        <span className="font-medium">내위치공유(지금가고있어요)</span>
+                        <span className="font-medium">{t('nav.shareLocation')}</span>
                     </a>
                 </div>
             </nav>
@@ -63,14 +70,14 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
                     <Link to="/profile" className="flex items-center gap-3 w-full" onClick={closeMobileMenu}>
                         <img src={currentUser?.photoURL || "https://ui-avatars.com/api/?name=User"} alt="User" className="w-8 h-8 rounded-full" />
                         <div className="flex-1 overflow-hidden">
-                            <p className="text-sm font-medium truncate text-blue-900">{currentUser?.displayName || "사용자"}</p>
+                            <p className="text-sm font-medium truncate text-blue-900">{currentUser?.displayName || t('nav.user')}</p>
                             <p className="text-xs text-blue-500/70 truncate">{currentUser?.email}</p>
                         </div>
                     </Link>
                 </div>
                 <button onClick={logout} className="w-full flex items-center justify-center space-x-2 p-2 rounded-lg bg-white/60 hover:bg-white/90 transition-all duration-200 text-sm text-blue-700 border border-blue-100">
                     <LogOut size={16} />
-                    <span>로그아웃</span>
+                    <span>{t('nav.logout')}</span>
                 </button>
             </div>
         </aside>
