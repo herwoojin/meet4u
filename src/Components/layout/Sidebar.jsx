@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import LanguageSwitcher from './LanguageSwitcher';
-import { Calendar, Home, LogOut, PlusCircle, Settings, X, MapPin, Shield, BarChart3 } from 'lucide-react';
+import { Calendar, Home, LogOut, PlusCircle, Settings, X, MapPin, Shield, BarChart3, Globe } from 'lucide-react';
 
 const SidebarItem = ({ to, icon: Icon, label, onClick }) => {
     const location = useLocation();
@@ -48,6 +48,7 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
                 <SidebarItem to="/" icon={Home} label={t('nav.weeklyCalendar')} onClick={closeMobileMenu} />
                 <SidebarItem to="/calendar" icon={Calendar} label={t('nav.monthlyCalendar')} onClick={closeMobileMenu} />
                 <SidebarItem to="/schedule" icon={PlusCircle} label={t('nav.createMeeting')} onClick={closeMobileMenu} />
+                <SidebarItem to="/global-meeting" icon={Globe} label={t('nav.globalMeeting')} onClick={closeMobileMenu} />
                 <SidebarItem to="/my-dashboard" icon={BarChart3} label={t('nav.myDashboard')} onClick={closeMobileMenu} />
                 <div className="pt-4 mt-4 border-t border-blue-100/60">
                     <SidebarItem to="/settings" icon={Settings} label={t('nav.settings')} onClick={closeMobileMenu} />
