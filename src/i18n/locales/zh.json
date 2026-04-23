@@ -302,6 +302,24 @@
   "chat": {
     "messagePlaceholder": "输入消息..."
   },
+  "global": {
+    "title": "全球会议",
+    "subtitle": "在地图上分享会员的位置,并进行实时对话。",
+    "addPinTitle": "通过地址添加标记",
+    "addressPlaceholder": "地址 (例如:北京市朝阳区建国路88号)",
+    "pinTitlePlaceholder": "标记标题 (可选)",
+    "addPinBtn": "添加标记",
+    "adding": "添加中...",
+    "geocodeFailed": "未找到该地址。请输入更准确的地址。",
+    "addPinFailed": "添加标记失败。",
+    "noPins": "尚无标记。输入地址添加第一个标记吧!",
+    "deletePin": "删除标记",
+    "confirmDeletePin": "要删除此标记吗?",
+    "chatTitle": "全球对话",
+    "byLabel": "添加人",
+    "pinsCount": "{{count}} 个标记",
+    "loginRequired": "请先登录。"
+  },
   "settings": {
     "title": "设置",
     "notifications": "通知设置",

@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { db } from '../../lib/firebase';
-import { collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { collection, addDoc, query, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
 
-// BCP 47 locales for Web Speech API (SpeechRecognition / SpeechSynthesis)
+// BCP 47 locales for Web Speech API
 const SPEECH_LOCALE = {
     'ko': 'ko-KR',
     'en': 'en-US',
     'zh-CN': 'zh-CN',
+    'zh': 'zh-CN',
     'ja': 'ja-JP',
     'ru': 'ru-RU',
     'es': 'es-ES',
@@ -21,9 +22,9 @@ const SPEECH_LOCALE = {
     'fr': 'fr-FR',
 };
 
-const CommentSection = ({ meetingId, currentUser, attendees }) => {
+const GlobalChat = () => {
     const { t } = useTranslation();
-    const { userProfile } = useAuth();
+    const { currentUser, userProfile } = useAuth();
     const myLang = userProfile?.preferredLanguage || 'ko';
 
     const [comments, setComments] = useState([]);
@@ -38,64 +39,47 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
     const recordingBaseRef = useRef('');
 
     useEffect(() => {
-        if (!meetingId) return;
-
-        const q = query(
-            collection(db, 'comments'),
-            where('meetingId', '==', meetingId)
-        );
-
+        const q = query(collection(db, 'globalComments'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const loadedComments = snapshot.docs.map(d => ({
-                id: d.id,
-                ...d.data()
-            })).sort((a, b) => {
+            const loaded = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
                 const t1 = a.timestamp?.toMillis() || 0;
                 const t2 = b.timestamp?.toMillis() || 0;
                 return t1 - t2;
             });
-            setComments(loadedComments);
+            setComments(loaded);
             setLoading(false);
             scrollToBottom();
 
-            // Mark all comments as read by current user
             if (currentUser?.email) {
-                loadedComments.forEach(comment => {
-                    if (comment.senderEmail !== currentUser.email && !markedAsRead.current.has(comment.id)) {
-                        const readBy = comment.readBy || [];
+                loaded.forEach(c => {
+                    if (c.senderEmail !== currentUser.email && !markedAsRead.current.has(c.id)) {
+                        const readBy = c.readBy || [];
                         if (!readBy.includes(currentUser.email.toLowerCase())) {
-                            markedAsRead.current.add(comment.id);
-                            updateDoc(doc(db, 'comments', comment.id), {
+                            markedAsRead.current.add(c.id);
+                            updateDoc(doc(db, 'globalComments', c.id), {
                                 readBy: arrayUnion(currentUser.email.toLowerCase())
                             }).catch(() => { });
                         }
                     }
                 });
             }
-        }, (error) => {
-            console.error("Error fetching comments:", error);
+        }, (err) => {
+            console.error("GlobalChat fetch error:", err);
             setLoading(false);
         });
 
         return () => unsubscribe();
-    }, [meetingId, currentUser]);
+    }, [currentUser]);
 
-    // Background translation processor
     useEffect(() => {
         if (!currentUser) return;
-        
         comments.forEach(async (comment) => {
             const isMe = comment.senderEmail === currentUser.email;
             if (isMe) return;
 
             const srcLang = comment.sourceLanguage || 'ko';
-            // Same language → no translation needed
             if (srcLang === myLang) return;
-
-            // If we already have the translation for myLang, skip
             if (comment.translations && comment.translations[myLang]) return;
-
-            // Avoid duplicate calls
             if (translatingRef.current.has(comment.id)) return;
             translatingRef.current.add(comment.id);
 
@@ -105,18 +89,17 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text: comment.text, sourceLang: srcLang, targetLang: myLang })
                 });
-                
                 if (res.ok) {
                     const data = await res.json();
                     if (data.translatedText) {
-                        await updateDoc(doc(db, 'comments', comment.id), {
+                        await updateDoc(doc(db, 'globalComments', comment.id), {
                             [`translations.${myLang}`]: data.translatedText
                         });
                     }
                 }
             } catch (err) {
-                console.error("Translation fail:", err);
-                translatingRef.current.delete(comment.id); // allow retry later
+                console.error("GlobalChat translation fail:", err);
+                translatingRef.current.delete(comment.id);
             }
         });
     }, [comments, myLang, currentUser]);
@@ -125,7 +108,6 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    // Clean up any ongoing recognition/speech on unmount
     useEffect(() => {
         return () => {
             try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
@@ -135,24 +117,19 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         };
     }, []);
 
-    // Speech-to-text: dictate in user's preferred language
     const toggleRecording = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             alert(t('meeting.voiceUnsupportedInput'));
             return;
         }
-
         if (isRecording) {
             try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
             setIsRecording(false);
             return;
         }
 
-        // Android Chrome의 continuous 모드는 확정 세그먼트를 중복 재방출하는
-        // 버그가 있어 모바일에서는 단발 세션으로 동작시킨다.
         const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
-
         const recognition = new SpeechRecognition();
         recognition.lang = SPEECH_LOCALE[myLang] || 'ko-KR';
         recognition.interimResults = true;
@@ -171,10 +148,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
             }
             setNewComment(recordingBaseRef.current + finalText + interimText);
         };
-        recognition.onerror = (e) => {
-            console.error('Speech recognition error:', e);
-            setIsRecording(false);
-        };
+        recognition.onerror = () => setIsRecording(false);
         recognition.onend = () => setIsRecording(false);
 
         try {
@@ -187,7 +161,6 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         }
     };
 
-    // Text-to-speech: play a comment aloud in its source language
     const speakComment = (commentId, text, lang) => {
         if (typeof window === 'undefined' || !window.speechSynthesis) {
             alert(t('meeting.voiceUnsupportedPlay'));
@@ -213,55 +186,32 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         if (!newComment.trim() || !currentUser) return;
 
         const senderName = currentUser.displayName || currentUser.email.split('@')[0];
-        const recipientEmails = attendees
-            .filter(email => email && typeof email === 'string')
-            .map(email => email.toLowerCase());
-
         try {
-            await addDoc(collection(db, 'comments'), {
-                meetingId,
+            await addDoc(collection(db, 'globalComments'), {
                 text: newComment,
                 senderEmail: currentUser.email,
                 senderName,
                 sourceLanguage: myLang,
                 timestamp: serverTimestamp(),
                 readBy: [currentUser.email.toLowerCase()],
-                recipients: recipientEmails
             });
-
-            // Send background push notification to attendees
-            if (recipientEmails.length > 0) {
-                fetch('/.netlify/functions/send-notification', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: 'comment',
-                        title: `💬 ${senderName}님의 새 댓글`,
-                        body: newComment.length > 100 ? newComment.slice(0, 100) + '...' : newComment,
-                        recipientEmails,
-                        senderEmail: currentUser.email,
-                    }),
-                }).catch(err => console.error('Push notification failed:', err));
-            }
-
             setNewComment('');
         } catch (error) {
-            console.error("Error adding comment:", error);
-            alert(`댓글 저장 실패: ${error.message}`);
+            console.error("Error adding global comment:", error);
+            alert(`${t('meeting.errorOccurred')}: ${error.message}`);
         }
     };
 
     const handleDelete = async (commentId) => {
         if (!window.confirm(t('meeting.confirmDeleteComment'))) return;
         try {
-            await deleteDoc(doc(db, "comments", commentId));
+            await deleteDoc(doc(db, "globalComments", commentId));
         } catch (error) {
-            console.error("Error deleting comment:", error);
+            console.error("Error deleting global comment:", error);
             alert(t('meeting.deleteCommentFailed'));
         }
     };
 
-    // Get unique commenters (other than me) for read receipt calculation
     const getOtherCommenters = () => {
         const commenters = new Set();
         comments.forEach(c => {
@@ -272,27 +222,22 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         return commenters;
     };
 
-    // Get read status for a comment written by the current user
     const getReadStatus = (comment) => {
         const readBy = (comment.readBy || []).map(e => e.toLowerCase());
         const otherCommenters = getOtherCommenters();
-
-        if (otherCommenters.size === 0) return null; // No other commenters
-
-        // Filter to only commenters who have read this
+        if (otherCommenters.size === 0) return null;
         const readCommenters = [...otherCommenters].filter(email => readBy.includes(email));
-
-        if (readCommenters.length === 0) return null; // No one has read
-        if (readCommenters.length >= otherCommenters.size) return 'all'; // Everyone read
-        return 'some'; // Some have read
+        if (readCommenters.length === 0) return null;
+        if (readCommenters.length >= otherCommenters.size) return 'all';
+        return 'some';
     };
 
     return (
-        <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex flex-col h-80">
+        <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex flex-col h-96">
             <div className="flex items-center justify-between mb-4 text-gray-900 font-bold border-b border-gray-200 pb-2">
                 <div className="flex items-center gap-2">
                     <MessageSquare size={18} className="text-gray-700" />
-                    {t('meeting.commentsCount', { count: comments.length })}
+                    {t('global.chatTitle')} ({comments.length})
                 </div>
                 {myLang !== 'ko' && (
                     <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100">
@@ -313,8 +258,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                     const isTranslating = !isMe && !comment.translations?.[myLang] && (comment.sourceLanguage || 'ko') !== myLang;
                     const displayText = isMe ? comment.text : (comment.translations?.[myLang] || comment.text);
 
-                    // Sender plays their original text in the source language.
-                    // Receiver plays the translated text in their own preferred language.
+                    // Sender plays original in source language; receiver plays translated in own language
                     const ttsText = isMe ? comment.text : displayText;
                     const ttsLang = isMe ? (comment.sourceLanguage || 'ko') : myLang;
 
@@ -325,14 +269,14 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                                     <button
                                         onClick={() => handleDelete(comment.id)}
                                         className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                                        title="삭제"
+                                        title={t('meeting.deleteBtn')}
                                     >
                                         <Trash2 size={12} />
                                     </button>
                                 )}
                                 <span className="text-xs font-bold text-gray-700">{comment.senderName}</span>
                                 <span className="text-[10px] text-gray-400">
-                                    {comment.timestamp ? format(comment.timestamp.toDate(), 'a h:mm', { locale: ko }) : '방금 전'}
+                                    {comment.timestamp ? format(comment.timestamp.toDate(), 'a h:mm', { locale: ko }) : ''}
                                 </span>
                             </div>
                             <div className={`flex items-start gap-1.5 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -364,10 +308,8 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                                     {speakingId === comment.id ? <VolumeX size={14} /> : <Volume2 size={14} />}
                                 </button>
                             </div>
-                            {/* Read Receipt */}
                             {isMe && readStatus && (
-                                <div className={`flex items-center gap-1 mt-1 text-[10px] ${readStatus === 'all' ? 'text-blue-500' : 'text-gray-400'
-                                    }`}>
+                                <div className={`flex items-center gap-1 mt-1 text-[10px] ${readStatus === 'all' ? 'text-blue-500' : 'text-gray-400'}`}>
                                     <CheckCheck size={12} />
                                     <span>{readStatus === 'all' ? t('meeting.allRead') : t('meeting.someRead')}</span>
                                 </div>
@@ -385,11 +327,13 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder={isRecording ? t('meeting.voiceListening') : t('meeting.commentPlaceholder')}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={!currentUser}
                 />
                 <button
                     type="button"
                     onClick={toggleRecording}
-                    className={`relative p-2 rounded-lg transition-all shadow-sm ${isRecording
+                    disabled={!currentUser}
+                    className={`relative p-2 rounded-lg transition-all shadow-sm disabled:opacity-50 ${isRecording
                         ? 'bg-gradient-to-br from-red-500 to-pink-600 text-white ring-2 ring-red-300 animate-pulse'
                         : 'bg-gradient-to-br from-orange-400 to-red-500 text-white hover:from-orange-500 hover:to-red-600'
                         }`}
@@ -402,7 +346,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                 </button>
                 <button
                     type="submit"
-                    disabled={!newComment.trim()}
+                    disabled={!newComment.trim() || !currentUser}
                     className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                     <Send size={18} />
@@ -412,4 +356,4 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
     );
 };
 
-export default CommentSection;
+export default GlobalChat;

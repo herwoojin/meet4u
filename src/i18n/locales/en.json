@@ -302,6 +302,24 @@
   "chat": {
     "messagePlaceholder": "Type a message..."
   },
+  "global": {
+    "title": "Global Meeting",
+    "subtitle": "Share locations pinned by members and chat in real time.",
+    "addPinTitle": "Add a pin from an address",
+    "addressPlaceholder": "Address (e.g. 350 Fifth Avenue, New York)",
+    "pinTitlePlaceholder": "Pin title (optional)",
+    "addPinBtn": "Add pin",
+    "adding": "Adding...",
+    "geocodeFailed": "Address not found. Please try a more specific address.",
+    "addPinFailed": "Failed to add pin.",
+    "noPins": "No pins yet. Add the first one by entering an address!",
+    "deletePin": "Delete pin",
+    "confirmDeletePin": "Delete this pin?",
+    "chatTitle": "Global Chat",
+    "byLabel": "Added by",
+    "pinsCount": "{{count}} pins",
+    "loginRequired": "Please sign in to continue."
+  },
   "settings": {
     "title": "Settings",
     "notifications": "Notification Settings",
