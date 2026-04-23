@@ -34,7 +34,7 @@ const MainLayout = ({ children }) => {
             {/* Overlay for mobile menu */}
             {isMobileMenuOpen && (
                 <div
-                    className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+                    className="fixed inset-0 bg-black bg-opacity-50 z-[1090] md:hidden"
                     onClick={closeMobileMenu}
                 ></div>
             )}

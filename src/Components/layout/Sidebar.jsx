@@ -26,9 +26,9 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu }) => {
 
     return (
         <aside className={`
-            fixed inset-y-0 left-0 z-50 w-64 bg-gradient-to-b from-blue-50 via-indigo-50 to-sky-100 border-r border-blue-100 transform transition-transform duration-300 ease-in-out
+            fixed inset-y-0 left-0 z-[1100] w-64 bg-gradient-to-b from-blue-50 via-indigo-50 to-sky-100 border-r border-blue-100 transform transition-transform duration-300 ease-in-out
             ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-            md:relative md:translate-x-0 md:flex md:flex-col md:h-screen md:sticky md:top-0
+            md:relative md:translate-x-0 md:flex md:flex-col md:h-screen md:sticky md:top-0 md:z-auto
         `}>
             <div className="p-6 border-b border-blue-100/60 flex justify-between items-center">
                 <Link to="/" className="text-2xl font-bold text-blue-800 flex items-center gap-2" onClick={closeMobileMenu}>
