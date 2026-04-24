@@ -25,6 +25,22 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
 
+    function roomDoc(roomId) {
+      return get(/databases/$(database)/documents/globalChatRooms/$(roomId));
+    }
+
+    function isRoomMember(roomId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/globalChatRooms/$(roomId))
+        && myEmail() in roomDoc(roomId).data.members;
+    }
+
+    function isRoomOwner(roomId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/globalChatRooms/$(roomId))
+        && roomDoc(roomId).data.createdBy == myEmail();
+    }
+
     // ---------- Users ----------
     // Any signed-in user can read (needed for member search / attendee lookups).
     // Owner creates/updates own profile. Admin can update anyone (role changes).
@@ -120,25 +136,17 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.createdBy == myEmail();
 
       match /messages/{messageId} {
-        function roomMembers() {
-          return get(/databases/$(database)/documents/globalChatRooms/$(roomId)).data.members;
-        }
-        function roomOwner() {
-          return get(/databases/$(database)/documents/globalChatRooms/$(roomId)).data.createdBy;
-        }
+        allow read: if isRoomMember(roomId);
 
-        allow read: if isSignedIn() && myEmail() in roomMembers();
-
-        allow create: if isSignedIn()
-          && myEmail() in roomMembers()
+        allow create: if isRoomMember(roomId)
           && request.resource.data.senderEmail == request.auth.token.email;
 
         // Update allowed for readBy arrayUnion + translations cache.
-        allow update: if isSignedIn() && myEmail() in roomMembers();
+        allow update: if isRoomMember(roomId);
 
         allow delete: if isSignedIn()
           && (resource.data.senderEmail == request.auth.token.email
-              || roomOwner() == myEmail()
+              || isRoomOwner(roomId)
               || isAdmin());
       }
     }
