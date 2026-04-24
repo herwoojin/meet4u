@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import 'leaflet/dist/leaflet.css';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { Globe, MapPin, Trash2, Loader, Plus } from 'lucide-react';
+import { Globe, MapPin, Trash2, Loader, Plus, Search, X } from 'lucide-react';
 import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -20,18 +20,25 @@ L.Icon.Default.mergeOptions({
     shadowUrl: markerShadow,
 });
 
-// Recenter helper — flies to target when a new pin is added
+// Custom icon for the pending (unsaved) pin — distinct orange color
+const pendingIcon = L.divIcon({
+    className: 'pending-pin-marker',
+    html: '<div style="background:#f97316;width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>',
+    iconSize: [22, 22],
+    iconAnchor: [11, 22],
+});
+
+// Recenter helper — flies to target when it changes
 const MapFlyTo = ({ target }) => {
     const map = useMap();
     useEffect(() => {
         if (target) {
-            map.flyTo([target.lat, target.lng], Math.max(map.getZoom(), 13), { duration: 1.2 });
+            map.flyTo([target.lat, target.lng], Math.max(map.getZoom(), 14), { duration: 1.2 });
         }
     }, [target, map]);
     return null;
 };
 
-// Fix map sizing once mounted so Leaflet recomputes tiles correctly on mobile
 const MapResizeFix = () => {
     const map = useMap();
     useEffect(() => {
@@ -47,17 +54,42 @@ const MapResizeFix = () => {
     return null;
 };
 
+// Handles plain-map clicks (not clicks on existing markers)
+const ClickToPin = ({ onPick }) => {
+    useMapEvents({
+        click(e) {
+            onPick({ lat: e.latlng.lat, lng: e.latlng.lng });
+        },
+    });
+    return null;
+};
+
 const GlobalMeetingMap = () => {
     const { t } = useTranslation();
     const { currentUser } = useAuth();
 
     const [pins, setPins] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    // Address form
     const [address, setAddress] = useState('');
     const [pinTitle, setPinTitle] = useState('');
     const [adding, setAdding] = useState(false);
+
     const [flyToTarget, setFlyToTarget] = useState(null);
 
+    // Pending (unsaved) pin — from map click or search selection
+    const [pendingPin, setPendingPin] = useState(null); // { lat, lng, address, resolving }
+    const [pendingTitle, setPendingTitle] = useState('');
+
+    // Keyword search
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [searching, setSearching] = useState(false);
+    const pendingCardRef = useRef(null);
+
+    // Load pins
     useEffect(() => {
         const q = query(collection(db, 'globalPins'), orderBy('createdAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -71,6 +103,14 @@ const GlobalMeetingMap = () => {
         return () => unsubscribe();
     }, []);
 
+    // Scroll pending card into view when created
+    useEffect(() => {
+        if (pendingPin && pendingCardRef.current) {
+            pendingCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }, [pendingPin]);
+
+    // -------- Geocoding --------
     const geocodeAddress = async (addr) => {
         const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(addr)}`;
         const res = await fetch(url, {
@@ -80,11 +120,76 @@ const GlobalMeetingMap = () => {
         const data = await res.json();
         if (!Array.isArray(data) || data.length === 0) return null;
         const hit = data[0];
-        return {
-            lat: parseFloat(hit.lat),
-            lng: parseFloat(hit.lon),
-            displayName: hit.display_name,
-        };
+        return { lat: parseFloat(hit.lat), lng: parseFloat(hit.lon), displayName: hit.display_name };
+    };
+
+    const reverseGeocode = async (lat, lng) => {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
+        const res = await fetch(url, {
+            headers: { 'Accept': 'application/json', 'Accept-Language': 'ko,en;q=0.8,zh;q=0.6' }
+        });
+        if (!res.ok) throw new Error('reverse geocode failed');
+        const data = await res.json();
+        return data?.display_name || '';
+    };
+
+    const searchNominatim = async (q) => {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=8&q=${encodeURIComponent(q)}`;
+        const res = await fetch(url, {
+            headers: { 'Accept': 'application/json', 'Accept-Language': 'ko,en;q=0.8,zh;q=0.6' }
+        });
+        if (!res.ok) throw new Error('search failed');
+        return await res.json();
+    };
+
+    // -------- Handlers --------
+    const startPendingPin = async (lat, lng, initialAddress = '') => {
+        setPendingPin({ lat, lng, address: initialAddress, resolving: !initialAddress });
+        setPendingTitle('');
+        setFlyToTarget({ lat, lng, key: Date.now() });
+        if (!initialAddress) {
+            try {
+                const resolved = await reverseGeocode(lat, lng);
+                setPendingPin(prev => prev && prev.lat === lat && prev.lng === lng
+                    ? { ...prev, address: resolved || '', resolving: false }
+                    : prev);
+            } catch (err) {
+                console.error('reverseGeocode fail', err);
+                setPendingPin(prev => prev ? { ...prev, resolving: false } : prev);
+            }
+        }
+    };
+
+    const handleMapClick = (latlng) => {
+        if (!currentUser) {
+            alert(t('global.loginRequired'));
+            return;
+        }
+        startPendingPin(latlng.lat, latlng.lng);
+    };
+
+    const handleConfirmPendingPin = async () => {
+        if (!pendingPin || !currentUser) return;
+        setAdding(true);
+        try {
+            await addDoc(collection(db, 'globalPins'), {
+                lat: pendingPin.lat,
+                lng: pendingPin.lng,
+                address: pendingPin.address || `${pendingPin.lat.toFixed(5)}, ${pendingPin.lng.toFixed(5)}`,
+                resolvedAddress: pendingPin.address || '',
+                title: pendingTitle.trim() || '',
+                createdBy: currentUser.email,
+                createdByName: currentUser.displayName || currentUser.email.split('@')[0],
+                createdAt: serverTimestamp(),
+            });
+            setPendingPin(null);
+            setPendingTitle('');
+        } catch (err) {
+            console.error('Failed to save pending pin:', err);
+            alert(t('global.addPinFailed'));
+        } finally {
+            setAdding(false);
+        }
     };
 
     const handleAddPin = async (e) => {
@@ -131,6 +236,32 @@ const GlobalMeetingMap = () => {
         } catch (err) {
             console.error('Failed to delete pin:', err);
         }
+    };
+
+    const handleSearchSubmit = async (e) => {
+        e.preventDefault();
+        if (!searchQuery.trim()) return;
+        setSearching(true);
+        setSearchResults([]);
+        try {
+            const results = await searchNominatim(searchQuery.trim());
+            setSearchResults(Array.isArray(results) ? results : []);
+        } catch (err) {
+            console.error('search failed', err);
+            setSearchResults([]);
+        } finally {
+            setSearching(false);
+        }
+    };
+
+    const handleSelectSearchResult = (r) => {
+        const lat = parseFloat(r.lat);
+        const lng = parseFloat(r.lon);
+        if (Number.isNaN(lat) || Number.isNaN(lng)) return;
+        startPendingPin(lat, lng, r.display_name || '');
+        setSearchOpen(false);
+        setSearchQuery('');
+        setSearchResults([]);
     };
 
     return (
@@ -184,6 +315,132 @@ const GlobalMeetingMap = () => {
                 </button>
             </form>
 
+            {/* Search toolbar */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
+                <div className="flex items-center justify-between gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setSearchOpen(v => !v)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition-colors ${searchOpen ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                    >
+                        <Search size={14} />
+                        {t('global.searchBtn')}
+                    </button>
+                    <span className="text-xs text-slate-400 hidden sm:inline">
+                        {t('global.pendingHint')}
+                    </span>
+                </div>
+
+                {searchOpen && (
+                    <div className="mt-3">
+                        <form onSubmit={handleSearchSubmit} className="flex gap-2">
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder={t('global.searchPlaceholder')}
+                                autoFocus
+                                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <button
+                                type="submit"
+                                disabled={searching || !searchQuery.trim()}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg shadow-sm hover:bg-blue-700 disabled:bg-slate-300"
+                            >
+                                {searching ? (
+                                    <><Loader size={14} className="animate-spin" />{t('global.searching')}</>
+                                ) : (
+                                    <><Search size={14} />{t('global.searchAction')}</>
+                                )}
+                            </button>
+                        </form>
+
+                        {!searching && searchResults.length === 0 && searchQuery && (
+                            <div className="mt-2 text-xs text-slate-400 text-center py-3">
+                                {t('global.noSearchResults')}
+                            </div>
+                        )}
+
+                        {searchResults.length > 0 && (
+                            <ul className="mt-2 max-h-56 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100">
+                                {searchResults.map((r, idx) => (
+                                    <li key={`${r.place_id || idx}`}>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSelectSearchResult(r)}
+                                            className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm flex items-start gap-2"
+                                        >
+                                            <MapPin size={14} className="text-blue-500 mt-0.5 shrink-0" />
+                                            <span className="flex-1 text-slate-700 truncate" title={r.display_name}>
+                                                {r.display_name}
+                                            </span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Pending pin confirmation card */}
+            {pendingPin && (
+                <div ref={pendingCardRef} className="bg-orange-50 border border-orange-200 rounded-xl shadow-sm p-4 flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 text-orange-700 font-medium">
+                            <MapPin size={16} />
+                            <span>{t('global.pendingTitle')}</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => { setPendingPin(null); setPendingTitle(''); }}
+                            className="p-1 text-orange-400 hover:text-orange-700"
+                            title={t('common.cancel')}
+                        >
+                            <X size={16} />
+                        </button>
+                    </div>
+                    <div className="text-xs text-slate-600 bg-white border border-orange-100 rounded-lg p-2">
+                        {pendingPin.resolving ? (
+                            <span className="inline-flex items-center gap-1 text-slate-400">
+                                <Loader size={12} className="animate-spin" />
+                                {t('global.resolvingAddress')}
+                            </span>
+                        ) : (
+                            pendingPin.address || `${pendingPin.lat.toFixed(5)}, ${pendingPin.lng.toFixed(5)}`
+                        )}
+                    </div>
+                    <div className="flex flex-col md:flex-row gap-2">
+                        <input
+                            type="text"
+                            value={pendingTitle}
+                            onChange={(e) => setPendingTitle(e.target.value)}
+                            placeholder={t('global.pinTitlePlaceholder')}
+                            className="flex-1 px-3 py-2 border border-orange-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
+                        />
+                        <button
+                            type="button"
+                            onClick={handleConfirmPendingPin}
+                            disabled={adding || pendingPin.resolving}
+                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-orange-500 text-white text-sm rounded-lg shadow-sm hover:bg-orange-600 disabled:bg-slate-300"
+                        >
+                            {adding ? (
+                                <><Loader size={14} className="animate-spin" />{t('global.adding')}</>
+                            ) : (
+                                <><Plus size={14} />{t('global.confirmAdd')}</>
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setPendingPin(null); setPendingTitle(''); }}
+                            className="px-3 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50"
+                        >
+                            {t('common.cancel')}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Map */}
             <div className="relative w-full h-[60vh] md:h-[70vh] min-h-[400px] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 {loading && (
@@ -201,7 +458,30 @@ const GlobalMeetingMap = () => {
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                     <MapResizeFix />
+                    <ClickToPin onPick={handleMapClick} />
                     {flyToTarget && <MapFlyTo target={flyToTarget} />}
+
+                    {/* Pending (unsaved) pin */}
+                    {pendingPin && (
+                        <Marker
+                            position={[pendingPin.lat, pendingPin.lng]}
+                            icon={pendingIcon}
+                            eventHandlers={{ add: (e) => e.target.openPopup() }}
+                        >
+                            <Popup>
+                                <div className="min-w-[180px]">
+                                    <div className="font-bold text-orange-600 mb-1 text-sm">
+                                        {t('global.pendingTitle')}
+                                    </div>
+                                    <div className="text-xs text-slate-600">
+                                        {pendingPin.resolving
+                                            ? t('global.resolvingAddress')
+                                            : (pendingPin.address || `${pendingPin.lat.toFixed(5)}, ${pendingPin.lng.toFixed(5)}`)}
+                                    </div>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    )}
 
                     <MarkerClusterGroup chunkedLoading>
                         {pins.map((pin) => (

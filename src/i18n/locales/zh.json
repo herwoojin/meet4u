@@ -347,7 +347,16 @@
     "chatTitle": "全球对话",
     "byLabel": "添加人",
     "pinsCount": "{{count}} 个标记",
-    "loginRequired": "请先登录。"
+    "loginRequired": "请先登录。",
+    "searchBtn": "搜索地图",
+    "searchPlaceholder": "搜索地点或地址...",
+    "searchAction": "搜索",
+    "searching": "搜索中...",
+    "noSearchResults": "无搜索结果。",
+    "resolvingAddress": "正在解析地址...",
+    "pendingTitle": "在此位置添加标记?",
+    "confirmAdd": "添加标记",
+    "pendingHint": "请点击地图或使用上方搜索选择位置。"
   },
   "settings": {
     "title": "设置",

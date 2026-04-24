@@ -347,7 +347,16 @@
     "chatTitle": "글로벌 대화",
     "byLabel": "등록자",
     "pinsCount": "등록된 핀 {{count}}개",
-    "loginRequired": "로그인 후 이용해 주세요."
+    "loginRequired": "로그인 후 이용해 주세요.",
+    "searchBtn": "지도 검색",
+    "searchPlaceholder": "장소나 주소로 검색 (예: 남대문시장)",
+    "searchAction": "검색",
+    "searching": "검색 중...",
+    "noSearchResults": "검색 결과가 없습니다.",
+    "resolvingAddress": "주소 확인 중...",
+    "pendingTitle": "이 위치에 핀을 추가할까요?",
+    "confirmAdd": "핀 추가",
+    "pendingHint": "지도를 클릭하거나 위에서 검색해 위치를 선택하세요."
   },
   "settings": {
     "title": "설정",

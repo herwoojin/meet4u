@@ -347,7 +347,16 @@
     "chatTitle": "Global Chat",
     "byLabel": "Added by",
     "pinsCount": "{{count}} pins",
-    "loginRequired": "Please sign in to continue."
+    "loginRequired": "Please sign in to continue.",
+    "searchBtn": "Search map",
+    "searchPlaceholder": "Search place or address...",
+    "searchAction": "Search",
+    "searching": "Searching...",
+    "noSearchResults": "No results found.",
+    "resolvingAddress": "Resolving address...",
+    "pendingTitle": "Add a pin at this location?",
+    "confirmAdd": "Add pin",
+    "pendingHint": "Click on the map or use search to select a location."
   },
   "settings": {
     "title": "Settings",
