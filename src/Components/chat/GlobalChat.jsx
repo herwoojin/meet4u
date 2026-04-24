@@ -251,12 +251,17 @@ const GlobalChat = () => {
     const [newMessage, setNewMessage] = useState('');
     const [isRecording, setIsRecording] = useState(false);
     const [speakingId, setSpeakingId] = useState(null);
+    const [autoVoice, setAutoVoice] = useState(() =>
+        typeof window !== 'undefined' && localStorage.getItem('meet4u_autoVoice') === 'true'
+    );
 
     const markedAsRead = useRef(new Set());
     const translatingRef = useRef(new Set());
     const messagesEndRef = useRef(null);
     const recognitionRef = useRef(null);
     const recordingBaseRef = useRef('');
+    const spokenIdsRef = useRef(new Set());
+    const firstLoadRef = useRef(true);
     const dropdownRef = useRef(null);
 
     // Load rooms the user is a member of
@@ -371,6 +376,60 @@ const GlobalChat = () => {
             }
         };
     }, []);
+
+    // Reset auto-voice tracking when switching rooms (don't narrate history)
+    useEffect(() => {
+        firstLoadRef.current = true;
+        spokenIdsRef.current = new Set();
+        if (typeof window !== 'undefined' && window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+        }
+    }, [selectedRoomId]);
+
+    // Persist auto-voice toggle
+    useEffect(() => {
+        try { localStorage.setItem('meet4u_autoVoice', autoVoice ? 'true' : 'false'); } catch (_) { /* ignore */ }
+    }, [autoVoice]);
+
+    // When enabling, mark current messages as already spoken
+    useEffect(() => {
+        if (autoVoice) {
+            messages.forEach(m => spokenIdsRef.current.add(m.id));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoVoice]);
+
+    // Auto-voice playback for new incoming messages
+    useEffect(() => {
+        if (firstLoadRef.current && messages.length > 0) {
+            firstLoadRef.current = false;
+            messages.forEach(m => spokenIdsRef.current.add(m.id));
+            return;
+        }
+        if (!autoVoice || !currentUser) return;
+        if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+        messages.forEach(m => {
+            if (spokenIdsRef.current.has(m.id)) return;
+            const isMe = m.senderEmail === currentUser.email;
+            if (isMe) {
+                spokenIdsRef.current.add(m.id);
+                return;
+            }
+            const srcLang = m.sourceLanguage || 'ko';
+            const needsTranslation = srcLang !== myLang;
+            const translated = m.translations?.[myLang];
+            if (needsTranslation && !translated) return;
+
+            spokenIdsRef.current.add(m.id);
+            const textToSpeak = translated || m.text;
+            if (!textToSpeak) return;
+
+            const utter = new SpeechSynthesisUtterance(textToSpeak);
+            utter.lang = SPEECH_LOCALE[myLang] || 'ko-KR';
+            window.speechSynthesis.speak(utter);
+        });
+    }, [messages, autoVoice, myLang, currentUser]);
 
     const selectedRoom = useMemo(
         () => rooms.find(r => r.id === selectedRoomId) || null,
@@ -642,6 +701,27 @@ const GlobalChat = () => {
                         <Users size={16} />
                     </button>
                 )}
+
+                {/* Auto-voice toggle */}
+                <button
+                    type="button"
+                    onClick={() => {
+                        setAutoVoice(v => {
+                            const next = !v;
+                            if (!next && typeof window !== 'undefined' && window.speechSynthesis) {
+                                window.speechSynthesis.cancel();
+                            }
+                            return next;
+                        });
+                    }}
+                    title={t('meeting.autoVoiceTitle')}
+                    className={`shrink-0 inline-flex items-center gap-1 p-1.5 rounded-lg border transition-colors ${autoVoice
+                        ? 'bg-orange-50 border-orange-200 text-orange-600'
+                        : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                        }`}
+                >
+                    {autoVoice ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                </button>
 
                 {/* New room button */}
                 <button

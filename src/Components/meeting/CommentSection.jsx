@@ -32,11 +32,16 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
     const [loading, setLoading] = useState(true);
     const [isRecording, setIsRecording] = useState(false);
     const [speakingId, setSpeakingId] = useState(null);
+    const [autoVoice, setAutoVoice] = useState(() =>
+        typeof window !== 'undefined' && localStorage.getItem('meet4u_autoVoice') === 'true'
+    );
     const commentsEndRef = useRef(null);
     const markedAsRead = useRef(new Set());
     const translatingRef = useRef(new Set());
     const recognitionRef = useRef(null);
     const recordingBaseRef = useRef('');
+    const spokenIdsRef = useRef(new Set());
+    const firstLoadRef = useRef(true);
 
     useEffect(() => {
         if (!meetingId) return;
@@ -80,6 +85,57 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
 
         return () => unsubscribe();
     }, [meetingId, currentUser]);
+
+    // Persist auto-voice preference
+    useEffect(() => {
+        try { localStorage.setItem('meet4u_autoVoice', autoVoice ? 'true' : 'false'); } catch (_) { /* ignore */ }
+    }, [autoVoice]);
+
+    // Auto-voice: read new incoming messages aloud in the receiver's language
+    useEffect(() => {
+        if (firstLoadRef.current && comments.length > 0) {
+            firstLoadRef.current = false;
+            comments.forEach(c => spokenIdsRef.current.add(c.id));
+            return;
+        }
+        if (!autoVoice || !currentUser) return;
+        if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+        comments.forEach(c => {
+            if (spokenIdsRef.current.has(c.id)) return;
+
+            const isMe = c.senderEmail === currentUser.email;
+            if (isMe) {
+                spokenIdsRef.current.add(c.id);
+                return;
+            }
+            const srcLang = c.sourceLanguage || 'ko';
+            const needsTranslation = srcLang !== myLang;
+            const translated = c.translations?.[myLang];
+
+            if (needsTranslation && !translated) {
+                // Translation not yet arrived — wait for next update
+                return;
+            }
+
+            spokenIdsRef.current.add(c.id);
+            const textToSpeak = translated || c.text;
+            if (!textToSpeak) return;
+
+            const utter = new SpeechSynthesisUtterance(textToSpeak);
+            utter.lang = SPEECH_LOCALE[myLang] || 'ko-KR';
+            window.speechSynthesis.speak(utter);
+        });
+    }, [comments, autoVoice, myLang, currentUser]);
+
+    // When enabling auto-voice, mark current comments as already spoken so
+    // history isn't narrated on toggle-on.
+    useEffect(() => {
+        if (autoVoice) {
+            comments.forEach(c => spokenIdsRef.current.add(c.id));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoVoice]);
 
     // Background translation processor
     useEffect(() => {
@@ -290,16 +346,38 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
 
     return (
         <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex flex-col h-80">
-            <div className="flex items-center justify-between mb-4 text-gray-900 font-bold border-b border-gray-200 pb-2">
+            <div className="flex items-center justify-between mb-4 text-gray-900 font-bold border-b border-gray-200 pb-2 gap-2">
                 <div className="flex items-center gap-2">
                     <MessageSquare size={18} className="text-gray-700" />
                     {t('meeting.commentsCount', { count: comments.length })}
                 </div>
-                {myLang !== 'ko' && (
-                    <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100">
-                        {t('meeting.translationEnabled')}
-                    </span>
-                )}
+                <div className="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setAutoVoice(v => {
+                                const next = !v;
+                                if (!next && typeof window !== 'undefined' && window.speechSynthesis) {
+                                    window.speechSynthesis.cancel();
+                                }
+                                return next;
+                            });
+                        }}
+                        title={t('meeting.autoVoiceTitle')}
+                        className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border transition-colors ${autoVoice
+                            ? 'bg-orange-50 text-orange-600 border-orange-200'
+                            : 'bg-gray-50 text-gray-400 border-gray-200 hover:text-gray-600'
+                            }`}
+                    >
+                        {autoVoice ? <Volume2 size={10} /> : <VolumeX size={10} />}
+                        {autoVoice ? t('meeting.autoVoiceOn') : t('meeting.autoVoiceOff')}
+                    </button>
+                    {myLang !== 'ko' && (
+                        <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100">
+                            {t('meeting.translationEnabled')}
+                        </span>
+                    )}
+                </div>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
