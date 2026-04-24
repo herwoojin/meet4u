@@ -300,7 +300,36 @@
     "timesSuffix": ""
   },
   "chat": {
-    "messagePlaceholder": "Type a message..."
+    "messagePlaceholder": "Type a message...",
+    "rooms": {
+      "label": "Room",
+      "newRoom": "New room",
+      "roomName": "Room name",
+      "roomNamePlaceholder": "e.g. Weekend team",
+      "inviteMembers": "Invite members",
+      "searchUser": "Search by name or email...",
+      "noResults": "No results",
+      "noRooms": "No rooms yet. Create one to start chatting!",
+      "selectRoom": "Select a room",
+      "selectRoomHint": "Pick a room above or create a new one.",
+      "members": "Members",
+      "createdBy": "Owner",
+      "you": "you",
+      "create": "Create",
+      "creating": "Creating...",
+      "createFailed": "Failed to create room.",
+      "deleteRoom": "Delete room",
+      "confirmDelete": "Delete this room? All messages will be lost.",
+      "deleteFailed": "Failed to delete room.",
+      "leaveRoom": "Leave",
+      "confirmLeave": "Leave this room?",
+      "leaveFailed": "Failed to leave the room.",
+      "selectedMembers": "Selected",
+      "remove": "Remove",
+      "titleRequired": "Please enter a room name.",
+      "atLeastOneInvitee": "Please invite at least one person.",
+      "membersCount": "{{count}} members"
+    }
   },
   "global": {
     "title": "Global Meeting",

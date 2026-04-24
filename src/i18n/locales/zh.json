@@ -300,7 +300,36 @@
     "timesSuffix": "次"
   },
   "chat": {
-    "messagePlaceholder": "输入消息..."
+    "messagePlaceholder": "输入消息...",
+    "rooms": {
+      "label": "聊天室",
+      "newRoom": "新建聊天室",
+      "roomName": "聊天室名称",
+      "roomNamePlaceholder": "例如:周末聚会",
+      "inviteMembers": "邀请成员",
+      "searchUser": "按姓名或邮箱搜索...",
+      "noResults": "无搜索结果",
+      "noRooms": "尚未加入任何聊天室。创建一个开始对话吧!",
+      "selectRoom": "请选择聊天室",
+      "selectRoomHint": "请在顶部选择聊天室或新建一个。",
+      "members": "成员",
+      "createdBy": "房主",
+      "you": "我",
+      "create": "创建",
+      "creating": "创建中...",
+      "createFailed": "创建聊天室失败。",
+      "deleteRoom": "删除聊天室",
+      "confirmDelete": "要删除此聊天室吗?所有消息都将被清除。",
+      "deleteFailed": "删除聊天室失败。",
+      "leaveRoom": "退出",
+      "confirmLeave": "要退出此聊天室吗?",
+      "leaveFailed": "退出失败。",
+      "selectedMembers": "已选成员",
+      "remove": "移除",
+      "titleRequired": "请输入聊天室名称。",
+      "atLeastOneInvitee": "请至少邀请一人。",
+      "membersCount": "{{count}}人"
+    }
   },
   "global": {
     "title": "全球会议",

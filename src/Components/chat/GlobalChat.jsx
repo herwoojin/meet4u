@@ -1,13 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { db } from '../../lib/firebase';
-import { collection, addDoc, query, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX } from 'lucide-react';
+import {
+    collection, addDoc, query, where, onSnapshot, serverTimestamp,
+    deleteDoc, doc, updateDoc, arrayUnion, arrayRemove, getDocs, writeBatch
+} from 'firebase/firestore';
+import {
+    Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX,
+    Plus, Users, LogOut, X, ChevronDown, Search, Loader
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
 
-// BCP 47 locales for Web Speech API
 const SPEECH_LOCALE = {
     'ko': 'ko-KR',
     'en': 'en-US',
@@ -22,92 +27,341 @@ const SPEECH_LOCALE = {
     'fr': 'fr-FR',
 };
 
+const lower = (s) => (s || '').toLowerCase();
+
+// ---------------- Create room modal ----------------
+const CreateRoomModal = ({ onClose, onCreated }) => {
+    const { t } = useTranslation();
+    const { currentUser } = useAuth();
+    const [name, setName] = useState('');
+    const [allUsers, setAllUsers] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selected, setSelected] = useState([]); // [{email, displayName}]
+    const [saving, setSaving] = useState(false);
+    const [showList, setShowList] = useState(false);
+
+    useEffect(() => {
+        getDocs(collection(db, 'users'))
+            .then(snap => setAllUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))))
+            .catch(err => console.error('load users failed', err));
+    }, []);
+
+    const filtered = useMemo(() => {
+        const term = searchTerm.trim().toLowerCase();
+        const selectedEmails = new Set(selected.map(s => lower(s.email)));
+        return allUsers
+            .filter(u => u.email && lower(u.email) !== lower(currentUser?.email))
+            .filter(u => !selectedEmails.has(lower(u.email)))
+            .filter(u => {
+                if (!term) return true;
+                const name = lower(u.displayName || '');
+                const email = lower(u.email || '');
+                return name.includes(term) || email.includes(term);
+            })
+            .slice(0, 20);
+    }, [allUsers, searchTerm, selected, currentUser]);
+
+    const toggleSelect = (user) => {
+        setSelected(prev => [...prev, { email: user.email, displayName: user.displayName || user.email.split('@')[0] }]);
+        setSearchTerm('');
+        setShowList(false);
+    };
+
+    const removeSelected = (email) => {
+        setSelected(prev => prev.filter(s => lower(s.email) !== lower(email)));
+    };
+
+    const handleCreate = async (e) => {
+        e.preventDefault();
+        if (!currentUser) return;
+        if (!name.trim()) {
+            alert(t('chat.rooms.titleRequired'));
+            return;
+        }
+        if (selected.length === 0) {
+            alert(t('chat.rooms.atLeastOneInvitee'));
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const members = [
+                lower(currentUser.email),
+                ...selected.map(s => lower(s.email))
+            ];
+            const memberNames = {
+                [lower(currentUser.email)]: currentUser.displayName || currentUser.email.split('@')[0],
+            };
+            selected.forEach(s => {
+                memberNames[lower(s.email)] = s.displayName;
+            });
+
+            const ref = await addDoc(collection(db, 'globalChatRooms'), {
+                name: name.trim(),
+                createdBy: lower(currentUser.email),
+                createdByName: currentUser.displayName || currentUser.email.split('@')[0],
+                members: Array.from(new Set(members)),
+                memberNames,
+                createdAt: serverTimestamp(),
+            });
+            onCreated?.(ref.id);
+            onClose();
+        } catch (err) {
+            console.error('create room failed', err);
+            alert(t('chat.rooms.createFailed'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                    <h3 className="font-bold text-gray-900">{t('chat.rooms.newRoom')}</h3>
+                    <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <form onSubmit={handleCreate} className="p-4 flex-1 overflow-y-auto space-y-4">
+                    <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t('chat.rooms.roomName')}</label>
+                        <input
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder={t('chat.rooms.roomNamePlaceholder')}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            autoFocus
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">{t('chat.rooms.inviteMembers')}</label>
+                        <div className="relative">
+                            <div className="flex items-center gap-2 px-3 border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-blue-500">
+                                <Search size={14} className="text-gray-400" />
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => { setSearchTerm(e.target.value); setShowList(true); }}
+                                    onFocus={() => setShowList(true)}
+                                    placeholder={t('chat.rooms.searchUser')}
+                                    className="flex-1 py-2 text-sm bg-transparent focus:outline-none"
+                                />
+                            </div>
+                            {showList && (searchTerm || filtered.length > 0) && (
+                                <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                                    {filtered.length === 0 ? (
+                                        <div className="p-3 text-xs text-gray-400 text-center">{t('chat.rooms.noResults')}</div>
+                                    ) : (
+                                        filtered.map(u => (
+                                            <button
+                                                type="button"
+                                                key={u.email}
+                                                onClick={() => toggleSelect(u)}
+                                                className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm flex items-center justify-between"
+                                            >
+                                                <span className="truncate">
+                                                    <span className="font-medium text-gray-800">{u.displayName || u.email.split('@')[0]}</span>
+                                                    <span className="ml-2 text-xs text-gray-400 truncate">{u.email}</span>
+                                                </span>
+                                                <Plus size={14} className="text-blue-500 shrink-0" />
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {selected.length > 0 && (
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                {t('chat.rooms.selectedMembers')} ({selected.length})
+                            </label>
+                            <div className="flex flex-wrap gap-1.5">
+                                {selected.map(s => (
+                                    <span key={s.email} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full border border-blue-100">
+                                        {s.displayName}
+                                        <button
+                                            type="button"
+                                            onClick={() => removeSelected(s.email)}
+                                            className="text-blue-400 hover:text-blue-600"
+                                            title={t('chat.rooms.remove')}
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                        >
+                            {t('common.cancel')}
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={saving}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg shadow-sm hover:bg-blue-700 disabled:bg-blue-300"
+                        >
+                            {saving ? (
+                                <>
+                                    <Loader size={14} className="animate-spin" />
+                                    {t('chat.rooms.creating')}
+                                </>
+                            ) : (
+                                <>
+                                    <Plus size={14} />
+                                    {t('chat.rooms.create')}
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+// ---------------- Main GlobalChat with rooms ----------------
 const GlobalChat = () => {
     const { t } = useTranslation();
     const { currentUser, userProfile } = useAuth();
     const myLang = userProfile?.preferredLanguage || 'ko';
+    const myEmail = lower(currentUser?.email);
 
-    const [comments, setComments] = useState([]);
-    const [newComment, setNewComment] = useState('');
-    const [loading, setLoading] = useState(true);
+    const [rooms, setRooms] = useState([]);
+    const [roomsLoading, setRoomsLoading] = useState(true);
+    const [selectedRoomId, setSelectedRoomId] = useState(null);
+    const [showRoomDropdown, setShowRoomDropdown] = useState(false);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showMembersPanel, setShowMembersPanel] = useState(false);
+
+    const [messages, setMessages] = useState([]);
+    const [loadingMsgs, setLoadingMsgs] = useState(false);
+    const [newMessage, setNewMessage] = useState('');
     const [isRecording, setIsRecording] = useState(false);
     const [speakingId, setSpeakingId] = useState(null);
-    const commentsEndRef = useRef(null);
+
     const markedAsRead = useRef(new Set());
     const translatingRef = useRef(new Set());
+    const messagesEndRef = useRef(null);
     const recognitionRef = useRef(null);
     const recordingBaseRef = useRef('');
+    const dropdownRef = useRef(null);
 
+    // Load rooms the user is a member of
     useEffect(() => {
-        const q = query(collection(db, 'globalComments'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const loaded = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
-                const t1 = a.timestamp?.toMillis() || 0;
-                const t2 = b.timestamp?.toMillis() || 0;
-                return t1 - t2;
+        if (!currentUser?.email) return;
+        const q = query(
+            collection(db, 'globalChatRooms'),
+            where('members', 'array-contains', myEmail)
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            list.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+            setRooms(list);
+            setRoomsLoading(false);
+            // Auto-select first room if none selected
+            setSelectedRoomId(prev => {
+                if (prev && list.find(r => r.id === prev)) return prev;
+                return list[0]?.id || null;
             });
-            setComments(loaded);
-            setLoading(false);
-            scrollToBottom();
+        }, (err) => {
+            console.error('rooms load failed', err);
+            setRoomsLoading(false);
+        });
+        return () => unsub();
+    }, [currentUser, myEmail]);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handler = (e) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+                setShowRoomDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
+    // Load messages for selected room
+    useEffect(() => {
+        if (!selectedRoomId) {
+            setMessages([]);
+            return;
+        }
+        setLoadingMsgs(true);
+        const q = query(collection(db, 'globalChatRooms', selectedRoomId, 'messages'));
+        const unsub = onSnapshot(q, (snap) => {
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => {
+                return (a.timestamp?.toMillis?.() || 0) - (b.timestamp?.toMillis?.() || 0);
+            });
+            setMessages(list);
+            setLoadingMsgs(false);
+            setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
 
             if (currentUser?.email) {
-                loaded.forEach(c => {
-                    if (c.senderEmail !== currentUser.email && !markedAsRead.current.has(c.id)) {
-                        const readBy = c.readBy || [];
-                        if (!readBy.includes(currentUser.email.toLowerCase())) {
-                            markedAsRead.current.add(c.id);
-                            updateDoc(doc(db, 'globalComments', c.id), {
-                                readBy: arrayUnion(currentUser.email.toLowerCase())
+                list.forEach(m => {
+                    if (m.senderEmail !== currentUser.email && !markedAsRead.current.has(`${selectedRoomId}:${m.id}`)) {
+                        const readBy = m.readBy || [];
+                        if (!readBy.includes(myEmail)) {
+                            markedAsRead.current.add(`${selectedRoomId}:${m.id}`);
+                            updateDoc(doc(db, 'globalChatRooms', selectedRoomId, 'messages', m.id), {
+                                readBy: arrayUnion(myEmail)
                             }).catch(() => { });
                         }
                     }
                 });
             }
         }, (err) => {
-            console.error("GlobalChat fetch error:", err);
-            setLoading(false);
+            console.error('messages load failed', err);
+            setLoadingMsgs(false);
         });
+        return () => unsub();
+    }, [selectedRoomId, currentUser, myEmail]);
 
-        return () => unsubscribe();
-    }, [currentUser]);
-
+    // Background translation
     useEffect(() => {
-        if (!currentUser) return;
-        comments.forEach(async (comment) => {
-            const isMe = comment.senderEmail === currentUser.email;
+        if (!currentUser || !selectedRoomId) return;
+        messages.forEach(async (m) => {
+            const isMe = m.senderEmail === currentUser.email;
             if (isMe) return;
-
-            const srcLang = comment.sourceLanguage || 'ko';
+            const srcLang = m.sourceLanguage || 'ko';
             if (srcLang === myLang) return;
-            if (comment.translations && comment.translations[myLang]) return;
-            if (translatingRef.current.has(comment.id)) return;
-            translatingRef.current.add(comment.id);
-
+            if (m.translations && m.translations[myLang]) return;
+            if (translatingRef.current.has(m.id)) return;
+            translatingRef.current.add(m.id);
             try {
                 const res = await fetch('/.netlify/functions/translate-comment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: comment.text, sourceLang: srcLang, targetLang: myLang })
+                    body: JSON.stringify({ text: m.text, sourceLang: srcLang, targetLang: myLang })
                 });
                 if (res.ok) {
                     const data = await res.json();
                     if (data.translatedText) {
-                        await updateDoc(doc(db, 'globalComments', comment.id), {
+                        await updateDoc(doc(db, 'globalChatRooms', selectedRoomId, 'messages', m.id), {
                             [`translations.${myLang}`]: data.translatedText
                         });
                     }
                 }
             } catch (err) {
-                console.error("GlobalChat translation fail:", err);
-                translatingRef.current.delete(comment.id);
+                console.error("translation fail:", err);
+                translatingRef.current.delete(m.id);
             }
         });
-    }, [comments, myLang, currentUser]);
+    }, [messages, myLang, currentUser, selectedRoomId]);
 
-    const scrollToBottom = () => {
-        commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    };
-
+    // Cleanup STT/TTS on unmount
     useEffect(() => {
         return () => {
             try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
@@ -116,6 +370,12 @@ const GlobalChat = () => {
             }
         };
     }, []);
+
+    const selectedRoom = useMemo(
+        () => rooms.find(r => r.id === selectedRoomId) || null,
+        [rooms, selectedRoomId]
+    );
+    const isOwner = selectedRoom?.createdBy === myEmail;
 
     const toggleRecording = () => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -135,18 +395,18 @@ const GlobalChat = () => {
         recognition.interimResults = true;
         recognition.continuous = !isMobile;
 
-        recordingBaseRef.current = newComment ? newComment.trimEnd() + (newComment ? ' ' : '') : '';
+        recordingBaseRef.current = newMessage ? newMessage.trimEnd() + (newMessage ? ' ' : '') : '';
 
         recognition.onresult = (event) => {
             let finalText = '';
             let interimText = '';
             for (let i = 0; i < event.results.length; i++) {
-                const result = event.results[i];
-                const transcript = result[0]?.transcript || '';
-                if (result.isFinal) finalText += transcript;
-                else interimText += transcript;
+                const r = event.results[i];
+                const tr = r[0]?.transcript || '';
+                if (r.isFinal) finalText += tr;
+                else interimText += tr;
             }
-            setNewComment(recordingBaseRef.current + finalText + interimText);
+            setNewMessage(recordingBaseRef.current + finalText + interimText);
         };
         recognition.onerror = () => setIsRecording(false);
         recognition.onend = () => setIsRecording(false);
@@ -161,13 +421,13 @@ const GlobalChat = () => {
         }
     };
 
-    const speakComment = (commentId, text, lang) => {
+    const speakMessage = (id, text, lang) => {
         if (typeof window === 'undefined' || !window.speechSynthesis) {
             alert(t('meeting.voiceUnsupportedPlay'));
             return;
         }
         const synth = window.speechSynthesis;
-        if (speakingId === commentId) {
+        if (speakingId === id) {
             synth.cancel();
             setSpeakingId(null);
             return;
@@ -177,117 +437,272 @@ const GlobalChat = () => {
         utter.lang = SPEECH_LOCALE[lang] || 'ko-KR';
         utter.onend = () => setSpeakingId(null);
         utter.onerror = () => setSpeakingId(null);
-        setSpeakingId(commentId);
+        setSpeakingId(id);
         synth.speak(utter);
     };
 
-    const handleSubmit = async (e) => {
+    const handleSend = async (e) => {
         e.preventDefault();
-        if (!newComment.trim() || !currentUser) return;
-
-        const senderName = currentUser.displayName || currentUser.email.split('@')[0];
+        if (!newMessage.trim() || !currentUser || !selectedRoomId) return;
         try {
-            await addDoc(collection(db, 'globalComments'), {
-                text: newComment,
+            await addDoc(collection(db, 'globalChatRooms', selectedRoomId, 'messages'), {
+                text: newMessage,
                 senderEmail: currentUser.email,
-                senderName,
+                senderName: currentUser.displayName || currentUser.email.split('@')[0],
                 sourceLanguage: myLang,
                 timestamp: serverTimestamp(),
-                readBy: [currentUser.email.toLowerCase()],
+                readBy: [myEmail],
             });
-            setNewComment('');
-        } catch (error) {
-            console.error("Error adding global comment:", error);
-            alert(`${t('meeting.errorOccurred')}: ${error.message}`);
+            setNewMessage('');
+        } catch (err) {
+            console.error('send failed', err);
+            alert(`${t('meeting.errorOccurred')}: ${err.message}`);
         }
     };
 
-    const handleDelete = async (commentId) => {
+    const handleDeleteMessage = async (msgId) => {
         if (!window.confirm(t('meeting.confirmDeleteComment'))) return;
         try {
-            await deleteDoc(doc(db, "globalComments", commentId));
-        } catch (error) {
-            console.error("Error deleting global comment:", error);
+            await deleteDoc(doc(db, 'globalChatRooms', selectedRoomId, 'messages', msgId));
+        } catch (err) {
+            console.error('delete message failed', err);
             alert(t('meeting.deleteCommentFailed'));
         }
     };
 
-    const getOtherCommenters = () => {
-        const commenters = new Set();
-        comments.forEach(c => {
-            if (c.senderEmail && c.senderEmail !== currentUser?.email) {
-                commenters.add(c.senderEmail.toLowerCase());
+    const handleDeleteRoom = async () => {
+        if (!selectedRoom || selectedRoom.createdBy !== myEmail) return;
+        if (!window.confirm(t('chat.rooms.confirmDelete'))) return;
+        try {
+            // Delete all messages first (batched)
+            const msgsSnap = await getDocs(collection(db, 'globalChatRooms', selectedRoomId, 'messages'));
+            const chunks = [];
+            for (let i = 0; i < msgsSnap.docs.length; i += 400) {
+                chunks.push(msgsSnap.docs.slice(i, i + 400));
             }
-        });
-        return commenters;
+            for (const ch of chunks) {
+                const batch = writeBatch(db);
+                ch.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+            }
+            await deleteDoc(doc(db, 'globalChatRooms', selectedRoomId));
+            setSelectedRoomId(null);
+            setShowMembersPanel(false);
+        } catch (err) {
+            console.error('delete room failed', err);
+            alert(t('chat.rooms.deleteFailed'));
+        }
     };
 
-    const getReadStatus = (comment) => {
-        const readBy = (comment.readBy || []).map(e => e.toLowerCase());
-        const otherCommenters = getOtherCommenters();
-        if (otherCommenters.size === 0) return null;
-        const readCommenters = [...otherCommenters].filter(email => readBy.includes(email));
-        if (readCommenters.length === 0) return null;
-        if (readCommenters.length >= otherCommenters.size) return 'all';
+    const handleLeaveRoom = async () => {
+        if (!selectedRoom || selectedRoom.createdBy === myEmail) return;
+        if (!window.confirm(t('chat.rooms.confirmLeave'))) return;
+        try {
+            await updateDoc(doc(db, 'globalChatRooms', selectedRoomId), {
+                members: arrayRemove(myEmail),
+            });
+            setSelectedRoomId(null);
+            setShowMembersPanel(false);
+        } catch (err) {
+            console.error('leave room failed', err);
+            alert(t('chat.rooms.leaveFailed'));
+        }
+    };
+
+    const getOtherSenders = () => {
+        const s = new Set();
+        messages.forEach(m => {
+            if (m.senderEmail && m.senderEmail !== currentUser?.email) {
+                s.add(lower(m.senderEmail));
+            }
+        });
+        return s;
+    };
+
+    const getReadStatus = (m) => {
+        const readBy = (m.readBy || []).map(lower);
+        const others = getOtherSenders();
+        if (others.size === 0) return null;
+        const read = [...others].filter(e => readBy.includes(e));
+        if (read.length === 0) return null;
+        if (read.length >= others.size) return 'all';
         return 'some';
     };
 
+    // -------------- Render --------------
     return (
-        <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex flex-col h-96">
-            <div className="flex items-center justify-between mb-4 text-gray-900 font-bold border-b border-gray-200 pb-2">
-                <div className="flex items-center gap-2">
-                    <MessageSquare size={18} className="text-gray-700" />
-                    {t('global.chatTitle')} ({comments.length})
+        <div className="bg-gray-50 rounded-xl p-5 border border-gray-100 flex flex-col h-[32rem]">
+            {/* Toolbar */}
+            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200">
+                <MessageSquare size={18} className="text-gray-700 shrink-0" />
+
+                {/* Room selector */}
+                <div className="relative flex-1 min-w-0" ref={dropdownRef}>
+                    <button
+                        type="button"
+                        onClick={() => setShowRoomDropdown(v => !v)}
+                        disabled={!currentUser}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:border-blue-300 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                        <span className="truncate font-bold text-gray-800">
+                            {roomsLoading
+                                ? t('common.loading')
+                                : (selectedRoom?.name || t('chat.rooms.selectRoom'))}
+                        </span>
+                        <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                    </button>
+                    {showRoomDropdown && (
+                        <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-64 overflow-y-auto">
+                            {rooms.length === 0 ? (
+                                <div className="p-3 text-xs text-gray-400 text-center">
+                                    {t('chat.rooms.noRooms')}
+                                </div>
+                            ) : (
+                                rooms.map(r => (
+                                    <button
+                                        type="button"
+                                        key={r.id}
+                                        onClick={() => { setSelectedRoomId(r.id); setShowRoomDropdown(false); }}
+                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between ${r.id === selectedRoomId ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-800'}`}
+                                    >
+                                        <span className="truncate">{r.name}</span>
+                                        <span className="text-[10px] text-gray-400 shrink-0 ml-2">
+                                            {(r.members?.length || 0)}
+                                            {r.createdBy === myEmail && (
+                                                <span className="ml-1 text-amber-600">★</span>
+                                            )}
+                                        </span>
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    )}
                 </div>
-                {myLang !== 'ko' && (
-                    <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100">
-                        {t('meeting.translationEnabled')}
-                    </span>
+
+                {/* Members button */}
+                {selectedRoom && (
+                    <button
+                        type="button"
+                        onClick={() => setShowMembersPanel(v => !v)}
+                        className={`shrink-0 p-1.5 rounded-lg border transition-colors ${showMembersPanel ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-100'}`}
+                        title={t('chat.rooms.members')}
+                    >
+                        <Users size={16} />
+                    </button>
                 )}
+
+                {/* New room button */}
+                <button
+                    type="button"
+                    onClick={() => setShowCreateModal(true)}
+                    disabled={!currentUser}
+                    className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300"
+                    title={t('chat.rooms.newRoom')}
+                >
+                    <Plus size={14} />
+                    <span className="hidden sm:inline">{t('chat.rooms.newRoom')}</span>
+                </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
-                {loading && <p className="text-center text-gray-400 text-sm">{t('common.loading')}</p>}
-                {!loading && comments.length === 0 && (
+            {/* Members panel */}
+            {showMembersPanel && selectedRoom && (
+                <div className="mb-3 p-3 bg-white border border-gray-200 rounded-lg text-xs">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-gray-700">
+                            {t('chat.rooms.members')} ({selectedRoom.members?.length || 0})
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                            {isOwner ? (
+                                <button
+                                    type="button"
+                                    onClick={handleDeleteRoom}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-red-600 hover:bg-red-50"
+                                >
+                                    <Trash2 size={12} />
+                                    {t('chat.rooms.deleteRoom')}
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleLeaveRoom}
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-gray-600 hover:bg-gray-100"
+                                >
+                                    <LogOut size={12} />
+                                    {t('chat.rooms.leaveRoom')}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                        {(selectedRoom.members || []).map(memEmail => {
+                            const isOwnerMember = memEmail === selectedRoom.createdBy;
+                            const isSelf = memEmail === myEmail;
+                            const displayName = selectedRoom.memberNames?.[memEmail] || memEmail.split('@')[0];
+                            return (
+                                <span
+                                    key={memEmail}
+                                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border ${isOwnerMember ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-gray-50 border-gray-200 text-gray-700'}`}
+                                >
+                                    {displayName}
+                                    {isSelf && <span className="text-[10px] text-gray-400">({t('chat.rooms.you')})</span>}
+                                    {isOwnerMember && <span className="text-[10px]">★</span>}
+                                </span>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                {!currentUser && (
+                    <p className="text-center text-gray-400 text-sm py-10">{t('global.loginRequired')}</p>
+                )}
+                {currentUser && !selectedRoom && !roomsLoading && (
+                    <div className="text-center text-gray-400 text-sm py-10">
+                        <p>{t('chat.rooms.noRooms')}</p>
+                        <p className="mt-1">{t('chat.rooms.selectRoomHint')}</p>
+                    </div>
+                )}
+                {selectedRoom && loadingMsgs && (
+                    <p className="text-center text-gray-400 text-sm">{t('common.loading')}</p>
+                )}
+                {selectedRoom && !loadingMsgs && messages.length === 0 && (
                     <p className="text-center text-gray-400 text-sm py-10">{t('meeting.noCommentsYet')}</p>
                 )}
-                {comments.map((comment) => {
-                    const isMe = comment.senderEmail === currentUser?.email;
-                    const readStatus = isMe ? getReadStatus(comment) : null;
-                    const isTranslated = !isMe && comment.translations && comment.translations[myLang] && comment.translations[myLang] !== comment.text;
-                    const isTranslating = !isMe && !comment.translations?.[myLang] && (comment.sourceLanguage || 'ko') !== myLang;
-                    const displayText = isMe ? comment.text : (comment.translations?.[myLang] || comment.text);
-
-                    // Sender plays original in source language; receiver plays translated in own language
-                    const ttsText = isMe ? comment.text : displayText;
-                    const ttsLang = isMe ? (comment.sourceLanguage || 'ko') : myLang;
+                {selectedRoom && messages.map(m => {
+                    const isMe = m.senderEmail === currentUser?.email;
+                    const readStatus = isMe ? getReadStatus(m) : null;
+                    const isTranslated = !isMe && m.translations && m.translations[myLang] && m.translations[myLang] !== m.text;
+                    const srcLang = m.sourceLanguage || 'ko';
+                    const isTranslating = !isMe && !m.translations?.[myLang] && srcLang !== myLang;
+                    const displayText = isMe ? m.text : (m.translations?.[myLang] || m.text);
+                    const ttsText = isMe ? m.text : displayText;
+                    const ttsLang = isMe ? srcLang : myLang;
 
                     return (
-                        <div key={comment.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                        <div key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                             <div className="flex items-center gap-2 mb-1">
                                 {isMe && (
                                     <button
-                                        onClick={() => handleDelete(comment.id)}
-                                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                                        onClick={() => handleDeleteMessage(m.id)}
+                                        className="text-gray-400 hover:text-red-500 p-1"
                                         title={t('meeting.deleteBtn')}
                                     >
                                         <Trash2 size={12} />
                                     </button>
                                 )}
-                                <span className="text-xs font-bold text-gray-700">{comment.senderName}</span>
+                                <span className="text-xs font-bold text-gray-700">{m.senderName}</span>
                                 <span className="text-[10px] text-gray-400">
-                                    {comment.timestamp ? format(comment.timestamp.toDate(), 'a h:mm', { locale: ko }) : ''}
+                                    {m.timestamp ? format(m.timestamp.toDate(), 'a h:mm', { locale: ko }) : ''}
                                 </span>
                             </div>
                             <div className={`flex items-start gap-1.5 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                                <div className={`px-3 py-2 rounded-lg text-sm break-words ${isMe
-                                    ? 'bg-blue-600 text-white rounded-tr-none'
-                                    : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
-                                    }`}>
+                                <div className={`px-3 py-2 rounded-lg text-sm break-words ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'}`}>
                                     {displayText}
                                     {isTranslated && (
                                         <div className="text-[9px] text-gray-400 mt-1 flex items-center gap-1 border-t border-gray-100 pt-1">
-                                            {t('meeting.translated')} ({t('meeting.original')}: {comment.text})
+                                            {t('meeting.translated')} ({t('meeting.original')}: {m.text})
                                         </div>
                                     )}
                                     {isTranslating && (
@@ -298,14 +713,11 @@ const GlobalChat = () => {
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => speakComment(comment.id, ttsText, ttsLang)}
-                                    className={`shrink-0 p-1.5 rounded-full transition-colors ${speakingId === comment.id
-                                        ? 'bg-blue-100 text-blue-600 animate-pulse'
-                                        : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
-                                        }`}
-                                    title={speakingId === comment.id ? t('meeting.ttsStop') : t('meeting.ttsPlay')}
+                                    onClick={() => speakMessage(m.id, ttsText, ttsLang)}
+                                    className={`shrink-0 p-1.5 rounded-full transition-colors ${speakingId === m.id ? 'bg-blue-100 text-blue-600 animate-pulse' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'}`}
+                                    title={speakingId === m.id ? t('meeting.ttsStop') : t('meeting.ttsPlay')}
                                 >
-                                    {speakingId === comment.id ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                                    {speakingId === m.id ? <VolumeX size={14} /> : <Volume2 size={14} />}
                                 </button>
                             </div>
                             {isMe && readStatus && (
@@ -317,26 +729,24 @@ const GlobalChat = () => {
                         </div>
                     );
                 })}
-                <div ref={commentsEndRef} />
+                <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSubmit} className="flex gap-2">
+            {/* Input */}
+            <form onSubmit={handleSend} className="flex gap-2 mt-3">
                 <input
                     type="text"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
                     placeholder={isRecording ? t('meeting.voiceListening') : t('meeting.commentPlaceholder')}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    disabled={!currentUser}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+                    disabled={!currentUser || !selectedRoomId}
                 />
                 <button
                     type="button"
                     onClick={toggleRecording}
-                    disabled={!currentUser}
-                    className={`relative p-2 rounded-lg transition-all shadow-sm disabled:opacity-50 ${isRecording
-                        ? 'bg-gradient-to-br from-red-500 to-pink-600 text-white ring-2 ring-red-300 animate-pulse'
-                        : 'bg-gradient-to-br from-orange-400 to-red-500 text-white hover:from-orange-500 hover:to-red-600'
-                        }`}
+                    disabled={!currentUser || !selectedRoomId}
+                    className={`relative p-2 rounded-lg transition-all shadow-sm disabled:opacity-50 ${isRecording ? 'bg-gradient-to-br from-red-500 to-pink-600 text-white ring-2 ring-red-300 animate-pulse' : 'bg-gradient-to-br from-orange-400 to-red-500 text-white hover:from-orange-500 hover:to-red-600'}`}
                     title={isRecording ? t('meeting.micStop') : t('meeting.micStart')}
                 >
                     <Mic size={18} />
@@ -346,12 +756,19 @@ const GlobalChat = () => {
                 </button>
                 <button
                     type="submit"
-                    disabled={!newComment.trim() || !currentUser}
+                    disabled={!newMessage.trim() || !currentUser || !selectedRoomId}
                     className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
                     <Send size={18} />
                 </button>
             </form>
+
+            {showCreateModal && (
+                <CreateRoomModal
+                    onClose={() => setShowCreateModal(false)}
+                    onCreated={(id) => setSelectedRoomId(id)}
+                />
+            )}
         </div>
     );
 };
