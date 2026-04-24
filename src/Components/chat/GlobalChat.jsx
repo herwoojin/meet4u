@@ -492,12 +492,11 @@ const GlobalChat = () => {
         }
     };
 
-    const handleDeleteRoom = async () => {
-        if (!selectedRoom || selectedRoom.createdBy !== myEmail) return;
-        if (!window.confirm(t('chat.rooms.confirmDelete'))) return;
+    const deleteRoomById = async (room) => {
+        if (!room || room.createdBy !== myEmail) return;
+        if (!window.confirm(`${t('chat.rooms.confirmDelete')}\n\n"${room.name || ''}"`)) return;
         try {
-            // Delete all messages first (batched)
-            const msgsSnap = await getDocs(collection(db, 'globalChatRooms', selectedRoomId, 'messages'));
+            const msgsSnap = await getDocs(collection(db, 'globalChatRooms', room.id, 'messages'));
             const chunks = [];
             for (let i = 0; i < msgsSnap.docs.length; i += 400) {
                 chunks.push(msgsSnap.docs.slice(i, i + 400));
@@ -507,29 +506,36 @@ const GlobalChat = () => {
                 ch.forEach(d => batch.delete(d.ref));
                 await batch.commit();
             }
-            await deleteDoc(doc(db, 'globalChatRooms', selectedRoomId));
-            setSelectedRoomId(null);
-            setShowMembersPanel(false);
+            await deleteDoc(doc(db, 'globalChatRooms', room.id));
+            if (selectedRoomId === room.id) {
+                setSelectedRoomId(null);
+                setShowMembersPanel(false);
+            }
         } catch (err) {
             console.error('delete room failed', err);
             alert(t('chat.rooms.deleteFailed'));
         }
     };
 
-    const handleLeaveRoom = async () => {
-        if (!selectedRoom || selectedRoom.createdBy === myEmail) return;
-        if (!window.confirm(t('chat.rooms.confirmLeave'))) return;
+    const leaveRoomById = async (room) => {
+        if (!room || room.createdBy === myEmail) return;
+        if (!window.confirm(`${t('chat.rooms.confirmLeave')}\n\n"${room.name || ''}"`)) return;
         try {
-            await updateDoc(doc(db, 'globalChatRooms', selectedRoomId), {
+            await updateDoc(doc(db, 'globalChatRooms', room.id), {
                 members: arrayRemove(myEmail),
             });
-            setSelectedRoomId(null);
-            setShowMembersPanel(false);
+            if (selectedRoomId === room.id) {
+                setSelectedRoomId(null);
+                setShowMembersPanel(false);
+            }
         } catch (err) {
             console.error('leave room failed', err);
             alert(t('chat.rooms.leaveFailed'));
         }
     };
+
+    const handleDeleteRoom = () => deleteRoomById(selectedRoom);
+    const handleLeaveRoom = () => leaveRoomById(selectedRoom);
 
     const getOtherSenders = () => {
         const s = new Set();
@@ -580,22 +586,46 @@ const GlobalChat = () => {
                                     {t('chat.rooms.noRooms')}
                                 </div>
                             ) : (
-                                rooms.map(r => (
-                                    <button
-                                        type="button"
-                                        key={r.id}
-                                        onClick={() => { setSelectedRoomId(r.id); setShowRoomDropdown(false); }}
-                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between ${r.id === selectedRoomId ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-800'}`}
-                                    >
-                                        <span className="truncate">{r.name}</span>
-                                        <span className="text-[10px] text-gray-400 shrink-0 ml-2">
-                                            {(r.members?.length || 0)}
-                                            {r.createdBy === myEmail && (
-                                                <span className="ml-1 text-amber-600">★</span>
+                                rooms.map(r => {
+                                    const isOwned = r.createdBy === myEmail;
+                                    return (
+                                        <div
+                                            key={r.id}
+                                            className={`group flex items-center gap-1 px-2 py-1.5 text-sm hover:bg-blue-50 ${r.id === selectedRoomId ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-800'}`}
+                                        >
+                                            <button
+                                                type="button"
+                                                onClick={() => { setSelectedRoomId(r.id); setShowRoomDropdown(false); }}
+                                                className="flex-1 min-w-0 flex items-center justify-between text-left px-1"
+                                            >
+                                                <span className="truncate">{r.name}</span>
+                                                <span className="text-[10px] text-gray-400 shrink-0 ml-2">
+                                                    {(r.members?.length || 0)}
+                                                    {isOwned && <span className="ml-1 text-amber-600">★</span>}
+                                                </span>
+                                            </button>
+                                            {isOwned ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); deleteRoomById(r); }}
+                                                    className="shrink-0 p-1 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-60 group-hover:opacity-100 transition"
+                                                    title={t('chat.rooms.deleteRoom')}
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); leaveRoomById(r); }}
+                                                    className="shrink-0 p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 opacity-60 group-hover:opacity-100 transition"
+                                                    title={t('chat.rooms.leaveRoom')}
+                                                >
+                                                    <LogOut size={14} />
+                                                </button>
                                             )}
-                                        </span>
-                                    </button>
-                                ))
+                                        </div>
+                                    );
+                                })
                             )}
                         </div>
                     )}
