@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import useCommentNotifications, { requestNotificationPermission } from '../../hooks/useCommentNotifications';
 import useAttendanceNotifications from '../../hooks/useAttendanceNotifications';
+import useGlobalChatNotifications from '../../hooks/useGlobalChatNotifications';
 import ChatModal from '../chat/ChatModal';
 import Sidebar from './Sidebar';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -18,6 +19,7 @@ const MainLayout = ({ children }) => {
 
     useCommentNotifications();
     useAttendanceNotifications();
+    useGlobalChatNotifications();
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const closeMobileMenu = () => setIsMobileMenuOpen(false);

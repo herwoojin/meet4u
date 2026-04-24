@@ -445,16 +445,37 @@ const GlobalChat = () => {
     const handleSend = async (e) => {
         e.preventDefault();
         if (!newMessage.trim() || !currentUser || !selectedRoomId) return;
+        const senderName = currentUser.displayName || currentUser.email.split('@')[0];
+        const textToSend = newMessage;
         try {
             await addDoc(collection(db, 'globalChatRooms', selectedRoomId, 'messages'), {
-                text: newMessage,
+                text: textToSend,
                 senderEmail: currentUser.email,
-                senderName: currentUser.displayName || currentUser.email.split('@')[0],
+                senderName,
                 sourceLanguage: myLang,
                 timestamp: serverTimestamp(),
                 readBy: [myEmail],
             });
             setNewMessage('');
+
+            // Fire background push to other room members
+            const recipientEmails = (selectedRoom?.members || []).filter(e => e && e !== myEmail);
+            const roomName = selectedRoom?.name || '';
+            if (recipientEmails.length > 0) {
+                fetch('/.netlify/functions/send-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'globalChat',
+                        title: roomName
+                            ? `💬 [${roomName}] ${senderName}`
+                            : `💬 ${senderName}`,
+                        body: textToSend.length > 100 ? textToSend.slice(0, 100) + '...' : textToSend,
+                        recipientEmails,
+                        senderEmail: currentUser.email,
+                    }),
+                }).catch(err => console.error('Global chat push failed:', err));
+            }
         } catch (err) {
             console.error('send failed', err);
             alert(`${t('meeting.errorOccurred')}: ${err.message}`);
