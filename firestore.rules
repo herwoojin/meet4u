@@ -1,0 +1,158 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Helpers ----------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myUid() {
+      return request.auth.uid;
+    }
+
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(myUid()))
+        && get(/databases/$(database)/documents/users/$(myUid())).data.role == 'admin';
+    }
+
+    function onlyAffects(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // ---------- Users ----------
+    // Any signed-in user can read (needed for member search / attendee lookups).
+    // Owner creates/updates own profile. Admin can update anyone (role changes).
+    match /users/{userId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && myUid() == userId;
+      allow update: if isSignedIn() && (myUid() == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ---------- Meetings ----------
+    // Signed-in users can read and create.
+    // Updates allowed (RSVP, comments-count, etc.) while signed in.
+    // Delete limited to creator or admin.
+    match /meetings/{meetingId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn()
+        && (resource.data.createdBy == myUid() || isAdmin());
+    }
+
+    // ---------- Per-meeting comments ----------
+    // Read/create by signed-in user. Update for readBy arrayUnion + translations cache.
+    // Delete by the original sender only.
+    match /comments/{commentId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.senderEmail == request.auth.token.email;
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn()
+        && resource.data.senderEmail == request.auth.token.email;
+    }
+
+    // ---------- 1:1 chats ----------
+    // Only participants (raw email stored in chats.participants) can read/write.
+    match /chats/{chatId} {
+      allow read: if isSignedIn()
+        && request.auth.token.email in resource.data.participants;
+      allow create: if isSignedIn()
+        && request.auth.token.email in request.resource.data.participants;
+      allow update: if isSignedIn()
+        && request.auth.token.email in resource.data.participants;
+      allow delete: if isSignedIn()
+        && request.auth.token.email in resource.data.participants;
+
+      match /messages/{messageId} {
+        allow read, create: if isSignedIn()
+          && request.auth.token.email in
+             get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow update: if isSignedIn()
+          && request.auth.token.email in
+             get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow delete: if isSignedIn()
+          && resource.data.senderEmail == request.auth.token.email;
+      }
+    }
+
+    // ---------- Global pins (map) ----------
+    // Anyone signed-in can read and add pins.
+    // Only the creator (or admin) can delete. No updates.
+    match /globalPins/{pinId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.token.email;
+      allow update: if false;
+      allow delete: if isSignedIn()
+        && (resource.data.createdBy == request.auth.token.email || isAdmin());
+    }
+
+    // ---------- Global chat rooms (invite-based) ----------
+    // Only members can read. Members are stored as lowercase emails.
+    match /globalChatRooms/{roomId} {
+      allow read: if isSignedIn() && myEmail() in resource.data.members;
+
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == myEmail()
+        && (myEmail() in request.resource.data.members);
+
+      // Owner can update anything.
+      // Non-owner member may only leave (remove own email from `members`
+      // with no other fields changing).
+      allow update: if isSignedIn() && (
+        resource.data.createdBy == myEmail()
+        ||
+        (
+          myEmail() in resource.data.members
+          && onlyAffects(['members'])
+          && !(myEmail() in request.resource.data.members)
+        )
+      );
+
+      allow delete: if isSignedIn() && resource.data.createdBy == myEmail();
+
+      match /messages/{messageId} {
+        function roomMembers() {
+          return get(/databases/$(database)/documents/globalChatRooms/$(roomId)).data.members;
+        }
+        function roomOwner() {
+          return get(/databases/$(database)/documents/globalChatRooms/$(roomId)).data.createdBy;
+        }
+
+        allow read: if isSignedIn() && myEmail() in roomMembers();
+
+        allow create: if isSignedIn()
+          && myEmail() in roomMembers()
+          && request.resource.data.senderEmail == request.auth.token.email;
+
+        // Update allowed for readBy arrayUnion + translations cache.
+        allow update: if isSignedIn() && myEmail() in roomMembers();
+
+        allow delete: if isSignedIn()
+          && (resource.data.senderEmail == request.auth.token.email
+              || roomOwner() == myEmail()
+              || isAdmin());
+      }
+    }
+
+    // ---------- Legacy: shops collection (no longer used by the UI) ----------
+    // Read by signed-in user; writes limited to admin for cleanup only.
+    match /shops/{shopId} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---------- Default deny ----------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
