@@ -18,6 +18,11 @@
   },
   "common": {
     "save": "저장",
+    "download": "다운로드",
+    "attachImage": "사진 첨부",
+    "uploading": "업로드 중...",
+    "imageTooLarge": "이미지가 너무 큽니다.",
+    "imageFailed": "이미지 업로드에 실패했습니다.",
     "cancel": "취소",
     "delete": "삭제",
     "edit": "편집",

@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// Firebase Storage rules for Meet4U / PromiseU
+// - commentImages/{meetingId}/{uid}/*  — 댓글 첨부 이미지
+// - globalChatImages/{roomId}/{uid}/*  — 글로벌 대화방 이미지
+// 업로드한 본인만 삭제 가능. 로그인한 사용자만 읽기 가능.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Type/size guardrails — 최대 10MB, image/* MIME만
+    function isSafeImage() {
+      return request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /commentImages/{meetingId}/{uid}/{fileName} {
+      allow read:   if isSignedIn();
+      allow create: if isOwner(uid) && isSafeImage();
+      allow update: if false;
+      allow delete: if isOwner(uid);
+    }
+
+    match /globalChatImages/{roomId}/{uid}/{fileName} {
+      allow read:   if isSignedIn();
+      allow create: if isOwner(uid) && isSafeImage();
+      allow update: if false;
+      allow delete: if isOwner(uid);
+    }
+
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -18,6 +18,11 @@
   },
   "common": {
     "save": "Save",
+    "download": "Download",
+    "attachImage": "Attach photo",
+    "uploading": "Uploading...",
+    "imageTooLarge": "Image is too large.",
+    "imageFailed": "Image upload failed.",
     "cancel": "Cancel",
     "delete": "Delete",
     "edit": "Edit",

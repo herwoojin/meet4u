@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { db } from '../../lib/firebase';
+import { db, storage } from '../../lib/firebase';
 import { collection, addDoc, query, where, onSnapshot, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX } from 'lucide-react';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX, Image as ImageIcon, Loader } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
+import { compressImageToWebp } from '../../lib/imageUtils';
+import ImageLightbox from '../chat/ImageLightbox';
 
 // BCP 47 locales for Web Speech API (SpeechRecognition / SpeechSynthesis)
 const SPEECH_LOCALE = {
@@ -35,6 +38,8 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
     const [autoVoice, setAutoVoice] = useState(() =>
         typeof window !== 'undefined' && localStorage.getItem('meet4u_autoVoice') === 'true'
     );
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const [lightboxSrc, setLightboxSrc] = useState(null);
     const commentsEndRef = useRef(null);
     const markedAsRead = useRef(new Set());
     const translatingRef = useRef(new Set());
@@ -42,6 +47,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
     const recordingBaseRef = useRef('');
     const spokenIdsRef = useRef(new Set());
     const firstLoadRef = useRef(true);
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         if (!meetingId) return;
@@ -109,6 +115,10 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                 spokenIdsRef.current.add(c.id);
                 return;
             }
+            if (c.imageUrl && !c.text) {
+                spokenIdsRef.current.add(c.id);
+                return;
+            }
             const srcLang = c.sourceLanguage || 'ko';
             const needsTranslation = srcLang !== myLang;
             const translated = c.translations?.[myLang];
@@ -144,6 +154,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         comments.forEach(async (comment) => {
             const isMe = comment.senderEmail === currentUser.email;
             if (isMe) return;
+            if (!comment.text) return; // skip image-only
 
             const srcLang = comment.sourceLanguage || 'ko';
             // Same language → no translation needed
@@ -265,6 +276,65 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         synth.speak(utter);
     };
 
+    const handleImageFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !currentUser || !meetingId) return;
+
+        if (file.size > 20 * 1024 * 1024) {
+            alert(t('common.imageTooLarge'));
+            return;
+        }
+
+        setUploadingImage(true);
+        try {
+            const { blob, width, height } = await compressImageToWebp(file, { maxDim: 1280, quality: 0.82 });
+            const path = `commentImages/${meetingId}/${currentUser.uid}/${Date.now()}.webp`;
+            const sRef = storageRef(storage, path);
+            await uploadBytes(sRef, blob, { contentType: 'image/webp' });
+            const url = await getDownloadURL(sRef);
+
+            const senderName = currentUser.displayName || currentUser.email.split('@')[0];
+            const recipientEmails = (attendees || [])
+                .filter(email => email && typeof email === 'string')
+                .map(email => email.toLowerCase());
+
+            await addDoc(collection(db, 'comments'), {
+                meetingId,
+                text: '',
+                imageUrl: url,
+                imagePath: path,
+                imageWidth: width,
+                imageHeight: height,
+                senderEmail: currentUser.email,
+                senderName,
+                sourceLanguage: myLang,
+                timestamp: serverTimestamp(),
+                readBy: [currentUser.email.toLowerCase()],
+                recipients: recipientEmails,
+            });
+
+            if (recipientEmails.length > 0) {
+                fetch('/.netlify/functions/send-notification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'comment',
+                        title: `📷 ${senderName}님의 새 사진 댓글`,
+                        body: '사진을 보냈습니다',
+                        recipientEmails,
+                        senderEmail: currentUser.email,
+                    }),
+                }).catch(() => { });
+            }
+        } catch (err) {
+            console.error('image upload failed', err);
+            alert(t('common.imageFailed'));
+        } finally {
+            setUploadingImage(false);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!newComment.trim() || !currentUser) return;
@@ -311,7 +381,11 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
     const handleDelete = async (commentId) => {
         if (!window.confirm(t('meeting.confirmDeleteComment'))) return;
         try {
+            const comment = comments.find(c => c.id === commentId);
             await deleteDoc(doc(db, "comments", commentId));
+            if (comment?.imagePath) {
+                deleteObject(storageRef(storage, comment.imagePath)).catch(() => { });
+            }
         } catch (error) {
             console.error("Error deleting comment:", error);
             alert(t('meeting.deleteCommentFailed'));
@@ -415,33 +489,51 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                                 </span>
                             </div>
                             <div className={`flex items-start gap-1.5 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                                <div className={`px-3 py-2 rounded-lg text-sm break-words ${isMe
-                                    ? 'bg-blue-600 text-white rounded-tr-none'
-                                    : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
-                                    }`}>
-                                    {displayText}
-                                    {isTranslated && (
-                                        <div className="text-[9px] text-gray-400 mt-1 flex items-center gap-1 border-t border-gray-100 pt-1">
-                                            {t('meeting.translated')} ({t('meeting.original')}: {comment.text})
-                                        </div>
-                                    )}
-                                    {isTranslating && (
-                                        <div className="text-[9px] text-gray-300 mt-1 italic">
-                                            {t('meeting.translating')}
-                                        </div>
-                                    )}
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => speakComment(comment.id, ttsText, ttsLang)}
-                                    className={`shrink-0 p-1.5 rounded-full transition-colors ${speakingId === comment.id
-                                        ? 'bg-blue-100 text-blue-600 animate-pulse'
-                                        : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
-                                        }`}
-                                    title={speakingId === comment.id ? t('meeting.ttsStop') : t('meeting.ttsPlay')}
-                                >
-                                    {speakingId === comment.id ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                                </button>
+                                {comment.imageUrl ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setLightboxSrc(comment.imageUrl)}
+                                        className={`overflow-hidden rounded-lg border ${isMe ? 'border-blue-200' : 'border-gray-200'} shadow-sm`}
+                                        style={{ maxWidth: '220px' }}
+                                    >
+                                        <img
+                                            src={comment.imageUrl}
+                                            alt=""
+                                            loading="lazy"
+                                            className="block max-w-[220px] max-h-[260px] object-cover"
+                                        />
+                                    </button>
+                                ) : (
+                                    <div className={`px-3 py-2 rounded-lg text-sm break-words ${isMe
+                                        ? 'bg-blue-600 text-white rounded-tr-none'
+                                        : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'
+                                        }`}>
+                                        {displayText}
+                                        {isTranslated && (
+                                            <div className="text-[9px] text-gray-400 mt-1 flex items-center gap-1 border-t border-gray-100 pt-1">
+                                                {t('meeting.translated')} ({t('meeting.original')}: {comment.text})
+                                            </div>
+                                        )}
+                                        {isTranslating && (
+                                            <div className="text-[9px] text-gray-300 mt-1 italic">
+                                                {t('meeting.translating')}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                {!comment.imageUrl && (
+                                    <button
+                                        type="button"
+                                        onClick={() => speakComment(comment.id, ttsText, ttsLang)}
+                                        className={`shrink-0 p-1.5 rounded-full transition-colors ${speakingId === comment.id
+                                            ? 'bg-blue-100 text-blue-600 animate-pulse'
+                                            : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+                                            }`}
+                                        title={speakingId === comment.id ? t('meeting.ttsStop') : t('meeting.ttsPlay')}
+                                    >
+                                        {speakingId === comment.id ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                                    </button>
+                                )}
                             </div>
                             {/* Read Receipt */}
                             {isMe && readStatus && (
@@ -465,6 +557,22 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                     placeholder={isRecording ? t('meeting.voiceListening') : t('meeting.commentPlaceholder')}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageFileChange}
+                />
+                <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingImage}
+                    className="p-2 rounded-lg transition-colors shadow-sm bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
+                    title={t('common.attachImage')}
+                >
+                    {uploadingImage ? <Loader size={18} className="animate-spin" /> : <ImageIcon size={18} />}
+                </button>
                 <button
                     type="button"
                     onClick={toggleRecording}
@@ -487,6 +595,13 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                     <Send size={18} />
                 </button>
             </form>
+
+            {lightboxSrc && (
+                <ImageLightbox
+                    src={lightboxSrc}
+                    onClose={() => setLightboxSrc(null)}
+                />
+            )}
         </div>
     );
 };
