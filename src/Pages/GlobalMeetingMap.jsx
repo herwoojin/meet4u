@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
-import MarkerClusterGroup from 'react-leaflet-cluster';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import 'leaflet/dist/leaflet.css';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { Globe, MapPin, Trash2, Loader, Plus, Search, X } from 'lucide-react';
+import { Globe, MapPin, Trash2, Loader, Plus, Search, X, Crosshair } from 'lucide-react';
 import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -20,12 +19,47 @@ L.Icon.Default.mergeOptions({
     shadowUrl: markerShadow,
 });
 
-// Custom icon for the pending (unsaved) pin — distinct orange color
+// Saved pin — bright red teardrop with white border, visible at all zoom levels
+const savedPinIcon = L.divIcon({
+    className: 'meet4u-pin',
+    html: `<svg width="34" height="44" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17 2C8.716 2 2 8.716 2 17c0 10.5 15 25 15 25s15-14.5 15-25C32 8.716 25.284 2 17 2z"
+              fill="#dc2626" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+        <circle cx="17" cy="17" r="6" fill="white"/>
+    </svg>`,
+    iconSize: [34, 44],
+    iconAnchor: [17, 42],
+    popupAnchor: [0, -38],
+});
+
+// Pending (unsaved) pin — bright orange teardrop
 const pendingIcon = L.divIcon({
-    className: 'pending-pin-marker',
-    html: '<div style="background:#f97316;width:22px;height:22px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.35);"></div>',
-    iconSize: [22, 22],
-    iconAnchor: [11, 22],
+    className: 'meet4u-pending-pin',
+    html: `<svg width="34" height="44" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17 2C8.716 2 2 8.716 2 17c0 10.5 15 25 15 25s15-14.5 15-25C32 8.716 25.284 2 17 2z"
+              fill="#f97316" stroke="white" stroke-width="3" stroke-linejoin="round"/>
+        <circle cx="17" cy="17" r="6" fill="white"/>
+    </svg>`,
+    iconSize: [34, 44],
+    iconAnchor: [17, 42],
+    popupAnchor: [0, -38],
+});
+
+// My-location pulsing blue dot
+const myLocationIcon = L.divIcon({
+    className: 'meet4u-my-location',
+    html: `<div style="position:relative;width:20px;height:20px;">
+        <div style="position:absolute;inset:0;background:rgba(59,130,246,0.25);border-radius:50%;animation:meet4u-pulse 1.8s ease-out infinite;"></div>
+        <div style="position:absolute;inset:4px;background:#2563eb;border:3px solid white;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+    </div>
+    <style>
+      @keyframes meet4u-pulse {
+        0%   { transform: scale(0.9); opacity: 0.9; }
+        100% { transform: scale(2.4); opacity: 0; }
+      }
+    </style>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
 });
 
 // Recenter helper — flies to target when it changes
@@ -81,6 +115,10 @@ const GlobalMeetingMap = () => {
     // Pending (unsaved) pin — from map click or search selection
     const [pendingPin, setPendingPin] = useState(null); // { lat, lng, address, resolving }
     const [pendingTitle, setPendingTitle] = useState('');
+
+    // My current location
+    const [myLocation, setMyLocation] = useState(null);
+    const [locating, setLocating] = useState(false);
 
     // Keyword search
     const [searchOpen, setSearchOpen] = useState(false);
@@ -226,6 +264,28 @@ const GlobalMeetingMap = () => {
         } finally {
             setAdding(false);
         }
+    };
+
+    const handleLocateMe = () => {
+        if (!('geolocation' in navigator)) {
+            alert(t('global.locationNotSupported'));
+            return;
+        }
+        setLocating(true);
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                setMyLocation(loc);
+                setFlyToTarget({ ...loc, key: Date.now() });
+                setLocating(false);
+            },
+            (err) => {
+                console.error('geolocation failed', err);
+                alert(t('global.locationFailed'));
+                setLocating(false);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
     };
 
     const handleDeletePin = async (pin) => {
@@ -483,36 +543,53 @@ const GlobalMeetingMap = () => {
                         </Marker>
                     )}
 
-                    <MarkerClusterGroup chunkedLoading>
-                        {pins.map((pin) => (
-                            <Marker key={pin.id} position={[pin.lat, pin.lng]}>
-                                <Popup>
-                                    <div className="p-1 min-w-[180px]">
-                                        {pin.title && <h3 className="font-bold text-slate-800 mb-1">{pin.title}</h3>}
-                                        <div className="text-sm text-slate-700 mb-1">{pin.address}</div>
-                                        {pin.resolvedAddress && pin.resolvedAddress !== pin.address && (
-                                            <div className="text-[11px] text-slate-400 mb-1.5 truncate" title={pin.resolvedAddress}>
-                                                {pin.resolvedAddress}
-                                            </div>
-                                        )}
-                                        <div className="text-[11px] text-slate-500">
-                                            {t('global.byLabel')}: {pin.createdByName || pin.createdBy}
+                    {pins.map((pin) => (
+                        <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={savedPinIcon}>
+                            <Popup>
+                                <div className="p-1 min-w-[180px]">
+                                    {pin.title && <h3 className="font-bold text-slate-800 mb-1">{pin.title}</h3>}
+                                    <div className="text-sm text-slate-700 mb-1">{pin.address}</div>
+                                    {pin.resolvedAddress && pin.resolvedAddress !== pin.address && (
+                                        <div className="text-[11px] text-slate-400 mb-1.5 truncate" title={pin.resolvedAddress}>
+                                            {pin.resolvedAddress}
                                         </div>
-                                        {pin.createdBy === currentUser?.email && (
-                                            <button
-                                                onClick={() => handleDeletePin(pin)}
-                                                className="mt-2 inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700"
-                                            >
-                                                <Trash2 size={12} />
-                                                {t('global.deletePin')}
-                                            </button>
-                                        )}
+                                    )}
+                                    <div className="text-[11px] text-slate-500">
+                                        {t('global.byLabel')}: {pin.createdByName || pin.createdBy}
                                     </div>
-                                </Popup>
-                            </Marker>
-                        ))}
-                    </MarkerClusterGroup>
+                                    {pin.createdBy === currentUser?.email && (
+                                        <button
+                                            onClick={() => handleDeletePin(pin)}
+                                            className="mt-2 inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700"
+                                        >
+                                            <Trash2 size={12} />
+                                            {t('global.deletePin')}
+                                        </button>
+                                    )}
+                                </div>
+                            </Popup>
+                        </Marker>
+                    ))}
+
+                    {/* My current location */}
+                    {myLocation && (
+                        <Marker position={[myLocation.lat, myLocation.lng]} icon={myLocationIcon}>
+                            <Popup>{t('global.myLocation')}</Popup>
+                        </Marker>
+                    )}
                 </MapContainer>
+
+                {/* My-location button (overlay) */}
+                <button
+                    type="button"
+                    onClick={handleLocateMe}
+                    disabled={locating}
+                    className="absolute top-3 right-3 z-[700] bg-white hover:bg-blue-50 border border-slate-200 shadow-md rounded-full p-2.5 text-blue-600 disabled:opacity-60 transition-colors"
+                    title={t('global.myLocation')}
+                    aria-label={t('global.myLocation')}
+                >
+                    {locating ? <Loader size={18} className="animate-spin" /> : <Crosshair size={18} />}
+                </button>
             </div>
 
             {/* Info bar */}

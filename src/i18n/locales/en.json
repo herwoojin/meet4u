@@ -364,7 +364,10 @@
     "resolvingAddress": "Resolving address...",
     "pendingTitle": "Add a pin at this location?",
     "confirmAdd": "Add pin",
-    "pendingHint": "Click on the map or use search to select a location."
+    "pendingHint": "Click on the map or use search to select a location.",
+    "myLocation": "My location",
+    "locationFailed": "Could not retrieve your location. Please check location permission.",
+    "locationNotSupported": "Your browser does not support geolocation."
   },
   "settings": {
     "title": "Settings",

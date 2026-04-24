@@ -364,7 +364,10 @@
     "resolvingAddress": "正在解析地址...",
     "pendingTitle": "在此位置添加标记?",
     "confirmAdd": "添加标记",
-    "pendingHint": "请点击地图或使用上方搜索选择位置。"
+    "pendingHint": "请点击地图或使用上方搜索选择位置。",
+    "myLocation": "我的位置",
+    "locationFailed": "无法获取您的位置。请检查位置权限。",
+    "locationNotSupported": "此浏览器不支持位置服务。"
   },
   "settings": {
     "title": "设置",
