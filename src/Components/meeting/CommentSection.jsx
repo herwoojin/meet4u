@@ -19,6 +19,7 @@ const SPEECH_LOCALE = {
     'mn': 'mn-MN',
     'ar': 'ar-SA',
     'fr': 'fr-FR',
+    'km': 'km-KH',
 };
 
 const CommentSection = ({ meetingId, currentUser, attendees }) => {

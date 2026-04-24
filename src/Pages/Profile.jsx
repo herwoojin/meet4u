@@ -17,6 +17,7 @@ const SUPPORTED_LANGUAGES = [
     { code: 'mn', label: 'Монгол(Mongolian)' },
     { code: 'ar', label: 'العربية(Arabic)' },
     { code: 'fr', label: 'Français(French)' },
+    { code: 'km', label: 'ភាសាខ្មែរ(Cambodian)' },
 ];
 
 const Profile = () => {
