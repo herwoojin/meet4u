@@ -120,6 +120,9 @@ const GlobalMeetingMap = () => {
     const [myLocation, setMyLocation] = useState(null);
     const [locating, setLocating] = useState(false);
 
+    // Pins list modal
+    const [showPinsList, setShowPinsList] = useState(false);
+
     // Keyword search
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -594,10 +597,17 @@ const GlobalMeetingMap = () => {
 
             {/* Info bar */}
             <div className="flex flex-wrap items-center gap-3 px-4 py-3 bg-white rounded-xl border border-slate-200 shadow-sm text-xs text-slate-600">
-                <span className="inline-flex items-center gap-1.5">
+                <button
+                    type="button"
+                    onClick={() => pins.length > 0 && setShowPinsList(true)}
+                    disabled={pins.length === 0}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 -mx-2 rounded-md hover:bg-blue-50 disabled:hover:bg-transparent transition-colors"
+                >
                     <MapPin size={14} className="text-blue-600" />
-                    {t('global.pinsCount', { count: pins.length })}
-                </span>
+                    <span className={pins.length > 0 ? 'text-blue-600 underline-offset-2 hover:underline' : ''}>
+                        {t('global.pinsCount', { count: pins.length })}
+                    </span>
+                </button>
                 {!currentUser && (
                     <span className="text-amber-600">{t('global.loginRequired')}</span>
                 )}
@@ -605,6 +615,63 @@ const GlobalMeetingMap = () => {
                     <span className="text-slate-400">{t('global.noPins')}</span>
                 )}
             </div>
+
+            {/* Pins list modal */}
+            {showPinsList && (
+                <div
+                    className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-4"
+                    onClick={() => setShowPinsList(false)}
+                >
+                    <div
+                        className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                            <h3 className="font-bold text-slate-800 inline-flex items-center gap-2">
+                                <MapPin size={16} className="text-blue-600" />
+                                {t('global.pinsListTitle')}
+                                <span className="text-xs text-slate-400 font-normal">({pins.length})</span>
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setShowPinsList(false)}
+                                className="p-1 text-slate-400 hover:text-slate-600"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <ul className="flex-1 overflow-y-auto divide-y divide-slate-100">
+                            {pins.map((pin) => (
+                                <li key={pin.id}>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setFlyToTarget({ lat: pin.lat, lng: pin.lng, key: Date.now() });
+                                            setShowPinsList(false);
+                                        }}
+                                        className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors flex items-start gap-2"
+                                    >
+                                        <MapPin size={14} className="text-red-500 mt-0.5 shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                            {pin.title && (
+                                                <div className="font-medium text-slate-800 text-sm truncate">
+                                                    {pin.title}
+                                                </div>
+                                            )}
+                                            <div className={`text-xs ${pin.title ? 'text-slate-500' : 'text-slate-700 font-medium'} truncate`}>
+                                                {pin.address}
+                                            </div>
+                                            <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+                                                {t('global.byLabel')}: {pin.createdByName || pin.createdBy}
+                                            </div>
+                                        </div>
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+            )}
 
             {/* Global chat */}
             <GlobalChat />
