@@ -5,6 +5,7 @@ import { db } from '../../lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
+import useGoogleCalendar from '../../hooks/useGoogleCalendar';
 
 // Searchable user dropdown component
 const UserSearchDropdown = ({ value, onChange, users }) => {
@@ -91,6 +92,7 @@ const MeetingForm = () => {
     const { t } = useTranslation();
     const { currentUser } = useAuth();
     const navigate = useNavigate();
+    const gcal = useGoogleCalendar();
     const location = useLocation();
     const [loading, setLoading] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -190,19 +192,33 @@ const MeetingForm = () => {
         };
 
         try {
+            let savedSuccess = '';
             if (isEditing && editId) {
                 await updateDoc(doc(db, "meetings", editId), {
                     ...meetingData,
                     updatedAt: serverTimestamp()
                 });
-                alert(t('meeting.meetingEditSuccess'));
+                savedSuccess = t('meeting.meetingEditSuccess');
             } else {
                 await addDoc(collection(db, "meetings"), {
                     ...meetingData,
                     createdAt: serverTimestamp()
                 });
-                alert(t('meeting.meetingCreateSuccess'));
+                savedSuccess = t('meeting.meetingCreateSuccess');
             }
+
+            // Best-effort Google Calendar sync (only on create + when enabled)
+            let trailingMsg = '';
+            if (!isEditing && gcal.syncEnabled && gcal.clientId) {
+                const result = await gcal.syncMeeting(meetingData);
+                if (result?.ok) {
+                    trailingMsg = '\n' + t('settings.googleCalendar.eventCreated');
+                } else if (!result?.skipped) {
+                    trailingMsg = '\n' + t('settings.googleCalendar.eventCreateFailed');
+                }
+            }
+
+            alert(savedSuccess + trailingMsg);
             navigate('/');
         } catch (error) {
             console.error("Error saving meeting: ", error);

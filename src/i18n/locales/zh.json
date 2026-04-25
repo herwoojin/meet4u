@@ -400,6 +400,32 @@
     "loginRequired": "请先登录。",
     "notifEnabledAlert": "通知已启用! 🔔\n即使应用关闭,您也能收到出席和评论通知。",
     "notifBlockedAlert": "通知已被屏蔽。\n请在浏览器(或设备)设置中允许通知。",
-    "notifTokenError": "由于密钥或网络错误,未能获取通知令牌。请检查是否已应用 VAPID 密钥。"
+    "notifTokenError": "由于密钥或网络错误,未能获取通知令牌。请检查是否已应用 VAPID 密钥。",
+    "googleCalendar": {
+      "title": "Google 日历同步",
+      "description": "预约新会议时自动添加到您的 Google 日历。",
+      "clientIdLabel": "OAuth Client ID",
+      "clientIdPlaceholder": "xxxxx.apps.googleusercontent.com",
+      "clientIdHelp": "在 Google Cloud Console > 凭据中创建 OAuth 2.0 客户端 ID(Web 应用),然后将 ID 粘贴到此处。",
+      "save": "保存",
+      "saved": "已保存",
+      "connect": "连接 Google 日历",
+      "connecting": "连接中...",
+      "disconnect": "断开连接",
+      "connected": "已连接",
+      "notConnected": "未连接",
+      "autoSync": "自动将新会议添加到日历",
+      "needClientId": "请先保存 OAuth Client ID。",
+      "connectFailed": "连接 Google 日历失败。",
+      "eventCreated": "已添加日程到 Google 日历。",
+      "eventCreateFailed": "添加 Google 日历日程失败。",
+      "guideTitle": "设置指南",
+      "guideStep1": "在 Google Cloud Console 创建新项目",
+      "guideStep2": "在 API 库中启用 'Google Calendar API'",
+      "guideStep3": "配置 OAuth 同意屏幕(外部,添加您的邮箱)",
+      "guideStep4": "在凭据中创建 OAuth 2.0 客户端 ID(Web 应用)",
+      "guideStep5": "在已授权的 JavaScript 来源中添加站点 URL",
+      "guideStep6": "将生成的 Client ID 粘贴到上面"
+    }
   }
 }

@@ -1,13 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bell, BellRing, BellOff, Settings as SettingsIcon } from 'lucide-react';
+import { Bell, BellRing, BellOff, Settings as SettingsIcon, Calendar, Check, Loader, Link as LinkIcon, Unlink } from 'lucide-react';
 import { requestFCMToken } from '../hooks/useFCM';
 import { useAuth } from '../context/AuthContext';
+import useGoogleCalendar from '../hooks/useGoogleCalendar';
 
 const Settings = () => {
     const { t } = useTranslation();
     const [notifPermission, setNotifPermission] = useState('unsupported');
     const { currentUser: user } = useAuth();
+    const gcal = useGoogleCalendar();
+    const [clientIdInput, setClientIdInput] = useState(gcal.clientId);
+    const [clientIdSavedFlash, setClientIdSavedFlash] = useState(false);
+
+    useEffect(() => { setClientIdInput(gcal.clientId); }, [gcal.clientId]);
+
+    const handleSaveClientId = () => {
+        gcal.saveClientId(clientIdInput);
+        setClientIdSavedFlash(true);
+        setTimeout(() => setClientIdSavedFlash(false), 1500);
+    };
+
+    const handleConnect = async () => {
+        if (!gcal.clientId) {
+            alert(t('settings.googleCalendar.needClientId'));
+            return;
+        }
+        try {
+            await gcal.connect();
+            gcal.setSyncEnabled(true);
+        } catch (_) {
+            alert(t('settings.googleCalendar.connectFailed'));
+        }
+    };
 
     useEffect(() => {
         if ('Notification' in window) {
@@ -111,6 +136,117 @@ const Settings = () => {
                     <p className="text-xs text-gray-600 leading-relaxed">
                         {t('settings.iosNoteDesc')}
                     </p>
+                </div>
+            </div>
+
+            {/* Google Calendar integration */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-6">
+                <div className="p-6 border-b border-gray-100">
+                    <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                        <Calendar className="text-emerald-600" size={20} />
+                        {t('settings.googleCalendar.title')}
+                    </h2>
+                    <p className="text-xs text-gray-500">
+                        {t('settings.googleCalendar.description')}
+                    </p>
+                </div>
+
+                <div className="p-6 space-y-5">
+                    {/* Client ID input */}
+                    <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                            {t('settings.googleCalendar.clientIdLabel')}
+                        </label>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={clientIdInput}
+                                onChange={(e) => setClientIdInput(e.target.value)}
+                                placeholder={t('settings.googleCalendar.clientIdPlaceholder')}
+                                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                                autoComplete="off"
+                                spellCheck="false"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleSaveClientId}
+                                disabled={!clientIdInput.trim() || clientIdInput.trim() === gcal.clientId}
+                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
+                            >
+                                {clientIdSavedFlash ? <Check size={14} /> : null}
+                                {clientIdSavedFlash ? t('settings.googleCalendar.saved') : t('settings.googleCalendar.save')}
+                            </button>
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-1.5">
+                            {t('settings.googleCalendar.clientIdHelp')}
+                        </p>
+                    </div>
+
+                    {/* Connection status + actions */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="flex items-center gap-2 text-sm">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${gcal.isTokenValid
+                                ? 'bg-green-100 text-green-700 border-green-200'
+                                : 'bg-gray-100 text-gray-500 border-gray-200'
+                                }`}>
+                                {gcal.isTokenValid
+                                    ? <><Check size={12} /> {t('settings.googleCalendar.connected')}</>
+                                    : <>{t('settings.googleCalendar.notConnected')}</>}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            {gcal.isTokenValid ? (
+                                <button
+                                    type="button"
+                                    onClick={() => gcal.disconnect()}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-700"
+                                >
+                                    <Unlink size={14} />
+                                    {t('settings.googleCalendar.disconnect')}
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleConnect}
+                                    disabled={gcal.busy || !gcal.clientId}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-300"
+                                >
+                                    {gcal.busy ? <Loader size={14} className="animate-spin" /> : <LinkIcon size={14} />}
+                                    {gcal.busy ? t('settings.googleCalendar.connecting') : t('settings.googleCalendar.connect')}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Auto-sync toggle */}
+                    <label className="flex items-center justify-between gap-3 p-3 bg-white border border-gray-100 rounded-lg cursor-pointer">
+                        <span className="text-sm text-gray-800">{t('settings.googleCalendar.autoSync')}</span>
+                        <span className="relative inline-flex items-center">
+                            <input
+                                type="checkbox"
+                                checked={gcal.syncEnabled}
+                                onChange={(e) => gcal.setSyncEnabled(e.target.checked)}
+                                className="sr-only peer"
+                            />
+                            <span className="w-10 h-6 bg-gray-200 rounded-full peer-checked:bg-emerald-500 transition-colors"></span>
+                            <span className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4"></span>
+                        </span>
+                    </label>
+
+                    {/* Setup guide */}
+                    <details className="text-xs text-gray-600">
+                        <summary className="cursor-pointer font-medium text-gray-700 hover:text-gray-900">
+                            {t('settings.googleCalendar.guideTitle')}
+                        </summary>
+                        <ol className="mt-2 ml-4 list-decimal space-y-1 text-gray-500">
+                            <li>{t('settings.googleCalendar.guideStep1')}</li>
+                            <li>{t('settings.googleCalendar.guideStep2')}</li>
+                            <li>{t('settings.googleCalendar.guideStep3')}</li>
+                            <li>{t('settings.googleCalendar.guideStep4')}</li>
+                            <li>{t('settings.googleCalendar.guideStep5')}</li>
+                            <li>{t('settings.googleCalendar.guideStep6')}</li>
+                        </ol>
+                    </details>
                 </div>
             </div>
         </div>

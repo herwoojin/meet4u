@@ -400,6 +400,32 @@
     "loginRequired": "로그인이 필요합니다.",
     "notifEnabledAlert": "알림이 활성화되었습니다! 🔔\n앱이 꺼져있어도 참석 및 댓글 알림을 받을 수 있습니다.",
     "notifBlockedAlert": "알림이 차단되어 있습니다.\n브라우저 설정(또는 기기 설정)에서 알림을 허용해 주세요.",
-    "notifTokenError": "키 입력 오류 또는 통신 오류로 알림 토큰을 받아오지 못했습니다. VAPID 키가 적용되어 있는지 확인하세요."
+    "notifTokenError": "키 입력 오류 또는 통신 오류로 알림 토큰을 받아오지 못했습니다. VAPID 키가 적용되어 있는지 확인하세요.",
+    "googleCalendar": {
+      "title": "구글 캘린더 연동",
+      "description": "새 미팅을 예약하면 자동으로 내 구글 캘린더에 일정을 추가합니다.",
+      "clientIdLabel": "OAuth Client ID",
+      "clientIdPlaceholder": "xxxxx.apps.googleusercontent.com",
+      "clientIdHelp": "Google Cloud Console > 사용자 인증 정보에서 OAuth 2.0 클라이언트 ID(웹 애플리케이션)를 만든 후 ID를 입력하세요.",
+      "save": "저장",
+      "saved": "저장됨",
+      "connect": "구글 캘린더 연결",
+      "connecting": "연결 중...",
+      "disconnect": "연결 해제",
+      "connected": "연결됨",
+      "notConnected": "미연결",
+      "autoSync": "새 미팅을 자동으로 캘린더에 추가",
+      "needClientId": "먼저 OAuth Client ID를 저장해 주세요.",
+      "connectFailed": "구글 캘린더 연결에 실패했습니다.",
+      "eventCreated": "구글 캘린더에 일정이 추가되었습니다.",
+      "eventCreateFailed": "구글 캘린더 일정 추가에 실패했습니다.",
+      "guideTitle": "설정 방법",
+      "guideStep1": "Google Cloud Console에서 새 프로젝트 생성",
+      "guideStep2": "API 라이브러리에서 'Google Calendar API' 사용 설정",
+      "guideStep3": "OAuth 동의 화면 구성 (외부, 본인 이메일 추가)",
+      "guideStep4": "사용자 인증 정보에서 OAuth 2.0 클라이언트 ID 만들기 (웹 애플리케이션)",
+      "guideStep5": "승인된 JavaScript 출처에 사이트 URL 추가",
+      "guideStep6": "생성된 Client ID를 위에 붙여넣기"
+    }
   }
 }

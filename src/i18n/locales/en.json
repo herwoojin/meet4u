@@ -400,6 +400,32 @@
     "loginRequired": "Please sign in first.",
     "notifEnabledAlert": "Notifications enabled! 🔔\nYou'll receive attendance and comment alerts even when the app is closed.",
     "notifBlockedAlert": "Notifications are blocked.\nPlease allow notifications in your browser (or device) settings.",
-    "notifTokenError": "Could not obtain a notification token due to a key or network error. Check that the VAPID key is applied."
+    "notifTokenError": "Could not obtain a notification token due to a key or network error. Check that the VAPID key is applied.",
+    "googleCalendar": {
+      "title": "Google Calendar sync",
+      "description": "New meetings will automatically be added to your Google Calendar.",
+      "clientIdLabel": "OAuth Client ID",
+      "clientIdPlaceholder": "xxxxx.apps.googleusercontent.com",
+      "clientIdHelp": "Create an OAuth 2.0 Client ID (Web application) in Google Cloud Console > Credentials, then paste the ID here.",
+      "save": "Save",
+      "saved": "Saved",
+      "connect": "Connect Google Calendar",
+      "connecting": "Connecting...",
+      "disconnect": "Disconnect",
+      "connected": "Connected",
+      "notConnected": "Not connected",
+      "autoSync": "Auto-add new meetings to Calendar",
+      "needClientId": "Please save your OAuth Client ID first.",
+      "connectFailed": "Failed to connect Google Calendar.",
+      "eventCreated": "Event added to Google Calendar.",
+      "eventCreateFailed": "Failed to add event to Google Calendar.",
+      "guideTitle": "Setup guide",
+      "guideStep1": "Create a project in Google Cloud Console",
+      "guideStep2": "Enable 'Google Calendar API' in the API library",
+      "guideStep3": "Configure the OAuth consent screen (External, add your email)",
+      "guideStep4": "Create OAuth 2.0 Client ID (Web application) in Credentials",
+      "guideStep5": "Add your site URL to authorized JavaScript origins",
+      "guideStep6": "Paste the resulting Client ID above"
+    }
   }
 }
