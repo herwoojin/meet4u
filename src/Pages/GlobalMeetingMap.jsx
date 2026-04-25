@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query, orderBy, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import 'leaflet/dist/leaflet.css';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { Globe, MapPin, Trash2, Loader, Plus, Search, X, Crosshair } from 'lucide-react';
+import { Globe, MapPin, Trash2, Loader, Plus, Search, X, Crosshair, Radio, Share2, Users, ChevronDown, ChevronUp } from 'lucide-react';
 import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -44,6 +44,44 @@ const pendingIcon = L.divIcon({
     iconAnchor: [17, 42],
     popupAnchor: [0, -38],
 });
+
+// Live shared location with name label — green for others, red for self
+const escapeHtml = (s) => String(s || '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+
+const sharedLocationIcon = (name, isSelf) => {
+    const color = isSelf ? '#dc2626' : '#10b981';
+    const safeName = escapeHtml(name);
+    return L.divIcon({
+        className: 'meet4u-shared-location',
+        html: `
+            <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
+              <div style="
+                background:${color};
+                color:white;
+                font-size:11px;
+                padding:2px 8px;
+                border-radius:10px;
+                white-space:nowrap;
+                box-shadow:0 1px 3px rgba(0,0,0,0.3);
+                margin-bottom:3px;
+                font-weight:600;
+                line-height:1.4;
+              ">${safeName}</div>
+              <div style="
+                width:18px;height:18px;
+                background:${color};
+                border:3px solid white;
+                border-radius:50%;
+                box-shadow:0 0 0 4px ${color}33, 0 1px 3px rgba(0,0,0,0.3);
+              "></div>
+            </div>
+        `,
+        iconSize: [120, 50],
+        iconAnchor: [60, 50],
+    });
+};
 
 // My-location pulsing blue dot
 const myLocationIcon = L.divIcon({
@@ -123,6 +161,13 @@ const GlobalMeetingMap = () => {
     // Pins list modal
     const [showPinsList, setShowPinsList] = useState(false);
 
+    // Live location sharing
+    const [isSharing, setIsSharing] = useState(false);
+    const [sharingLoading, setSharingLoading] = useState(false);
+    const [sharedUsers, setSharedUsers] = useState([]);
+    const [showSharedList, setShowSharedList] = useState(true);
+    const watchIdRef = useRef(null);
+
     // Keyword search
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -142,6 +187,40 @@ const GlobalMeetingMap = () => {
             setLoading(false);
         });
         return () => unsubscribe();
+    }, []);
+
+    // Filter out stale entries (no update in 10+ minutes)
+    const freshSharedUsers = useMemo(() => {
+        const TEN_MIN = 10 * 60 * 1000;
+        const now = Date.now();
+        return sharedUsers.filter(u => {
+            if (typeof u.lat !== 'number' || typeof u.lng !== 'number') return false;
+            const t = u.updatedAt?.toMillis?.();
+            if (!t) return true;
+            return now - t < TEN_MIN;
+        });
+    }, [sharedUsers]);
+
+    // Subscribe to all live shared locations
+    useEffect(() => {
+        const q = collection(db, 'liveLocations');
+        const unsub = onSnapshot(q, (snap) => {
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setSharedUsers(list);
+        }, (err) => {
+            console.error('liveLocations listen error:', err);
+        });
+        return () => unsub();
+    }, []);
+
+    // Stop sharing on unmount + clear watcher
+    useEffect(() => {
+        return () => {
+            if (watchIdRef.current != null && 'geolocation' in navigator) {
+                navigator.geolocation.clearWatch(watchIdRef.current);
+                watchIdRef.current = null;
+            }
+        };
     }, []);
 
     // Scroll pending card into view when created
@@ -266,6 +345,77 @@ const GlobalMeetingMap = () => {
             alert(t('global.addPinFailed'));
         } finally {
             setAdding(false);
+        }
+    };
+
+    const writeMyLocation = async (pos) => {
+        if (!currentUser?.uid) return;
+        try {
+            await setDoc(doc(db, 'liveLocations', currentUser.uid), {
+                uid: currentUser.uid,
+                email: currentUser.email,
+                displayName: currentUser.displayName || currentUser.email.split('@')[0],
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy ?? null,
+                updatedAt: serverTimestamp(),
+            });
+        } catch (err) {
+            console.error('writeMyLocation failed', err);
+        }
+    };
+
+    const startSharing = async () => {
+        if (!currentUser) {
+            alert(t('global.loginRequired'));
+            return;
+        }
+        if (!('geolocation' in navigator)) {
+            alert(t('global.locationNotSupported'));
+            return;
+        }
+        setSharingLoading(true);
+        try {
+            // Initial position
+            const initialPos = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true, timeout: 15000, maximumAge: 30000,
+                });
+            });
+            await writeMyLocation(initialPos);
+            setFlyToTarget({
+                lat: initialPos.coords.latitude,
+                lng: initialPos.coords.longitude,
+                key: Date.now(),
+            });
+
+            // Continuous tracking
+            watchIdRef.current = navigator.geolocation.watchPosition(
+                (pos) => writeMyLocation(pos),
+                (err) => console.error('watchPosition error', err),
+                { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+            );
+            setIsSharing(true);
+        } catch (err) {
+            console.error('startSharing failed', err);
+            alert(t('global.shareFailed'));
+        } finally {
+            setSharingLoading(false);
+        }
+    };
+
+    const stopSharing = async () => {
+        if (watchIdRef.current != null && 'geolocation' in navigator) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+        }
+        setIsSharing(false);
+        if (currentUser?.uid) {
+            try {
+                await deleteDoc(doc(db, 'liveLocations', currentUser.uid));
+            } catch (err) {
+                console.error('stopSharing delete failed', err);
+            }
         }
     };
 
@@ -574,25 +724,118 @@ const GlobalMeetingMap = () => {
                         </Marker>
                     ))}
 
-                    {/* My current location */}
-                    {myLocation && (
+                    {/* My (one-time) current location dot */}
+                    {myLocation && !isSharing && (
                         <Marker position={[myLocation.lat, myLocation.lng]} icon={myLocationIcon}>
                             <Popup>{t('global.myLocation')}</Popup>
                         </Marker>
                     )}
+
+                    {/* Live shared locations (other users + self when sharing) */}
+                    {freshSharedUsers.map((u) => (
+                        <Marker
+                            key={u.id}
+                            position={[u.lat, u.lng]}
+                            icon={sharedLocationIcon(u.displayName, u.uid === currentUser?.uid)}
+                        >
+                            <Popup>
+                                <div className="text-sm">
+                                    <div className="font-bold text-slate-800">
+                                        {u.displayName}
+                                        {u.uid === currentUser?.uid && (
+                                            <span className="text-[10px] text-slate-400 ml-1">{t('global.youLabel')}</span>
+                                        )}
+                                    </div>
+                                    <div className="text-[11px] text-slate-500 mt-1">
+                                        {u.lat.toFixed(5)}, {u.lng.toFixed(5)}
+                                    </div>
+                                </div>
+                            </Popup>
+                        </Marker>
+                    ))}
                 </MapContainer>
 
-                {/* My-location button (overlay) */}
-                <button
-                    type="button"
-                    onClick={handleLocateMe}
-                    disabled={locating}
-                    className="absolute top-3 right-3 z-[700] bg-white hover:bg-blue-50 border border-slate-200 shadow-md rounded-full p-2.5 text-blue-600 disabled:opacity-60 transition-colors"
-                    title={t('global.myLocation')}
-                    aria-label={t('global.myLocation')}
-                >
-                    {locating ? <Loader size={18} className="animate-spin" /> : <Crosshair size={18} />}
-                </button>
+                {/* Top-right control stack: legend + share button + locate button */}
+                <div className="absolute top-3 right-3 z-[700] flex flex-col items-end gap-2 max-w-[260px]">
+                    {/* Legend (collapsible) */}
+                    <div className="bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden w-full">
+                        <button
+                            type="button"
+                            onClick={() => setShowSharedList(v => !v)}
+                            className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                            <span className="inline-flex items-center gap-1.5">
+                                <Users size={13} className="text-emerald-600" />
+                                {t('global.sharedUsersTitle')}
+                                <span className="text-slate-400 font-normal">({freshSharedUsers.length})</span>
+                            </span>
+                            {showSharedList ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        </button>
+                        {showSharedList && (
+                            <div className="border-t border-slate-100 max-h-44 overflow-y-auto">
+                                {freshSharedUsers.length === 0 ? (
+                                    <div className="text-[11px] text-slate-400 text-center py-3 px-3">
+                                        {t('global.noSharedUsers')}
+                                    </div>
+                                ) : (
+                                    <ul className="divide-y divide-slate-50">
+                                        {freshSharedUsers.map(u => {
+                                            const isMe = u.uid === currentUser?.uid;
+                                            return (
+                                                <li key={u.id}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFlyToTarget({ lat: u.lat, lng: u.lng, key: Date.now() })}
+                                                        className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center gap-2 text-xs"
+                                                    >
+                                                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isMe ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
+                                                        <span className="text-slate-700 truncate flex-1">
+                                                            {u.displayName}
+                                                            {isMe && <span className="text-slate-400 ml-1">{t('global.youLabel')}</span>}
+                                                        </span>
+                                                    </button>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Share / Stop sharing button */}
+                    <button
+                        type="button"
+                        onClick={isSharing ? stopSharing : startSharing}
+                        disabled={sharingLoading || !currentUser}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-md border text-xs font-medium transition-colors disabled:opacity-60 ${isSharing
+                            ? 'bg-red-500 text-white border-red-600 hover:bg-red-600'
+                            : 'bg-white text-blue-700 border-slate-200 hover:bg-blue-50'
+                            }`}
+                        title={isSharing ? t('global.stopSharing') : t('global.shareLocation')}
+                    >
+                        {sharingLoading ? (
+                            <Loader size={14} className="animate-spin" />
+                        ) : isSharing ? (
+                            <Radio size={14} className="animate-pulse" />
+                        ) : (
+                            <Share2 size={14} />
+                        )}
+                        <span>{isSharing ? t('global.stopSharing') : t('global.shareLocation')}</span>
+                    </button>
+
+                    {/* My-location (one-shot) */}
+                    <button
+                        type="button"
+                        onClick={handleLocateMe}
+                        disabled={locating}
+                        className="bg-white hover:bg-blue-50 border border-slate-200 shadow-md rounded-full p-2.5 text-blue-600 disabled:opacity-60 transition-colors"
+                        title={t('global.myLocation')}
+                        aria-label={t('global.myLocation')}
+                    >
+                        {locating ? <Loader size={18} className="animate-spin" /> : <Crosshair size={18} />}
+                    </button>
+                </div>
             </div>
 
             {/* Info bar */}

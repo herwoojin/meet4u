@@ -151,6 +151,16 @@ service cloud.firestore {
       }
     }
 
+    // ---------- Live location sharing ----------
+    // liveLocations/{userId} — only the owner writes their own doc.
+    // All signed-in users may read so they can see others on the map.
+    match /liveLocations/{userId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && myUid() == userId;
+      allow update: if isSignedIn() && myUid() == userId;
+      allow delete: if isSignedIn() && myUid() == userId;
+    }
+
     // ---------- Legacy: shops collection (no longer used by the UI) ----------
     // Read by signed-in user; writes limited to admin for cleanup only.
     match /shops/{shopId} {
