@@ -138,7 +138,7 @@ const ClickToPin = ({ onPick }) => {
 
 const GlobalMeetingMap = () => {
     const { t } = useTranslation();
-    const { currentUser } = useAuth();
+    const { currentUser, isAdmin } = useAuth();
 
     const [pins, setPins] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -442,7 +442,7 @@ const GlobalMeetingMap = () => {
     };
 
     const handleDeletePin = async (pin) => {
-        if (pin.createdBy !== currentUser?.email) return;
+        if (pin.createdBy !== currentUser?.email && !isAdmin) return;
         if (!window.confirm(t('global.confirmDeletePin'))) return;
         try {
             await deleteDoc(doc(db, 'globalPins', pin.id));
@@ -710,7 +710,7 @@ const GlobalMeetingMap = () => {
                                     <div className="text-[11px] text-slate-500">
                                         {t('global.byLabel')}: {pin.createdByName || pin.createdBy}
                                     </div>
-                                    {pin.createdBy === currentUser?.email && (
+                                    {(pin.createdBy === currentUser?.email || isAdmin) && (
                                         <button
                                             onClick={() => handleDeletePin(pin)}
                                             className="mt-2 inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700"
