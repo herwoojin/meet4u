@@ -55,6 +55,7 @@ const CreateRoomModal = ({ onClose, onCreated }) => {
         const selectedEmails = new Set(selected.map(s => lower(s.email)));
         return allUsers
             .filter(u => u.email && lower(u.email) !== lower(currentUser?.email))
+            .filter(u => !u.hiddenFromSearch)
             .filter(u => !selectedEmails.has(lower(u.email)))
             .filter(u => {
                 if (!term) return true;
@@ -62,7 +63,7 @@ const CreateRoomModal = ({ onClose, onCreated }) => {
                 const email = lower(u.email || '');
                 return name.includes(term) || email.includes(term);
             })
-            .slice(0, 20);
+            .slice(0, 50);
     }, [allUsers, searchTerm, selected, currentUser]);
 
     const toggleSelect = (user) => {
@@ -156,7 +157,7 @@ const CreateRoomModal = ({ onClose, onCreated }) => {
                                 />
                             </div>
                             {showList && (searchTerm || filtered.length > 0) && (
-                                <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                                <div className="absolute left-0 right-0 mt-1 max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-10">
                                     {filtered.length === 0 ? (
                                         <div className="p-3 text-xs text-gray-400 text-center">{t('chat.rooms.noResults')}</div>
                                     ) : (

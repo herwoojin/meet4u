@@ -213,6 +213,8 @@
     "email": "电子邮件",
     "userId": "用户 ID",
     "joinDate": "注册日期",
+    "hideFromSearch": "在邀请搜索中隐藏我",
+    "hideFromSearchDesc": "开启后,其他成员在创建新聊天室时的搜索结果中不会出现您的姓名。",
     "updated": "个人资料更新成功。",
     "updateFailed": "个人资料更新失败。",
     "relogin": "请重新登录以应用语言设置。"

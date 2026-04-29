@@ -213,6 +213,8 @@
     "email": "Email",
     "userId": "User ID",
     "joinDate": "Joined",
+    "hideFromSearch": "Hide me from invite search",
+    "hideFromSearchDesc": "When enabled, your name won't appear in others' room-invite search results.",
     "updated": "Profile updated successfully.",
     "updateFailed": "Failed to update profile.",
     "relogin": "Please sign in again to apply the language change."

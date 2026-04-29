@@ -213,6 +213,8 @@
     "email": "이메일",
     "userId": "사용자 ID",
     "joinDate": "가입일",
+    "hideFromSearch": "참여자 초대 검색에서 나를 숨기기",
+    "hideFromSearchDesc": "켜두면 다른 회원이 새 대화방을 만들 때 검색 결과에 내 이름이 노출되지 않습니다.",
     "updated": "프로필이 성공적으로 업데이트되었습니다.",
     "updateFailed": "프로필 업데이트에 실패했습니다.",
     "relogin": "언어 설정을 적용하려면 재로그인 해주세요."

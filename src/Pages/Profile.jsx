@@ -174,6 +174,38 @@ const Profile = () => {
                                     <p className="font-mono text-sm">{currentUser?.uid}</p>
                                 </div>
                             </div>
+
+                            <label className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-100 cursor-pointer">
+                                <span className="flex-1">
+                                    <span className="block text-sm font-medium text-gray-800">
+                                        {t('profile.hideFromSearch')}
+                                    </span>
+                                    <span className="block text-xs text-gray-500 mt-1">
+                                        {t('profile.hideFromSearchDesc')}
+                                    </span>
+                                </span>
+                                <span className="relative inline-flex items-center mt-1 shrink-0">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!userProfile?.hiddenFromSearch}
+                                        onChange={async (e) => {
+                                            const next = e.target.checked;
+                                            try {
+                                                await setDoc(doc(db, "users", currentUser.uid), {
+                                                    hiddenFromSearch: next,
+                                                    updatedAt: new Date().toISOString(),
+                                                }, { merge: true });
+                                            } catch (err) {
+                                                console.error('Failed to toggle hideFromSearch', err);
+                                                alert(t('profile.updateFailed'));
+                                            }
+                                        }}
+                                        className="sr-only peer"
+                                    />
+                                    <span className="w-10 h-6 bg-gray-200 rounded-full peer-checked:bg-blue-600 transition-colors"></span>
+                                    <span className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4"></span>
+                                </span>
+                            </label>
                         </div>
 
                         <div className="pt-6 border-t border-gray-100">
