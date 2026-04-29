@@ -281,7 +281,10 @@
     "noCostsMonth": "해당 월에 비용이 등록된 일정이 없습니다.",
     "noCostData": "비용 데이터가 없습니다.",
     "dateFormat": "yyyy년 M월",
-    "attendSuffix": "명"
+    "attendSuffix": "명",
+    "confirmDeleteUser": "정말 {{email}} 회원을 삭제하시겠습니까? 관련된 데이터가 손실될 수 있습니다.",
+    "deleteUser": "삭제",
+    "deleteUserFailed": "회원 삭제에 실패했습니다."
   },
   "stats": {
     "thisMonthBtn": "이번 달 보기",

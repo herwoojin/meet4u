@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { db } from '../lib/firebase';
-import { collection, getDocs, doc, updateDoc, query, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, query, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { Shield, ShieldOff, Users, Eye, EyeOff, Calendar, Lock, LogOut, BarChart2, DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Shield, ShieldOff, Users, Eye, EyeOff, Calendar, Lock, LogOut, BarChart2, DollarSign, ChevronLeft, ChevronRight, UserMinus } from 'lucide-react';
 import MeetingDetailModal from '../Components/meeting/MeetingDetailModal';
 import AttendanceStats from '../Components/admin/AttendanceStats';
 import { useNavigate } from 'react-router-dom';
@@ -354,6 +354,17 @@ const AdminPage = () => {
         }
     };
 
+    const handleDeleteUser = async (userId, userEmail) => {
+        if (!window.confirm(t('admin.confirmDeleteUser', { email: userEmail, defaultValue: `정말 ${userEmail} 회원을 삭제하시겠습니까? 관련된 데이터가 손실될 수 있습니다.` }))) return;
+        try {
+            await deleteDoc(doc(db, 'users', userId));
+            setUsers(prev => prev.filter(u => u.id !== userId));
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            alert(t('admin.deleteUserFailed') || '회원 삭제에 실패했습니다.');
+        }
+    };
+
     const toggleMeetingHidden = async (meetingId, currentHidden) => {
         try {
             await updateDoc(doc(db, 'meetings', meetingId), { hidden: !currentHidden });
@@ -505,19 +516,27 @@ const AdminPage = () => {
                                             <p className="text-xs text-gray-500 truncate">{user.email}</p>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => toggleAdmin(user.id, user.role)}
-                                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border shadow-sm ${user.role === 'admin'
-                                            ? 'bg-white text-red-600 border-red-200 hover:bg-red-50'
-                                            : 'bg-white text-purple-600 border-purple-200 hover:bg-purple-50'
-                                            }`}
-                                    >
-                                        {user.role === 'admin' ? (
-                                            <><ShieldOff size={14} /> {t('admin.revokeAdmin')}</>
-                                        ) : (
-                                            <><Shield size={14} /> {t('admin.makeAdmin')}</>
-                                        )}
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => toggleAdmin(user.id, user.role)}
+                                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border shadow-sm ${user.role === 'admin'
+                                                ? 'bg-white text-red-600 border-red-200 hover:bg-red-50'
+                                                : 'bg-white text-purple-600 border-purple-200 hover:bg-purple-50'
+                                                }`}
+                                        >
+                                            {user.role === 'admin' ? (
+                                                <><ShieldOff size={14} /> {t('admin.revokeAdmin')}</>
+                                            ) : (
+                                                <><Shield size={14} /> {t('admin.makeAdmin')}</>
+                                            )}
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteUser(user.id, user.email)}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border shadow-sm bg-white text-red-600 border-red-200 hover:bg-red-50"
+                                        >
+                                            <UserMinus size={14} /> {t('admin.deleteUser') || '삭제'}
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
