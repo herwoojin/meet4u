@@ -22,7 +22,7 @@ const SUPPORTED_LANGUAGES = [
 
 const Profile = () => {
     const { t } = useTranslation();
-    const { currentUser, userProfile, logout } = useAuth();
+    const { currentUser, userProfile, logout, updateUserProfile } = useAuth();
     const [isEditing, setIsEditing] = useState(false);
     const [newName, setNewName] = useState(currentUser?.displayName || "");
     const [newLang, setNewLang] = useState(userProfile?.preferredLanguage || "ko");
@@ -191,10 +191,10 @@ const Profile = () => {
                                         onChange={async (e) => {
                                             const next = e.target.checked;
                                             try {
-                                                await setDoc(doc(db, "users", currentUser.uid), {
+                                                await updateUserProfile({
                                                     hiddenFromSearch: next,
                                                     updatedAt: new Date().toISOString(),
-                                                }, { merge: true });
+                                                });
                                             } catch (err) {
                                                 console.error('Failed to toggle hideFromSearch', err);
                                                 alert(t('profile.updateFailed'));

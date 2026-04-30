@@ -123,7 +123,8 @@ export const AuthProvider = ({ children }) => {
         adminLogout,
         activeChatUser,
         openChat,
-        closeChat
+        closeChat,
+        updateUserProfile,
     };
 
     return (
