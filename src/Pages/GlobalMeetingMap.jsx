@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query, orderBy, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import 'leaflet/dist/leaflet.css';
@@ -18,6 +19,49 @@ L.Icon.Default.mergeOptions({
     iconRetinaUrl: markerIcon2x,
     shadowUrl: markerShadow,
 });
+
+// Cluster icon factory — colors and sizes buckets by count thresholds.
+// 2-4 ⇒ green (small), 5-9 ⇒ yellow, 10-14 ⇒ orange, 15-29 ⇒ red-orange, 30+ ⇒ deep red.
+const createClusterIcon = (cluster) => {
+    const count = cluster.getChildCount();
+    let bucket = 0; // size index
+    let bg = 'hsla(112, 75%, 42%, 0.95)';
+    let size = 34;
+
+    if (count >= 30)      { bucket = 4; bg = 'hsla(0, 80%, 48%, 0.95)';  size = 60; }
+    else if (count >= 15) { bucket = 3; bg = 'hsla(8, 88%, 52%, 0.95)';  size = 52; }
+    else if (count >= 10) { bucket = 2; bg = 'hsla(28, 92%, 52%, 0.95)'; size = 46; }
+    else if (count >= 5)  { bucket = 1; bg = 'hsla(48, 95%, 50%, 0.95)'; size = 40; }
+    else                  { bucket = 0; bg = 'hsla(112, 75%, 42%, 0.95)'; size = 34; }
+
+    const fontSize = bucket >= 3 ? 16 : bucket >= 2 ? 15 : 13;
+    const ring = bucket >= 3 ? 10 : 8;
+
+    return L.divIcon({
+        className: 'meet4u-cluster',
+        html: `
+            <div style="
+                width:${size}px;
+                height:${size}px;
+                border-radius:50%;
+                background:${bg};
+                color:white;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                font-weight:700;
+                font-size:${fontSize}px;
+                text-shadow:0 1px 2px rgba(0,0,0,0.45);
+                box-shadow:
+                    0 0 0 ${ring}px rgba(255,255,255,0.55),
+                    0 2px 6px rgba(0,0,0,0.35);
+                border:2px solid white;
+            ">${count}</div>
+        `,
+        iconSize: [size, size],
+        iconAnchor: [size / 2, size / 2],
+    });
+};
 
 // Saved pin — bright red teardrop with white border, visible at all zoom levels
 const savedPinIcon = L.divIcon({
@@ -696,33 +740,42 @@ const GlobalMeetingMap = () => {
                         </Marker>
                     )}
 
-                    {pins.map((pin) => (
-                        <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={savedPinIcon}>
-                            <Popup>
-                                <div className="p-1 min-w-[180px]">
-                                    {pin.title && <h3 className="font-bold text-slate-800 mb-1">{pin.title}</h3>}
-                                    <div className="text-sm text-slate-700 mb-1">{pin.address}</div>
-                                    {pin.resolvedAddress && pin.resolvedAddress !== pin.address && (
-                                        <div className="text-[11px] text-slate-400 mb-1.5 truncate" title={pin.resolvedAddress}>
-                                            {pin.resolvedAddress}
+                    <MarkerClusterGroup
+                        chunkedLoading
+                        showCoverageOnHover={false}
+                        spiderfyOnMaxZoom
+                        maxClusterRadius={60}
+                        disableClusteringAtZoom={17}
+                        iconCreateFunction={createClusterIcon}
+                    >
+                        {pins.map((pin) => (
+                            <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={savedPinIcon}>
+                                <Popup>
+                                    <div className="p-1 min-w-[180px]">
+                                        {pin.title && <h3 className="font-bold text-slate-800 mb-1">{pin.title}</h3>}
+                                        <div className="text-sm text-slate-700 mb-1">{pin.address}</div>
+                                        {pin.resolvedAddress && pin.resolvedAddress !== pin.address && (
+                                            <div className="text-[11px] text-slate-400 mb-1.5 truncate" title={pin.resolvedAddress}>
+                                                {pin.resolvedAddress}
+                                            </div>
+                                        )}
+                                        <div className="text-[11px] text-slate-500">
+                                            {t('global.byLabel')}: {pin.createdByName || pin.createdBy}
                                         </div>
-                                    )}
-                                    <div className="text-[11px] text-slate-500">
-                                        {t('global.byLabel')}: {pin.createdByName || pin.createdBy}
+                                        {(pin.createdBy === currentUser?.email || isAdmin) && (
+                                            <button
+                                                onClick={() => handleDeletePin(pin)}
+                                                className="mt-2 inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700"
+                                            >
+                                                <Trash2 size={12} />
+                                                {t('global.deletePin')}
+                                            </button>
+                                        )}
                                     </div>
-                                    {(pin.createdBy === currentUser?.email || isAdmin) && (
-                                        <button
-                                            onClick={() => handleDeletePin(pin)}
-                                            className="mt-2 inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700"
-                                        >
-                                            <Trash2 size={12} />
-                                            {t('global.deletePin')}
-                                        </button>
-                                    )}
-                                </div>
-                            </Popup>
-                        </Marker>
-                    ))}
+                                </Popup>
+                            </Marker>
+                        ))}
+                    </MarkerClusterGroup>
 
                     {/* My (one-time) current location dot */}
                     {myLocation && !isSharing && (
