@@ -144,41 +144,39 @@ const CreateRoomModal = ({ onClose, onCreated }) => {
 
                     <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">{t('chat.rooms.inviteMembers')}</label>
-                        <div className="relative">
-                            <div className="flex items-center gap-2 px-3 border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-blue-500">
-                                <Search size={14} className="text-gray-400" />
-                                <input
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(e) => { setSearchTerm(e.target.value); setShowList(true); }}
-                                    onFocus={() => setShowList(true)}
-                                    placeholder={t('chat.rooms.searchUser')}
-                                    className="flex-1 py-2 text-sm bg-transparent focus:outline-none"
-                                />
-                            </div>
-                            {showList && (searchTerm || filtered.length > 0) && (
-                                <div className="absolute left-0 right-0 mt-1 max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                                    {filtered.length === 0 ? (
-                                        <div className="p-3 text-xs text-gray-400 text-center">{t('chat.rooms.noResults')}</div>
-                                    ) : (
-                                        filtered.map(u => (
-                                            <button
-                                                type="button"
-                                                key={u.email}
-                                                onClick={() => toggleSelect(u)}
-                                                className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm flex items-center justify-between"
-                                            >
-                                                <span className="truncate">
-                                                    <span className="font-medium text-gray-800">{u.displayName || u.email.split('@')[0]}</span>
-                                                    <span className="ml-2 text-xs text-gray-400 truncate">{u.email}</span>
-                                                </span>
-                                                <Plus size={14} className="text-blue-500 shrink-0" />
-                                            </button>
-                                        ))
-                                    )}
-                                </div>
-                            )}
+                        <div className="flex items-center gap-2 px-3 border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-blue-500">
+                            <Search size={14} className="text-gray-400" />
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => { setSearchTerm(e.target.value); setShowList(true); }}
+                                onFocus={() => setShowList(true)}
+                                placeholder={t('chat.rooms.searchUser')}
+                                className="flex-1 py-2 text-sm bg-transparent focus:outline-none"
+                            />
                         </div>
+                        {showList && (searchTerm || filtered.length > 0) && (
+                            <div className="mt-1 max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-sm">
+                                {filtered.length === 0 ? (
+                                    <div className="p-3 text-xs text-gray-400 text-center">{t('chat.rooms.noResults')}</div>
+                                ) : (
+                                    filtered.map(u => (
+                                        <button
+                                            type="button"
+                                            key={u.email}
+                                            onClick={() => toggleSelect(u)}
+                                            className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm flex items-center justify-between"
+                                        >
+                                            <span className="truncate min-w-0 flex-1">
+                                                <span className="font-medium text-gray-800">{u.displayName || u.email.split('@')[0]}</span>
+                                                <span className="ml-2 text-xs text-gray-400 truncate">{u.email}</span>
+                                            </span>
+                                            <Plus size={14} className="text-blue-500 shrink-0" />
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {selected.length > 0 && (
