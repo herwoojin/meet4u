@@ -35,12 +35,28 @@ export const AuthProvider = ({ children }) => {
         return signOut(auth);
     };
 
-    // Admin login with hardcoded credentials
-    const adminLogin = (id, password) => {
-        if (id === 'admin' && password === 'admin1234') {
-            sessionStorage.setItem('meet4u_admin', 'true');
-            setIsAdmin(true);
-            return true;
+    // Admin login: ID match + SHA-256 hash compare (credentials in .env)
+    const adminLogin = async (id, password) => {
+        const expectedId = import.meta.env.VITE_ADMIN_ID;
+        const expectedHash = import.meta.env.VITE_ADMIN_PASSWORD_HASH;
+        if (!expectedId || !expectedHash) {
+            console.error('Admin credentials not configured: set VITE_ADMIN_ID and VITE_ADMIN_PASSWORD_HASH in .env');
+            return false;
+        }
+        if (id !== expectedId) return false;
+        try {
+            const buf = new TextEncoder().encode(password);
+            const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+            const inputHash = Array.from(new Uint8Array(hashBuf))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+            if (inputHash === expectedHash.toLowerCase()) {
+                sessionStorage.setItem('meet4u_admin', 'true');
+                setIsAdmin(true);
+                return true;
+            }
+        } catch (e) {
+            console.error('Admin login hash failed:', e);
         }
         return false;
     };

@@ -432,9 +432,9 @@ const AdminPage = () => {
         return () => unsubscribe();
     }, [isAdmin]);
 
-    const handleAdminLogin = (e) => {
+    const handleAdminLogin = async (e) => {
         e.preventDefault();
-        const success = adminLogin(adminId, adminPw);
+        const success = await adminLogin(adminId, adminPw);
         if (success) {
             setLoginError('');
             setAdminId('');
