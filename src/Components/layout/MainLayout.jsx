@@ -13,6 +13,9 @@ const MainLayout = ({ children }) => {
     const { t } = useTranslation();
     const { activeChatUser, closeChat } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+        try { return localStorage.getItem('meet4u_sidebar_collapsed') === 'true'; } catch { return false; }
+    });
     const [notifPermission, setNotifPermission] = useState(
         'Notification' in window ? Notification.permission : 'unsupported'
     );
@@ -23,6 +26,13 @@ const MainLayout = ({ children }) => {
 
     const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
     const closeMobileMenu = () => setIsMobileMenuOpen(false);
+    const toggleSidebarCollapsed = () => {
+        setIsSidebarCollapsed(prev => {
+            const next = !prev;
+            try { localStorage.setItem('meet4u_sidebar_collapsed', String(next)); } catch { /* ignore */ }
+            return next;
+        });
+    };
 
     return (
         <div className="flex flex-col md:flex-row min-h-screen bg-gray-50 text-gray-900">
@@ -31,6 +41,8 @@ const MainLayout = ({ children }) => {
                 isMobileMenuOpen={isMobileMenuOpen}
                 toggleMobileMenu={toggleMobileMenu}
                 closeMobileMenu={closeMobileMenu}
+                isCollapsed={isSidebarCollapsed}
+                toggleCollapsed={toggleSidebarCollapsed}
             />
 
             {/* Overlay for mobile menu */}

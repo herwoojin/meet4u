@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { db } from '../lib/firebase';
 import { collection, getDocs, doc, updateDoc, query, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { Shield, ShieldOff, Users, Eye, EyeOff, Calendar, Lock, LogOut, BarChart2, DollarSign, ChevronLeft, ChevronRight, UserMinus } from 'lucide-react';
+import { Shield, ShieldOff, Users, Eye, EyeOff, Calendar, Lock, LogOut, BarChart2, DollarSign, ChevronLeft, ChevronRight, UserMinus, KeyRound } from 'lucide-react';
 import MeetingDetailModal from '../Components/meeting/MeetingDetailModal';
 import AttendanceStats from '../Components/admin/AttendanceStats';
 import { useNavigate } from 'react-router-dom';
 import { format, isValid } from 'date-fns';
+import { GROUPS, MENU_KEYS, useMenuPermissions, saveMenuPermissions, getUserGroup } from '../lib/menuPermissions';
 
 // Helper: convert sanitized email key back to real email
 const unsanitizeEmail = (key) => {
@@ -281,6 +282,103 @@ const CostManagement = ({ meetings, users }) => {
     );
 };
 
+const PermissionsManagement = () => {
+    const { t } = useTranslation();
+    const { permissions, loaded } = useMenuPermissions();
+    const [draft, setDraft] = useState(null);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (loaded) setDraft(permissions);
+    }, [loaded, permissions]);
+
+    const toggleCell = (menuKey, group) => {
+        setDraft(prev => ({
+            ...prev,
+            [menuKey]: {
+                ...prev[menuKey],
+                [group]: !prev[menuKey]?.[group],
+            },
+        }));
+    };
+
+    const handleSave = async () => {
+        if (!draft) return;
+        setSaving(true);
+        try {
+            await saveMenuPermissions(draft);
+            alert(t('admin.permissionsSaved'));
+        } catch (e) {
+            console.error('Save permissions failed:', e);
+            alert(t('admin.permissionsSaveFailed'));
+        }
+        setSaving(false);
+    };
+
+    if (!draft) {
+        return <div className="p-10 text-center text-gray-400">{t('admin.loading')}</div>;
+    }
+
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+            <div className="flex items-center gap-2 mb-2">
+                <KeyRound size={20} className="text-purple-600" />
+                <h3 className="text-lg font-bold text-gray-900">{t('admin.permissionsTitle')}</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">{t('admin.permissionsHint')}</p>
+
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                    <thead>
+                        <tr className="border-b border-gray-200">
+                            <th className="text-left py-2 px-3 text-gray-600 font-medium">메뉴</th>
+                            {GROUPS.map(g => (
+                                <th key={g} className="py-2 px-3 text-gray-600 font-medium text-center">
+                                    {t(`admin.group${g.charAt(0).toUpperCase() + g.slice(1)}`)}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {MENU_KEYS.map(menuKey => (
+                            <tr key={menuKey} className="border-b border-gray-100 hover:bg-gray-50">
+                                <td className="py-2 px-3 text-gray-900 font-medium">
+                                    {t(`nav.${menuKey}`)}
+                                </td>
+                                {GROUPS.map(g => {
+                                    const checked = !!draft[menuKey]?.[g];
+                                    const isAdminGroup = g === 'admin';
+                                    return (
+                                        <td key={g} className="py-2 px-3 text-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={isAdminGroup ? true : checked}
+                                                disabled={isAdminGroup}
+                                                onChange={() => !isAdminGroup && toggleCell(menuKey, g)}
+                                                className="w-4 h-4 accent-purple-600 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                                            />
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+                <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-5 py-2 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-sm disabled:opacity-60"
+                >
+                    {t('admin.permissionsSave')}
+                </button>
+            </div>
+        </div>
+    );
+};
+
 const AdminPage = () => {
     const { t } = useTranslation();
     const { currentUser, isAdmin, adminLogin, adminLogout } = useAuth();
@@ -351,6 +449,18 @@ const AdminPage = () => {
         } catch (error) {
             console.error('Error updating role:', error);
             alert(t('admin.roleChangeFailed'));
+        }
+    };
+
+    const handleChangeGroup = async (userId, newGroup) => {
+        try {
+            await updateDoc(doc(db, 'users', userId), { group: newGroup });
+            setUsers(prev => prev.map(u =>
+                u.id === userId ? { ...u, group: newGroup } : u
+            ));
+        } catch (error) {
+            console.error('Error updating group:', error);
+            alert(t('admin.groupChangeFailed'));
         }
     };
 
@@ -487,6 +597,15 @@ const AdminPage = () => {
                 >
                     <DollarSign size={16} /> {t('admin.tabCosts')}
                 </button>
+                <button
+                    onClick={() => setActiveTab('permissions')}
+                    className={`px-4 py-3 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'permissions'
+                        ? 'border-gray-900 text-gray-900'
+                        : 'border-transparent text-gray-400 hover:text-gray-600'
+                        }`}
+                >
+                    <KeyRound size={16} /> {t('admin.tabPermissions')}
+                </button>
             </div>
 
             {/* Users Tab */}
@@ -516,7 +635,19 @@ const AdminPage = () => {
                                             <p className="text-xs text-gray-500 truncate">{user.email}</p>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                                        <select
+                                            value={getUserGroup(user)}
+                                            onChange={(e) => handleChangeGroup(user.id, e.target.value)}
+                                            className="px-2 py-2 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-200"
+                                            title={t('admin.memberGroup')}
+                                        >
+                                            {GROUPS.map(g => (
+                                                <option key={g} value={g}>
+                                                    {t(`admin.group${g.charAt(0).toUpperCase() + g.slice(1)}`)}
+                                                </option>
+                                            ))}
+                                        </select>
                                         <button
                                             onClick={() => toggleAdmin(user.id, user.role)}
                                             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border shadow-sm ${user.role === 'admin'
@@ -614,6 +745,11 @@ const AdminPage = () => {
             {/* Cost Management Tab */}
             {activeTab === 'costs' && (
                 <CostManagement meetings={meetings} users={users} />
+            )}
+
+            {/* Permissions Tab */}
+            {activeTab === 'permissions' && (
+                <PermissionsManagement />
             )}
 
             {selectedMeeting && (

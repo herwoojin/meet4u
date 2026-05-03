@@ -217,14 +217,17 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
             return;
         }
 
-        // Android Chrome의 continuous 모드는 확정 세그먼트를 중복 재방출하는
-        // 버그가 있어 모바일에서는 단발 세션으로 동작시킨다.
-        const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent);
+        // Android Chrome의 continuous 모드는 확정 세그먼트를 중복 재방출하는 버그가 있고,
+        // Edge는 continuous 모드에서 음성 감지 실패 시 즉시 onend가 발생하므로
+        // 모바일과 Edge에서는 단발 세션으로 동작시킨다.
+        const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+        const isMobile = /Android|iPhone|iPad|iPod|Mobi/i.test(ua);
+        const isEdge = /Edg\//i.test(ua);
 
         const recognition = new SpeechRecognition();
         recognition.lang = SPEECH_LOCALE[myLang] || 'ko-KR';
         recognition.interimResults = true;
-        recognition.continuous = !isMobile;
+        recognition.continuous = !(isMobile || isEdge);
 
         recordingBaseRef.current = newComment ? newComment.trimEnd() + (newComment ? ' ' : '') : '';
 
@@ -240,7 +243,10 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
             setNewComment(recordingBaseRef.current + finalText + interimText);
         };
         recognition.onerror = (e) => {
-            console.error('Speech recognition error:', e);
+            console.error('Speech recognition error:', e?.error || e);
+            if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed') {
+                alert(t('meeting.voiceUnsupportedInput'));
+            }
             setIsRecording(false);
         };
         recognition.onend = () => setIsRecording(false);
