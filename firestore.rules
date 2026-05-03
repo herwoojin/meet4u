@@ -168,6 +168,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ---------- App config (menu permissions, etc.) ----------
+    // Any signed-in user can read (sidebar subscribes for menu visibility).
+    // Only admins can change.
+    match /config/{configId} {
+      allow read:  if isSignedIn();
+      allow write: if isAdmin();
+    }
+
     // ---------- Default deny ----------
     match /{document=**} {
       allow read, write: if false;

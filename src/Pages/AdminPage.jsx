@@ -310,7 +310,12 @@ const PermissionsManagement = () => {
             alert(t('admin.permissionsSaved'));
         } catch (e) {
             console.error('Save permissions failed:', e);
-            alert(t('admin.permissionsSaveFailed'));
+            const code = e?.code || '';
+            if (code === 'permission-denied') {
+                alert('권한 저장에 실패했습니다.\n\n원인: Firestore 보안 규칙이 쓰기를 거부했습니다.\n해결 방법:\n1) "회원 관리" 탭에서 본인 계정의 "관리자 지정" 버튼을 눌러 user 문서에 role: admin 부여\n2) 그 다음, 업데이트된 firestore.rules 를 배포 (firebase deploy --only firestore:rules)');
+            } else {
+                alert(`${t('admin.permissionsSaveFailed')}${code ? `\n(${code})` : ''}`);
+            }
         }
         setSaving(false);
     };
