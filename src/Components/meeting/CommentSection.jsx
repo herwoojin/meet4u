@@ -243,9 +243,16 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
             setNewComment(recordingBaseRef.current + finalText + interimText);
         };
         recognition.onerror = (e) => {
-            console.error('Speech recognition error:', e?.error || e);
-            if (e?.error === 'not-allowed' || e?.error === 'service-not-allowed') {
+            const code = e?.error || 'unknown';
+            console.error('Speech recognition error:', code, e);
+            if (code === 'not-allowed' || code === 'service-not-allowed') {
                 alert(t('meeting.voiceUnsupportedInput'));
+            } else if (code === 'network') {
+                alert(t('meeting.voiceNetworkError'));
+            } else if (code === 'language-not-supported') {
+                alert(t('meeting.voiceLangUnsupported', { lang: recognition.lang }));
+            } else if (code !== 'no-speech' && code !== 'aborted') {
+                alert(t('meeting.voiceGenericError', { code }));
             }
             setIsRecording(false);
         };
