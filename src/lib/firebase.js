@@ -21,6 +21,8 @@ const app = initializeApp(firebaseConfig);
 export const analytics = getAnalytics(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+// Always show the Google account picker (instead of auto-selecting last used account)
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 export const db = getFirestore(app);
 export const messaging = getMessaging(app); // Initialized Messaging
 export const storage = getStorage(app);
