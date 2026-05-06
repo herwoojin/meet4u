@@ -1,8 +1,6 @@
-// MyMemory Translation API (free, no API key required)
-// Docs: https://mymemory.translated.net/doc/spec.php
-// Quota: 5000 words/day anonymous, 10000 with email parameter
-
-const MYMEMORY_EMAIL = process.env.MYMEMORY_EMAIL || 'meet4u-app@example.com';
+// Google Translate API (free, no API key required)
+// Uses the same endpoint as Google Translate web interface
+// Supports all language pairs with high quality
 
 export const handler = async (event) => {
     if (event.httpMethod !== 'POST') {
@@ -29,21 +27,25 @@ export const handler = async (event) => {
             };
         }
 
-        const langpair = `${sourceLang}|${targetLang}`;
-        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(langpair)}&de=${encodeURIComponent(MYMEMORY_EMAIL)}`;
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
 
         const response = await fetch(url);
         if (!response.ok) {
-            throw new Error(`MyMemory API error: ${response.statusText}`);
+            throw new Error(`Google Translate API error: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
 
-        if (data.responseStatus && data.responseStatus !== 200) {
-            throw new Error(`MyMemory response error: ${data.responseDetails || 'unknown'}`);
+        // Google Translate returns nested arrays: data[0] contains translation segments
+        // Each segment is [translatedText, originalText, ...]
+        let translatedText = '';
+        if (data && data[0]) {
+            translatedText = data[0]
+                .filter(segment => segment && segment[0])
+                .map(segment => segment[0])
+                .join('');
         }
 
-        const translatedText = data?.responseData?.translatedText || '';
         if (!translatedText) {
             throw new Error('Empty translation result');
         }
@@ -51,10 +53,7 @@ export const handler = async (event) => {
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                translatedText,
-                match: data?.responseData?.match || 0
-            })
+            body: JSON.stringify({ translatedText })
         };
     } catch (error) {
         console.error('Translation error:', error);
