@@ -291,6 +291,7 @@ const GlobalChat = () => {
     const spokenIdsRef = useRef(new Set());
     const firstLoadRef = useRef(true);
     const dropdownRef = useRef(null);
+    const audioRef = useRef(null); // Google TTS audio element
 
     // Load rooms the user is a member of
     useEffect(() => {
@@ -422,9 +423,7 @@ const GlobalChat = () => {
     useEffect(() => {
         return () => {
             try { recognitionRef.current?.stop(); } catch (_) { /* ignore */ }
-            if (typeof window !== 'undefined' && window.speechSynthesis) {
-                window.speechSynthesis.cancel();
-            }
+            try { audioRef.current?.pause(); audioRef.current = null; } catch (_) { /* ignore */ }
         };
     }, []);
 
@@ -432,9 +431,7 @@ const GlobalChat = () => {
     useEffect(() => {
         firstLoadRef.current = true;
         spokenIdsRef.current = new Set();
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
-            window.speechSynthesis.cancel();
-        }
+        try { audioRef.current?.pause(); audioRef.current = null; } catch (_) { /* ignore */ }
     }, [selectedRoomId]);
 
     // Persist auto-voice toggle
@@ -450,6 +447,17 @@ const GlobalChat = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [autoVoice]);
 
+    // Helper: play TTS via Google Translate proxy (works on ALL browsers)
+    const playGoogleTTS = (text, lang) => {
+        if (!text) return null;
+        const locale = lang || 'ko';
+        // Truncate for Google TTS limit
+        const trimmed = text.length > 200 ? text.slice(0, 200) : text;
+        const url = `/.netlify/functions/text-to-speech?text=${encodeURIComponent(trimmed)}&lang=${encodeURIComponent(locale)}`;
+        const audio = new Audio(url);
+        return audio;
+    };
+
     // Auto-voice playback for new incoming messages
     useEffect(() => {
         if (firstLoadRef.current && messages.length > 0) {
@@ -458,7 +466,6 @@ const GlobalChat = () => {
             return;
         }
         if (!autoVoice || !currentUser) return;
-        if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
         messages.forEach(m => {
             if (spokenIdsRef.current.has(m.id)) return;
@@ -481,9 +488,8 @@ const GlobalChat = () => {
             const textToSpeak = translated || m.text;
             if (!textToSpeak) return;
 
-            const utter = new SpeechSynthesisUtterance(textToSpeak);
-            utter.lang = SPEECH_LOCALE[myLang] || 'ko-KR';
-            window.speechSynthesis.speak(utter);
+            const audio = playGoogleTTS(textToSpeak, myLang);
+            if (audio) audio.play().catch(() => {});
         });
     }, [messages, autoVoice, myLang, currentUser]);
 
@@ -554,23 +560,22 @@ const GlobalChat = () => {
     };
 
     const speakMessage = (id, text, lang) => {
-        if (typeof window === 'undefined' || !window.speechSynthesis) {
-            alert(t('meeting.voiceUnsupportedPlay'));
-            return;
-        }
-        const synth = window.speechSynthesis;
+        // Toggle off if already playing this message
         if (speakingId === id) {
-            synth.cancel();
+            try { audioRef.current?.pause(); audioRef.current = null; } catch (_) { /* ignore */ }
             setSpeakingId(null);
             return;
         }
-        synth.cancel();
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.lang = SPEECH_LOCALE[lang] || 'ko-KR';
-        utter.onend = () => setSpeakingId(null);
-        utter.onerror = () => setSpeakingId(null);
+        // Stop any current playback
+        try { audioRef.current?.pause(); audioRef.current = null; } catch (_) { /* ignore */ }
+
+        const audio = playGoogleTTS(text, lang);
+        if (!audio) return;
+        audioRef.current = audio;
         setSpeakingId(id);
-        synth.speak(utter);
+        audio.onended = () => { setSpeakingId(null); audioRef.current = null; };
+        audio.onerror = () => { setSpeakingId(null); audioRef.current = null; };
+        audio.play().catch(() => { setSpeakingId(null); audioRef.current = null; });
     };
 
     const handleSend = async (e) => {
