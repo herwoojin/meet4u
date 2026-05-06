@@ -15,6 +15,7 @@ import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
 import { compressImageToWebp } from '../../lib/imageUtils';
 import ImageLightbox from './ImageLightbox';
+import { romajiToHangul, pinyinToHangul } from '../../lib/phonetics';
 
 const SPEECH_LOCALE = {
     'ko': 'ko-KR',
@@ -29,6 +30,18 @@ const SPEECH_LOCALE = {
     'ar': 'ar-SA',
     'fr': 'fr-FR',
     'km': 'km-KH',
+};
+
+const LANG_LABEL = {
+    'ko': '한국어', 'en': 'English', 'ja': '日本語', 'zh-CN': '中文(简)', 'zh': '中文',
+    'ru': 'Русский', 'es': 'Español', 'vi': 'Tiếng Việt', 'mn': 'Монгол',
+    'ar': 'العربية', 'fr': 'Français', 'km': 'ភាសាខ្មែរ',
+};
+
+const LANG_FLAG = {
+    'ko': '🇰🇷', 'en': '🇺🇸', 'ja': '🇯🇵', 'zh-CN': '🇨🇳', 'zh': '🇨🇳',
+    'ru': '🇷🇺', 'es': '🇪🇸', 'vi': '🇻🇳', 'mn': '🇲🇳',
+    'ar': '🇸🇦', 'fr': '🇫🇷', 'km': '🇰🇭',
 };
 
 const lower = (s) => (s || '').toLowerCase();
@@ -260,6 +273,16 @@ const GlobalChat = () => {
     const [lightboxSrc, setLightboxSrc] = useState(null);
     const fileInputRef = useRef(null);
 
+    // Direct Speaking (Memo) State
+    const [showDirectSpeak, setShowDirectSpeak] = useState(false);
+    const [directSpeakText, setDirectSpeakText] = useState('');
+    const [directSpeakLang, setDirectSpeakLang] = useState('ja');
+    const [directSpeakResult, setDirectSpeakResult] = useState(null);
+    const [directSpeakLoading, setDirectSpeakLoading] = useState(false);
+
+    // Member language map: { email -> preferredLanguage }
+    const [memberLangs, setMemberLangs] = useState({});
+
     const markedAsRead = useRef(new Set());
     const translatingRef = useRef(new Set());
     const messagesEndRef = useRef(null);
@@ -303,6 +326,27 @@ const GlobalChat = () => {
         document.addEventListener('mousedown', handler);
         return () => document.removeEventListener('mousedown', handler);
     }, []);
+
+    // Load member languages from Firestore
+    useEffect(() => {
+        if (!selectedRoom?.members?.length) return;
+        const loadLangs = async () => {
+            try {
+                const snap = await getDocs(collection(db, 'users'));
+                const langMap = {};
+                snap.docs.forEach(d => {
+                    const data = d.data();
+                    if (data.email && selectedRoom.members.includes(lower(data.email))) {
+                        langMap[lower(data.email)] = data.preferredLanguage || 'ko';
+                    }
+                });
+                setMemberLangs(langMap);
+            } catch (err) {
+                console.error('Failed to load member languages:', err);
+            }
+        };
+        loadLangs();
+    }, [selectedRoom?.members]);
 
     // Load messages for selected room
     useEffect(() => {
@@ -624,6 +668,47 @@ const GlobalChat = () => {
         }
     };
 
+    const handleDirectSpeakTranslate = async () => {
+        if (!directSpeakText.trim()) return;
+        setDirectSpeakLoading(true);
+        try {
+            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${myLang}&tl=${directSpeakLang}&dt=t&dt=rm&q=${encodeURIComponent(directSpeakText)}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            let translated = '';
+            let roman = '';
+            
+            if (data && data[0] && data[0].length > 0) {
+                // translated text is usually in data[0][i][0]
+                translated = data[0].filter(item => item[0]).map(item => item[0]).join('');
+                // romanization is usually the last item in data[0] at index 2 or 3
+                const lastItem = data[0][data[0].length - 1];
+                if (lastItem) {
+                    roman = lastItem[2] || lastItem[3] || '';
+                }
+            }
+
+            let hangul = '';
+            if (directSpeakLang === 'ja') {
+                hangul = romajiToHangul(roman);
+            } else if (directSpeakLang === 'zh-CN' || directSpeakLang === 'zh') {
+                hangul = pinyinToHangul(roman);
+            }
+
+            setDirectSpeakResult({
+                translated,
+                roman,
+                hangul
+            });
+        } catch (err) {
+            console.error('Direct speak translation failed:', err);
+            alert(t('meeting.errorOccurred'));
+        } finally {
+            setDirectSpeakLoading(false);
+        }
+    };
+
     const handleDeleteMessage = async (msgId) => {
         if (!window.confirm(t('meeting.confirmDeleteComment'))) return;
         try {
@@ -801,13 +886,20 @@ const GlobalChat = () => {
                             return next;
                         });
                     }}
-                    title={t('meeting.autoVoiceTitle')}
-                    className={`shrink-0 inline-flex items-center gap-1 p-1.5 rounded-lg border transition-colors ${autoVoice
-                        ? 'bg-orange-50 border-orange-200 text-orange-600'
-                        : 'border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                        }`}
+                    className={`shrink-0 p-1.5 rounded-lg border transition-colors ${autoVoice ? 'bg-blue-50 border-blue-200 text-blue-600' : 'border-gray-200 text-gray-500 hover:bg-gray-100'}`}
+                    title={autoVoice ? t('chat.autoVoiceOff', '자동 음성 끄기') : t('chat.autoVoiceOn', '자동 음성 켜기')}
                 >
                     {autoVoice ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                </button>
+
+                {/* Direct Speak Toggle */}
+                <button
+                    type="button"
+                    onClick={() => setShowDirectSpeak(v => !v)}
+                    className={`shrink-0 p-1.5 rounded-lg border transition-colors ${showDirectSpeak ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'border-gray-200 text-gray-500 hover:bg-gray-100'}`}
+                    title="내가 직접 말하기 (메모/발음 연습)"
+                >
+                    <MessageSquare size={16} />
                 </button>
 
                 {/* New room button */}
@@ -857,18 +949,137 @@ const GlobalChat = () => {
                             const isOwnerMember = memEmail === selectedRoom.createdBy;
                             const isSelf = memEmail === myEmail;
                             const displayName = selectedRoom.memberNames?.[memEmail] || memEmail.split('@')[0];
+                            const memLang = memberLangs[memEmail] || 'ko';
                             return (
                                 <span
                                     key={memEmail}
                                     className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border ${isOwnerMember ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-gray-50 border-gray-200 text-gray-700'}`}
                                 >
                                     {displayName}
+                                    <span className="text-[10px] px-1 py-0.5 rounded bg-white/60 border border-gray-200 text-gray-500 whitespace-nowrap" title={LANG_LABEL[memLang] || memLang}>
+                                        {LANG_FLAG[memLang] || '🌐'} {LANG_LABEL[memLang] || memLang}
+                                    </span>
                                     {isSelf && <span className="text-[10px] text-gray-400">({t('chat.rooms.you')})</span>}
                                     {isOwnerMember && <span className="text-[10px]">★</span>}
                                 </span>
                             );
                         })}
                     </div>
+                </div>
+            )}
+
+            {/* Direct Speak panel */}
+            {showDirectSpeak && selectedRoom && (
+                <div className="mb-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg text-sm flex flex-col gap-2 relative shadow-sm">
+                    <button 
+                        type="button" 
+                        onClick={() => setShowDirectSpeak(false)}
+                        className="absolute top-2 right-2 p-1 text-indigo-400 hover:text-indigo-600 rounded-md"
+                    >
+                        <X size={16} />
+                    </button>
+                    <div className="font-bold text-indigo-700 flex items-center gap-1.5 mb-1">
+                        <MessageSquare size={16} /> 내가 직접 말하기 (메모장)
+                    </div>
+                    <div className="flex gap-2">
+                        <textarea 
+                            value={directSpeakText}
+                            onChange={(e) => setDirectSpeakText(e.target.value)}
+                            placeholder="한국어로 입력하세요..."
+                            className="flex-1 p-2 border border-indigo-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none h-20 bg-white"
+                        />
+                        <div className="flex flex-col gap-2 w-32 shrink-0">
+                            <select 
+                                value={directSpeakLang}
+                                onChange={(e) => setDirectSpeakLang(e.target.value)}
+                                className="w-full p-2 border border-indigo-200 rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            >
+                                {/* Languages used by room members (excluding my own) */}
+                                {(() => {
+                                    const memberLangSet = new Set(
+                                        Object.entries(memberLangs)
+                                            .filter(([email]) => email !== myEmail)
+                                            .map(([, lang]) => lang)
+                                    );
+                                    const memberOptions = [...memberLangSet].map(code => (
+                                        <option key={`mem-${code}`} value={code}>
+                                            ★ {LANG_FLAG[code] || '🌐'} {LANG_LABEL[code] || code}
+                                        </option>
+                                    ));
+                                    const otherOptions = Object.keys(LANG_LABEL)
+                                        .filter(code => code !== myLang && !memberLangSet.has(code))
+                                        .map(code => (
+                                            <option key={code} value={code}>
+                                                {LANG_FLAG[code] || '🌐'} {LANG_LABEL[code] || code}
+                                            </option>
+                                        ));
+                                    return (
+                                        <>
+                                            {memberOptions.length > 0 && (
+                                                <optgroup label="참여자 언어">
+                                                    {memberOptions}
+                                                </optgroup>
+                                            )}
+                                            <optgroup label="기타 언어">
+                                                {otherOptions}
+                                            </optgroup>
+                                        </>
+                                    );
+                                })()}
+                            </select>
+                            <button 
+                                type="button"
+                                onClick={handleDirectSpeakTranslate}
+                                disabled={!directSpeakText.trim() || directSpeakLoading}
+                                className="w-full flex-1 bg-indigo-600 text-white rounded-md text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1"
+                            >
+                                {directSpeakLoading ? <Loader size={14} className="animate-spin" /> : <Send size={14} />}
+                                번역·발음
+                            </button>
+                        </div>
+                    </div>
+                    {directSpeakResult && (
+                        <div className="mt-2 p-3 bg-white rounded-lg border border-indigo-100 flex flex-col gap-2 shadow-inner">
+                            {/* Translated text with TTS */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600 font-semibold">
+                                        {LANG_FLAG[directSpeakLang] || '🌐'} {LANG_LABEL[directSpeakLang] || directSpeakLang}
+                                    </span>
+                                    <span className="text-gray-800 font-medium text-base">
+                                        {directSpeakResult.translated}
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => speakMessage('direct-speak', directSpeakResult.translated, directSpeakLang)}
+                                    className={`shrink-0 p-1.5 rounded-md transition-colors ${speakingId === 'direct-speak' ? 'bg-indigo-100 text-indigo-600' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+                                    title="발음 듣기"
+                                >
+                                    <Volume2 size={16} />
+                                </button>
+                            </div>
+                            {/* Romanization */}
+                            {directSpeakResult.roman && (
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 font-semibold shrink-0">로마자</span>
+                                    <span className="text-sm text-indigo-600 font-mono tracking-wide">{directSpeakResult.roman}</span>
+                                </div>
+                            )}
+                            {/* Korean pronunciation guide */}
+                            {directSpeakResult.hangul && (
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-100 text-teal-600 font-semibold shrink-0">한글발음</span>
+                                    <span className="text-sm font-bold text-teal-700">{directSpeakResult.hangul}</span>
+                                </div>
+                            )}
+                            {/* Original Korean text */}
+                            <div className="flex items-center gap-1.5 pt-1 border-t border-gray-100">
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 font-semibold shrink-0">🇰🇷 원문</span>
+                                <span className="text-xs text-gray-500">{directSpeakText}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -905,13 +1116,16 @@ const GlobalChat = () => {
                                 {isMe && (
                                     <button
                                         onClick={() => handleDeleteMessage(m.id)}
-                                        className="text-gray-400 hover:text-red-500 p-1"
+                                        className="text-gray-400 hover:text-red-500 p-0.5"
                                         title={t('meeting.deleteBtn')}
                                     >
                                         <Trash2 size={12} />
                                     </button>
                                 )}
                                 <span className="text-xs font-bold text-gray-700">{m.senderName}</span>
+                                <span className="inline-flex items-center text-[9px] px-1 py-0.5 rounded bg-gray-100 border border-gray-200 text-gray-500" title={LANG_LABEL[srcLang] || srcLang}>
+                                    {LANG_FLAG[srcLang] || '🌐'}{LANG_LABEL[srcLang] || srcLang}
+                                </span>
                                 <span className="text-[10px] text-gray-400">
                                     {m.timestamp ? format(m.timestamp.toDate(), 'a h:mm', { locale: ko }) : ''}
                                 </span>
