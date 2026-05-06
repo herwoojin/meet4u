@@ -329,14 +329,15 @@ const GlobalChat = () => {
 
     // Load member languages from Firestore
     useEffect(() => {
-        if (!selectedRoom?.members?.length) return;
+        const room = rooms.find(r => r.id === selectedRoomId);
+        if (!room?.members?.length) return;
         const loadLangs = async () => {
             try {
                 const snap = await getDocs(collection(db, 'users'));
                 const langMap = {};
                 snap.docs.forEach(d => {
                     const data = d.data();
-                    if (data.email && selectedRoom.members.includes(lower(data.email))) {
+                    if (data.email && room.members.includes(lower(data.email))) {
                         langMap[lower(data.email)] = data.preferredLanguage || 'ko';
                     }
                 });
@@ -346,7 +347,7 @@ const GlobalChat = () => {
             }
         };
         loadLangs();
-    }, [selectedRoom?.members]);
+    }, [rooms, selectedRoomId]);
 
     // Load messages for selected room
     useEffect(() => {
