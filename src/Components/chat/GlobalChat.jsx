@@ -1066,7 +1066,7 @@ const GlobalChat = () => {
                         <X size={16} />
                     </button>
                     <div className="font-bold text-indigo-700 flex items-center gap-1.5 mb-1">
-                        <MessageSquare size={16} /> 내가 직접 말하기 (메모장)
+                        <MessageSquare size={16} /> Korean -&gt; Other (Speak)
                     </div>
                     <div className="flex gap-2">
                         <textarea 
