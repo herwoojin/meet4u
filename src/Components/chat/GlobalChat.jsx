@@ -688,10 +688,12 @@ const GlobalChat = () => {
             if (data && data[0] && data[0].length > 0) {
                 // translated text is usually in data[0][i][0]
                 translated = data[0].filter(item => item[0]).map(item => item[0]).join('');
-                // romanization is usually the last item in data[0] at index 2 or 3
+                // Google Translate `dt=rm` 응답: lastItem[2]=원문 로마자, lastItem[3]=번역문 로마자.
+                // 번역된 언어의 발음을 보여주는 것이 사용자에게 유용하므로 [3]만 사용한다.
+                // 번역 대상이 라틴 문자(영어/베트남어 등)면 [3]이 비어있어 UI에서 자동으로 숨겨진다.
                 const lastItem = data[0][data[0].length - 1];
                 if (lastItem) {
-                    roman = lastItem[2] || lastItem[3] || '';
+                    roman = lastItem[3] || '';
                 }
             }
 
