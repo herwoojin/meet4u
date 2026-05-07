@@ -678,25 +678,41 @@ const GlobalChat = () => {
         if (!directSpeakText.trim()) return;
         setDirectSpeakLoading(true);
         try {
-            const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${myLang}&tl=${directSpeakLang}&dt=t&dt=rm&q=${encodeURIComponent(directSpeakText)}`;
-            const res = await fetch(url);
-            const data = await res.json();
-            
+            // 1단계: 번역만 가져온다 (sl=내언어, tl=대상언어)
+            const translateUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${myLang}&tl=${directSpeakLang}&dt=t&q=${encodeURIComponent(directSpeakText)}`;
+            const transRes = await fetch(translateUrl);
+            const transData = await transRes.json();
+
             let translated = '';
+            if (transData && transData[0] && transData[0].length > 0) {
+                translated = transData[0].filter(item => item[0]).map(item => item[0]).join('');
+            }
+
+            // 2단계: 번역문(대상 언어)의 로마자를 별도 호출로 가져온다.
+            // sl=대상언어로 두면 lastItem[2]이 대상 언어의 로마자가 된다.
+            // 대상 언어가 이미 라틴 문자면 호출 생략.
+            const NON_LATIN_TARGETS = new Set([
+                'ko', 'ja', 'zh', 'zh-CN', 'zh-TW',
+                'th', 'ar', 'ru', 'el', 'hi', 'km', 'mn', 'he', 'bn', 'ta', 'fa', 'ur'
+            ]);
             let roman = '';
-            
-            if (data && data[0] && data[0].length > 0) {
-                // translated text is usually in data[0][i][0]
-                translated = data[0].filter(item => item[0]).map(item => item[0]).join('');
-                // Google Translate `dt=rm` 응답: lastItem[2]=원문 로마자, lastItem[3]=번역문 로마자.
-                // 번역된 언어의 발음을 보여주는 것이 사용자에게 유용하므로 [3]만 사용한다.
-                // 번역 대상이 라틴 문자(영어/베트남어 등)면 [3]이 비어있어 UI에서 자동으로 숨겨진다.
-                const lastItem = data[0][data[0].length - 1];
-                if (lastItem) {
-                    roman = lastItem[3] || '';
+            if (translated && NON_LATIN_TARGETS.has(directSpeakLang)) {
+                try {
+                    const romanUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${directSpeakLang}&tl=en&dt=rm&q=${encodeURIComponent(translated)}`;
+                    const romanRes = await fetch(romanUrl);
+                    const romanData = await romanRes.json();
+                    if (romanData && romanData[0] && romanData[0].length > 0) {
+                        const lastItem = romanData[0][romanData[0].length - 1];
+                        if (lastItem) {
+                            roman = lastItem[2] || lastItem[3] || '';
+                        }
+                    }
+                } catch (romanErr) {
+                    console.warn('Romanization fetch failed (translation OK):', romanErr);
                 }
             }
 
+            // 한국어 발음 가이드: 일본어/중국어 로마자를 한글로 음차 변환
             let hangul = '';
             if (directSpeakLang === 'ja') {
                 hangul = romajiToHangul(roman);
