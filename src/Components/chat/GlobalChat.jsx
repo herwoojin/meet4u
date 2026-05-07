@@ -447,6 +447,14 @@ const GlobalChat = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [autoVoice]);
 
+    // Google Translate TTS가 지원하지 않는 언어 — 브라우저 네이티브 speechSynthesis로 fallback
+    const GOOGLE_TTS_UNSUPPORTED = new Set(['mn']);
+    const isGoogleTTSSupported = (lang) => {
+        if (!lang) return true;
+        const base = lang.split('-')[0];
+        return !GOOGLE_TTS_UNSUPPORTED.has(lang) && !GOOGLE_TTS_UNSUPPORTED.has(base);
+    };
+
     // Helper: play TTS via Google Translate proxy (works on ALL browsers)
     const playGoogleTTS = (text, lang) => {
         if (!text) return null;
@@ -456,6 +464,29 @@ const GlobalChat = () => {
         const url = `/.netlify/functions/text-to-speech?text=${encodeURIComponent(trimmed)}&lang=${encodeURIComponent(locale)}`;
         const audio = new Audio(url);
         return audio;
+    };
+
+    // Native browser speech synthesis (fallback for unsupported langs)
+    const playNativeTTS = (text, lang, onEnd) => {
+        if (typeof window === 'undefined' || !window.speechSynthesis || !text) {
+            onEnd?.();
+            return false;
+        }
+        try {
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = SPEECH_LOCALE[lang] || lang || 'ko-KR';
+            if (onEnd) {
+                utter.onend = onEnd;
+                utter.onerror = onEnd;
+            }
+            window.speechSynthesis.speak(utter);
+            return true;
+        } catch (e) {
+            console.error('Native TTS failed:', e);
+            onEnd?.();
+            return false;
+        }
     };
 
     // Auto-voice playback for new incoming messages
@@ -488,8 +519,15 @@ const GlobalChat = () => {
             const textToSpeak = translated || m.text;
             if (!textToSpeak) return;
 
+            if (!isGoogleTTSSupported(myLang)) {
+                playNativeTTS(textToSpeak, myLang);
+                return;
+            }
             const audio = playGoogleTTS(textToSpeak, myLang);
-            if (audio) audio.play().catch(() => {});
+            if (audio) {
+                audio.onerror = () => playNativeTTS(textToSpeak, myLang);
+                audio.play().catch(() => playNativeTTS(textToSpeak, myLang));
+            }
         });
     }, [messages, autoVoice, myLang, currentUser]);
 
@@ -559,23 +597,48 @@ const GlobalChat = () => {
         }
     };
 
+    const stopAllPlayback = () => {
+        try { audioRef.current?.pause(); audioRef.current = null; } catch (_) { /* ignore */ }
+        try { window.speechSynthesis?.cancel(); } catch (_) { /* ignore */ }
+    };
+
     const speakMessage = (id, text, lang) => {
         // Toggle off if already playing this message
         if (speakingId === id) {
-            try { audioRef.current?.pause(); audioRef.current = null; } catch (_) { /* ignore */ }
+            stopAllPlayback();
             setSpeakingId(null);
             return;
         }
         // Stop any current playback
-        try { audioRef.current?.pause(); audioRef.current = null; } catch (_) { /* ignore */ }
+        stopAllPlayback();
+        setSpeakingId(id);
+
+        // Mongolian and other Google-TTS-unsupported langs: native fallback
+        if (!isGoogleTTSSupported(lang)) {
+            const ok = playNativeTTS(text, lang, () => setSpeakingId(null));
+            if (!ok) setSpeakingId(null);
+            return;
+        }
 
         const audio = playGoogleTTS(text, lang);
-        if (!audio) return;
+        if (!audio) {
+            setSpeakingId(null);
+            return;
+        }
         audioRef.current = audio;
-        setSpeakingId(id);
         audio.onended = () => { setSpeakingId(null); audioRef.current = null; };
-        audio.onerror = () => { setSpeakingId(null); audioRef.current = null; };
-        audio.play().catch(() => { setSpeakingId(null); audioRef.current = null; });
+        // If Google TTS proxy fails (e.g., Google rejects the language),
+        // automatically fall back to the browser's native speech synthesis.
+        audio.onerror = () => {
+            audioRef.current = null;
+            const ok = playNativeTTS(text, lang, () => setSpeakingId(null));
+            if (!ok) setSpeakingId(null);
+        };
+        audio.play().catch(() => {
+            audioRef.current = null;
+            const ok = playNativeTTS(text, lang, () => setSpeakingId(null));
+            if (!ok) setSpeakingId(null);
+        });
     };
 
     const handleSend = async (e) => {
