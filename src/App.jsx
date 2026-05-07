@@ -38,7 +38,9 @@ const App = () => {
                         <PrivateRoute>
                             <MainLayout>
                                 <Routes>
-                                    <Route path="/" element={<Dashboard />} />
+                                    {/* 권한이 없는 사용자도 안전하게 접근 가능한 글로벌 미팅을 기본 진입 페이지로 사용 */}
+                                    <Route path="/" element={<Navigate to="/global-meeting" replace />} />
+                                    <Route path="/weekly" element={<Dashboard />} />
                                     <Route path="/calendar" element={<CalendarGrid />} />
                                     <Route path="/schedule" element={<MeetingForm />} />
                                     <Route path="/profile" element={<ProfilePage />} />

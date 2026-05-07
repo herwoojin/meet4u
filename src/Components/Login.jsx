@@ -11,7 +11,7 @@ const Login = () => {
     const handleLogin = async () => {
         try {
             await login();
-            navigate('/');
+            navigate('/global-meeting');
         } catch (error) {
             console.error("Failed to log in", error);
             alert(t('login.loginFailed') + ": " + error.message);

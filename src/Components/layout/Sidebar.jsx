@@ -28,7 +28,7 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
     const { permissions } = useMenuPermissions();
 
     const allItems = [
-        { key: 'weeklyCalendar', to: '/', icon: Home, label: t('nav.weeklyCalendar') },
+        { key: 'weeklyCalendar', to: '/weekly', icon: Home, label: t('nav.weeklyCalendar') },
         { key: 'monthlyCalendar', to: '/calendar', icon: Calendar, label: t('nav.monthlyCalendar') },
         { key: 'createMeeting', to: '/schedule', icon: PlusCircle, label: t('nav.createMeeting') },
         { key: 'globalMeeting', to: '/global-meeting', icon: Globe, label: t('nav.globalMeeting') },
