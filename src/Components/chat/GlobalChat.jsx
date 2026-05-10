@@ -8,7 +8,8 @@ import {
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import {
     Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX,
-    Plus, Users, LogOut, X, ChevronDown, Search, Loader, Image as ImageIcon
+    Plus, Users, LogOut, X, ChevronDown, Search, Loader, Image as ImageIcon,
+    Copy, Check, Star, Edit2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -247,6 +248,118 @@ const CreateRoomModal = ({ onClose, onCreated }) => {
     );
 };
 
+// ---------------- Quick Phrase Manager modal ----------------
+const PhraseManagerModal = ({ phrases, onSave, onClose }) => {
+    const [list, setList] = useState(phrases || []);
+    const [newText, setNewText] = useState('');
+    const [editingIdx, setEditingIdx] = useState(-1);
+    const [editText, setEditText] = useState('');
+
+    const persist = (next) => {
+        setList(next);
+        onSave(next);
+    };
+
+    const handleAdd = () => {
+        const trimmed = newText.trim();
+        if (!trimmed) return;
+        persist([...list, trimmed]);
+        setNewText('');
+    };
+
+    const handleDelete = (idx) => {
+        persist(list.filter((_, i) => i !== idx));
+        if (editingIdx === idx) {
+            setEditingIdx(-1);
+            setEditText('');
+        }
+    };
+
+    const startEdit = (idx) => {
+        setEditingIdx(idx);
+        setEditText(list[idx]);
+    };
+
+    const saveEdit = () => {
+        if (editingIdx < 0) return;
+        const trimmed = editText.trim();
+        if (!trimmed) return;
+        const next = list.map((v, i) => i === editingIdx ? trimmed : v);
+        persist(next);
+        setEditingIdx(-1);
+        setEditText('');
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-[1200] flex items-center justify-center p-4" onClick={onClose}>
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <div className="p-4 border-b flex justify-between items-center">
+                    <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                        <Star size={18} className="text-yellow-500" /> 자주 쓰는 문구 관리
+                    </h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
+                </div>
+                <div className="p-4 overflow-y-auto flex-1">
+                    {list.length === 0 ? (
+                        <p className="text-sm text-gray-400 text-center py-6">아직 저장된 문구가 없습니다.<br/>아래에서 추가해보세요.</p>
+                    ) : (
+                        <ul className="space-y-2">
+                            {list.map((phrase, idx) => (
+                                <li key={idx} className="flex items-center gap-2 p-2 border border-gray-200 rounded-lg">
+                                    {editingIdx === idx ? (
+                                        <>
+                                            <input
+                                                type="text"
+                                                value={editText}
+                                                onChange={(e) => setEditText(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') saveEdit();
+                                                    if (e.key === 'Escape') { setEditingIdx(-1); setEditText(''); }
+                                                }}
+                                                autoFocus
+                                                className="flex-1 px-2 py-1 border border-blue-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                            />
+                                            <button onClick={saveEdit} className="text-blue-600 hover:text-blue-700 text-xs font-bold px-2 py-1">저장</button>
+                                            <button onClick={() => { setEditingIdx(-1); setEditText(''); }} className="text-gray-400 hover:text-gray-700 text-xs px-2 py-1">취소</button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="flex-1 text-sm text-gray-800 break-words">{phrase}</span>
+                                            <button onClick={() => startEdit(idx)} className="text-gray-400 hover:text-blue-600 p-1" title="편집">
+                                                <Edit2 size={14} />
+                                            </button>
+                                            <button onClick={() => handleDelete(idx)} className="text-gray-400 hover:text-red-600 p-1" title="삭제">
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+                <div className="p-4 border-t flex gap-2">
+                    <input
+                        type="text"
+                        value={newText}
+                        onChange={(e) => setNewText(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+                        placeholder="새 문구 입력..."
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+                    <button
+                        onClick={handleAdd}
+                        disabled={!newText.trim()}
+                        className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50 hover:bg-blue-700 transition-colors flex items-center gap-1"
+                    >
+                        <Plus size={16} /> 추가
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // ---------------- Main GlobalChat with rooms ----------------
 const GlobalChat = () => {
     const { t } = useTranslation();
@@ -292,6 +405,82 @@ const GlobalChat = () => {
     const firstLoadRef = useRef(true);
     const dropdownRef = useRef(null);
     const audioRef = useRef(null); // Google TTS audio element
+    const messageInputRef = useRef(null);
+    const quickPhrasesRef = useRef(null);
+
+    // Copy-message feedback
+    const [copiedId, setCopiedId] = useState(null);
+
+    // Quick phrases (자주 쓰는 문구) — persisted in localStorage per device
+    const [quickPhrases, setQuickPhrases] = useState(() => {
+        try {
+            const stored = localStorage.getItem('meet4u_quick_phrases');
+            return stored ? JSON.parse(stored) : [];
+        } catch { return []; }
+    });
+    const [showQuickPhrases, setShowQuickPhrases] = useState(false);
+    const [showPhraseManager, setShowPhraseManager] = useState(false);
+
+    const persistPhrases = (next) => {
+        setQuickPhrases(next);
+        try { localStorage.setItem('meet4u_quick_phrases', JSON.stringify(next)); } catch { /* ignore */ }
+    };
+
+    const insertPhrase = (phrase) => {
+        if (!phrase) return;
+        setNewMessage(prev => {
+            if (!prev) return phrase;
+            const sep = prev.endsWith(' ') ? '' : ' ';
+            return prev + sep + phrase;
+        });
+        setShowQuickPhrases(false);
+        // Refocus input so user can keep typing
+        setTimeout(() => messageInputRef.current?.focus(), 0);
+    };
+
+    const copyMessage = async (id, text) => {
+        if (!text) return;
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                // Fallback for older browsers
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+            setCopiedId(id);
+            setTimeout(() => setCopiedId(null), 1500);
+        } catch (e) {
+            console.error('Copy failed:', e);
+        }
+    };
+
+    // Close quick-phrases popover when clicking outside
+    useEffect(() => {
+        if (!showQuickPhrases) return;
+        const onDocClick = (e) => {
+            if (quickPhrasesRef.current && !quickPhrasesRef.current.contains(e.target)) {
+                setShowQuickPhrases(false);
+            }
+        };
+        document.addEventListener('mousedown', onDocClick);
+        return () => document.removeEventListener('mousedown', onDocClick);
+    }, [showQuickPhrases]);
+
+    // Auto-resize textarea up to ~4 lines
+    useEffect(() => {
+        const el = messageInputRef.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        const max = 112; // ~4 lines
+        el.style.height = Math.min(el.scrollHeight, max) + 'px';
+    }, [newMessage]);
 
     // Load rooms the user is a member of
     useEffect(() => {
@@ -1248,14 +1437,24 @@ const GlobalChat = () => {
                                     </div>
                                 )}
                                 {!m.imageUrl && (
-                                    <button
-                                        type="button"
-                                        onClick={() => speakMessage(m.id, ttsText, ttsLang)}
-                                        className={`shrink-0 p-1.5 rounded-full transition-colors ${speakingId === m.id ? 'bg-blue-100 text-blue-600 animate-pulse' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'}`}
-                                        title={speakingId === m.id ? t('meeting.ttsStop') : t('meeting.ttsPlay')}
-                                    >
-                                        {speakingId === m.id ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                                    </button>
+                                    <div className="flex flex-col gap-0.5 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => speakMessage(m.id, ttsText, ttsLang)}
+                                            className={`p-1.5 rounded-full transition-colors ${speakingId === m.id ? 'bg-blue-100 text-blue-600 animate-pulse' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'}`}
+                                            title={speakingId === m.id ? t('meeting.ttsStop') : t('meeting.ttsPlay')}
+                                        >
+                                            {speakingId === m.id ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => copyMessage(m.id, displayText)}
+                                            className={`p-1.5 rounded-full transition-colors ${copiedId === m.id ? 'bg-green-100 text-green-600' : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'}`}
+                                            title={copiedId === m.id ? '복사됨' : '복사'}
+                                        >
+                                            {copiedId === m.id ? <Check size={14} /> : <Copy size={14} />}
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                             {isMe && readStatus && (
@@ -1271,13 +1470,64 @@ const GlobalChat = () => {
             </div>
 
             {/* Input */}
-            <form onSubmit={handleSend} className="flex gap-2 mt-3">
-                <input
-                    type="text"
+            <form onSubmit={handleSend} className="relative flex items-end gap-2 mt-3">
+                {/* Quick phrases popover */}
+                {showQuickPhrases && (
+                    <div ref={quickPhrasesRef} className="absolute bottom-full mb-2 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg p-3 max-h-60 overflow-y-auto z-30">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                                <Star size={12} className="text-yellow-500" /> 자주 쓰는 문구
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => { setShowQuickPhrases(false); setShowPhraseManager(true); }}
+                                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                            >
+                                <Edit2 size={11} /> 관리
+                            </button>
+                        </div>
+                        {quickPhrases.length === 0 ? (
+                            <p className="text-xs text-gray-400 text-center py-3">저장된 문구가 없습니다.<br/>관리에서 추가하세요.</p>
+                        ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                                {quickPhrases.map((phrase, i) => (
+                                    <button
+                                        key={i}
+                                        type="button"
+                                        onClick={() => insertPhrase(phrase)}
+                                        className="px-2.5 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-full border border-blue-200 transition-colors"
+                                    >
+                                        {phrase}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <button
+                    type="button"
+                    onClick={() => setShowQuickPhrases(v => !v)}
+                    disabled={!currentUser || !selectedRoomId}
+                    className={`p-2 rounded-lg transition-colors shadow-sm disabled:opacity-50 ${showQuickPhrases ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600 hover:bg-yellow-50 hover:text-yellow-600'}`}
+                    title="자주 쓰는 문구"
+                >
+                    <Star size={18} />
+                </button>
+                <textarea
+                    ref={messageInputRef}
+                    rows={1}
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                            e.preventDefault();
+                            handleSend(e);
+                        }
+                    }}
                     placeholder={isRecording ? t('meeting.voiceListening') : t('meeting.commentPlaceholder')}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 resize-none leading-6"
+                    style={{ minHeight: '40px', maxHeight: '112px' }}
                     disabled={!currentUser || !selectedRoomId}
                 />
                 <input
@@ -1328,6 +1578,14 @@ const GlobalChat = () => {
                 <ImageLightbox
                     src={lightboxSrc}
                     onClose={() => setLightboxSrc(null)}
+                />
+            )}
+
+            {showPhraseManager && (
+                <PhraseManagerModal
+                    phrases={quickPhrases}
+                    onSave={persistPhrases}
+                    onClose={() => setShowPhraseManager(false)}
                 />
             )}
         </div>
