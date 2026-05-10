@@ -363,7 +363,7 @@ const PhraseManagerModal = ({ phrases, onSave, onClose }) => {
 // ---------------- Main GlobalChat with rooms ----------------
 const GlobalChat = () => {
     const { t } = useTranslation();
-    const { currentUser, userProfile } = useAuth();
+    const { currentUser, userProfile, updateUserProfile } = useAuth();
     const myLang = userProfile?.preferredLanguage || 'ko';
     const myEmail = lower(currentUser?.email);
 
@@ -411,20 +411,47 @@ const GlobalChat = () => {
     // Copy-message feedback
     const [copiedId, setCopiedId] = useState(null);
 
-    // Quick phrases (자주 쓰는 문구) — persisted in localStorage per device
-    const [quickPhrases, setQuickPhrases] = useState(() => {
-        try {
-            const stored = localStorage.getItem('meet4u_quick_phrases');
-            return stored ? JSON.parse(stored) : [];
-        } catch { return []; }
-    });
+    // Quick phrases (자주 쓰는 문구) — synced via Firestore (users/{uid}.quickPhrases)
+    // 모든 디바이스에서 동일하게 보입니다.
+    const quickPhrases = useMemo(
+        () => Array.isArray(userProfile?.quickPhrases) ? userProfile.quickPhrases : [],
+        [userProfile]
+    );
     const [showQuickPhrases, setShowQuickPhrases] = useState(false);
     const [showPhraseManager, setShowPhraseManager] = useState(false);
 
-    const persistPhrases = (next) => {
-        setQuickPhrases(next);
-        try { localStorage.setItem('meet4u_quick_phrases', JSON.stringify(next)); } catch { /* ignore */ }
+    const persistPhrases = async (next) => {
+        try {
+            await updateUserProfile({ quickPhrases: next });
+        } catch (e) {
+            console.error('Failed to save quick phrases:', e);
+            alert('자주 쓰는 문구 저장에 실패했습니다.');
+        }
     };
+
+    // 1회성 마이그레이션: localStorage에 있던 기존 문구를 Firestore로 옮긴다.
+    useEffect(() => {
+        if (!currentUser || !userProfile) return;
+        // 이미 Firestore에 quickPhrases 필드가 존재하면(빈 배열 포함) 마이그레이션 불필요
+        if (userProfile.quickPhrases !== undefined) {
+            try { localStorage.removeItem('meet4u_quick_phrases'); } catch { /* ignore */ }
+            return;
+        }
+        let legacy = [];
+        try {
+            const stored = localStorage.getItem('meet4u_quick_phrases');
+            if (stored) legacy = JSON.parse(stored);
+        } catch { /* ignore */ }
+        if (!Array.isArray(legacy) || legacy.length === 0) return;
+        (async () => {
+            try {
+                await updateUserProfile({ quickPhrases: legacy });
+                try { localStorage.removeItem('meet4u_quick_phrases'); } catch { /* ignore */ }
+            } catch (e) {
+                console.error('Quick phrase migration failed:', e);
+            }
+        })();
+    }, [currentUser, userProfile, updateUserProfile]);
 
     const insertPhrase = (phrase) => {
         if (!phrase) return;
