@@ -13,7 +13,7 @@ export default defineConfig({
         }),
         VitePWA({
             registerType: 'autoUpdate',
-            includeAssets: ['favicon.png', 'apple-touch-icon.png', 'mascot-bg.png'],
+            includeAssets: ['favicon.png', 'apple-touch-icon.png', 'gs25-splash.jpg'],
             manifest: {
                 name: 'Meet4U - Meeting Scheduler',
                 short_name: 'Meet4U',
