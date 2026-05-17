@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bell, BellRing, BellOff, Settings as SettingsIcon, Calendar, Check, Loader, Link as LinkIcon, Unlink } from 'lucide-react';
+import { Bell, BellRing, BellOff, Settings as SettingsIcon, Calendar, Check, Loader, Link as LinkIcon, Unlink, Type } from 'lucide-react';
 import { requestFCMToken } from '../hooks/useFCM';
 import { useAuth } from '../context/AuthContext';
 import useGoogleCalendar from '../hooks/useGoogleCalendar';
@@ -8,12 +8,34 @@ import useGoogleCalendar from '../hooks/useGoogleCalendar';
 const Settings = () => {
     const { t } = useTranslation();
     const [notifPermission, setNotifPermission] = useState('unsupported');
-    const { currentUser: user } = useAuth();
+    const { currentUser: user, userProfile, updateUserProfile } = useAuth();
     const gcal = useGoogleCalendar();
     const [clientIdInput, setClientIdInput] = useState(gcal.clientId);
     const [clientIdSavedFlash, setClientIdSavedFlash] = useState(false);
 
+    // App title customization
+    const [appTitleInput, setAppTitleInput] = useState(userProfile?.appTitle || '');
+    const [appTitleSavedFlash, setAppTitleSavedFlash] = useState(false);
+    const [appTitleSaving, setAppTitleSaving] = useState(false);
+
     useEffect(() => { setClientIdInput(gcal.clientId); }, [gcal.clientId]);
+    useEffect(() => { setAppTitleInput(userProfile?.appTitle || ''); }, [userProfile?.appTitle]);
+
+    const handleSaveAppTitle = async () => {
+        const trimmed = appTitleInput.trim();
+        setAppTitleSaving(true);
+        try {
+            // Empty string clears the custom title (falls back to default 'PromiseU')
+            await updateUserProfile({ appTitle: trimmed });
+            setAppTitleSavedFlash(true);
+            setTimeout(() => setAppTitleSavedFlash(false), 1500);
+        } catch (e) {
+            console.error('Failed to save app title:', e);
+            alert(t('settings.appTitle.saveFailed'));
+        } finally {
+            setAppTitleSaving(false);
+        }
+    };
 
     const handleSaveClientId = () => {
         gcal.saveClientId(clientIdInput);
@@ -67,6 +89,43 @@ const Settings = () => {
                     {t('settings.title')}
                 </h1>
                 <p className="text-gray-500 mt-2">{t('settings.subtitle')}</p>
+            </div>
+
+            {/* App Title customization */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                <div className="p-6">
+                    <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                        <Type className="text-indigo-600" size={20} />
+                        {t('settings.appTitle.title')}
+                    </h2>
+                    <p className="text-xs text-gray-500 mb-4">
+                        {t('settings.appTitle.description')}
+                    </p>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={appTitleInput}
+                            onChange={(e) => setAppTitleInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleSaveAppTitle(); }}
+                            placeholder={t('settings.appTitle.placeholder')}
+                            maxLength={40}
+                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            disabled={!user || appTitleSaving}
+                        />
+                        <button
+                            type="button"
+                            onClick={handleSaveAppTitle}
+                            disabled={!user || appTitleSaving || (appTitleInput.trim() === (userProfile?.appTitle || ''))}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 transition-colors"
+                        >
+                            {appTitleSaving ? <Loader size={14} className="animate-spin" /> : (appTitleSavedFlash ? <Check size={14} /> : null)}
+                            {appTitleSavedFlash ? t('settings.appTitle.saved') : t('settings.appTitle.save')}
+                        </button>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-2">
+                        {t('settings.appTitle.hint')}
+                    </p>
+                </div>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

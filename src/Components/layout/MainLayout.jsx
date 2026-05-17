@@ -11,7 +11,16 @@ import { Menu, Calendar, Bell, BellRing, BellOff } from 'lucide-react';
 
 const MainLayout = ({ children }) => {
     const { t } = useTranslation();
-    const { activeChatUser, closeChat } = useAuth();
+    const { activeChatUser, closeChat, userProfile } = useAuth();
+    const displayAppTitle = (userProfile?.appTitle && userProfile.appTitle.trim()) || t('app.name');
+
+    // Sync browser tab title (next to favicon) with the user's custom app title
+    useEffect(() => {
+        if (typeof document !== 'undefined') {
+            document.title = displayAppTitle;
+        }
+    }, [displayAppTitle]);
+
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
         try { return localStorage.getItem('meet4u_sidebar_collapsed') === 'true'; } catch { return false; }
@@ -63,7 +72,7 @@ const MainLayout = ({ children }) => {
                         </button>
                         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                             <Calendar className="text-gray-900" size={20} />
-                            {t('app.name')}
+                            <span className="truncate max-w-[180px]">{displayAppTitle}</span>
                         </h1>
                     </div>
                     <div className="flex items-center gap-2">

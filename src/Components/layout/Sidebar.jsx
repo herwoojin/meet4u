@@ -26,6 +26,7 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
     const { t } = useTranslation();
     const { logout, currentUser, userProfile, isAdmin } = useAuth();
     const { permissions } = useMenuPermissions();
+    const displayAppTitle = (userProfile?.appTitle && userProfile.appTitle.trim()) || t('app.name');
 
     const allItems = [
         { key: 'weeklyCalendar', to: '/weekly', icon: Home, label: t('nav.weeklyCalendar') },
@@ -52,9 +53,9 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
         `}>
             <div className={`${isCollapsed ? 'p-3' : 'p-6'} border-b border-blue-100/60 flex ${isCollapsed ? 'justify-center' : 'justify-between'} items-center`}>
                 {!isCollapsed && (
-                    <Link to="/" className="text-2xl font-bold text-blue-800 flex items-center gap-2" onClick={closeMobileMenu}>
+                    <Link to="/" className="text-2xl font-bold text-blue-800 flex items-center gap-2" onClick={closeMobileMenu} title={displayAppTitle}>
                         <Calendar className="text-blue-600" />
-                        {t('app.name')}
+                        <span className="truncate max-w-[160px]">{displayAppTitle}</span>
                     </Link>
                 )}
                 <button
