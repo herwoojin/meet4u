@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bell, BellRing, BellOff, Settings as SettingsIcon, Calendar, Check, Loader, Link as LinkIcon, Unlink, Type } from 'lucide-react';
+import { Bell, BellRing, BellOff, Settings as SettingsIcon, Calendar, Check, Loader, Link as LinkIcon, Unlink, Type, Palette, Sparkles, FileText } from 'lucide-react';
 import { requestFCMToken } from '../hooks/useFCM';
 import { useAuth } from '../context/AuthContext';
 import useGoogleCalendar from '../hooks/useGoogleCalendar';
@@ -17,6 +17,20 @@ const Settings = () => {
     const [appTitleInput, setAppTitleInput] = useState(userProfile?.appTitle || '');
     const [appTitleSavedFlash, setAppTitleSavedFlash] = useState(false);
     const [appTitleSaving, setAppTitleSaving] = useState(false);
+
+    // Theme (per-device, localStorage)
+    const [theme, setTheme] = useState(() => {
+        try { return localStorage.getItem('meet4u_theme') || 'default'; } catch { return 'default'; }
+    });
+    const applyTheme = (next) => {
+        setTheme(next);
+        try { localStorage.setItem('meet4u_theme', next); } catch { /* ignore */ }
+        const html = document.documentElement;
+        html.classList.remove('theme-galaxy', 'theme-paper');
+        if (next === 'galaxy' || next === 'paper') {
+            html.classList.add(`theme-${next}`);
+        }
+    };
 
     useEffect(() => { setClientIdInput(gcal.clientId); }, [gcal.clientId]);
     useEffect(() => { setAppTitleInput(userProfile?.appTitle || ''); }, [userProfile?.appTitle]);
@@ -124,6 +138,93 @@ const Settings = () => {
                     </div>
                     <p className="text-[11px] text-gray-500 mt-2">
                         {t('settings.appTitle.hint')}
+                    </p>
+                </div>
+            </div>
+
+            {/* Theme picker */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                <div className="p-6">
+                    <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                        <Palette className="text-purple-600" size={20} />
+                        {t('settings.theme.title')}
+                    </h2>
+                    <p className="text-xs text-gray-500 mb-4">
+                        {t('settings.theme.description')}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Default */}
+                        <button
+                            type="button"
+                            onClick={() => applyTheme('default')}
+                            className={`p-3 rounded-xl border-2 text-left transition-all ${theme === 'default' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200 hover:border-gray-300'}`}
+                        >
+                            <div className="h-16 rounded-lg mb-2 bg-gradient-to-br from-blue-50 via-indigo-50 to-sky-100 border border-blue-100"></div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-bold text-gray-900">{t('settings.theme.default')}</p>
+                                    <p className="text-[11px] text-gray-500">{t('settings.theme.defaultDesc')}</p>
+                                </div>
+                                {theme === 'default' && <Check size={16} className="text-blue-600" />}
+                            </div>
+                        </button>
+                        {/* Galaxy */}
+                        <button
+                            type="button"
+                            onClick={() => applyTheme('galaxy')}
+                            className={`p-3 rounded-xl border-2 text-left transition-all ${theme === 'galaxy' ? 'border-purple-500 ring-2 ring-purple-200' : 'border-gray-200 hover:border-gray-300'}`}
+                        >
+                            <div
+                                className="h-16 rounded-lg mb-2 relative overflow-hidden"
+                                style={{
+                                    background: 'radial-gradient(ellipse at 25% 30%, rgba(99,50,180,0.5), transparent 60%), radial-gradient(ellipse at 75% 70%, rgba(40,80,200,0.45), transparent 60%), #050514',
+                                }}
+                            >
+                                <span style={{
+                                    position: 'absolute', inset: 0,
+                                    backgroundImage:
+                                        'radial-gradient(1px 1px at 15% 30%, #fff, transparent), radial-gradient(1px 1px at 60% 50%, #fff, transparent), radial-gradient(1.5px 1.5px at 80% 20%, #fff, transparent), radial-gradient(1px 1px at 35% 70%, #fff, transparent), radial-gradient(1px 1px at 90% 80%, #fff, transparent)',
+                                    opacity: 0.8
+                                }} />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-bold text-gray-900 flex items-center gap-1">
+                                        <Sparkles size={12} className="text-purple-500" />
+                                        {t('settings.theme.galaxy')}
+                                    </p>
+                                    <p className="text-[11px] text-gray-500">{t('settings.theme.galaxyDesc')}</p>
+                                </div>
+                                {theme === 'galaxy' && <Check size={16} className="text-purple-600" />}
+                            </div>
+                        </button>
+                        {/* Paper */}
+                        <button
+                            type="button"
+                            onClick={() => applyTheme('paper')}
+                            className={`p-3 rounded-xl border-2 text-left transition-all ${theme === 'paper' ? 'border-amber-600 ring-2 ring-amber-200' : 'border-gray-200 hover:border-gray-300'}`}
+                        >
+                            <div
+                                className="h-16 rounded-lg mb-2 border border-amber-200"
+                                style={{
+                                    background: 'radial-gradient(ellipse at 30% 30%, rgba(248,240,218,0.7), transparent 60%), radial-gradient(ellipse at 70% 70%, rgba(180,165,130,0.4), transparent 55%), #dfd4ba',
+                                    backgroundBlendMode: 'multiply'
+                                }}
+                            />
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-bold text-gray-900 flex items-center gap-1">
+                                        <FileText size={12} className="text-amber-700" />
+                                        {t('settings.theme.paper')}
+                                    </p>
+                                    <p className="text-[11px] text-gray-500">{t('settings.theme.paperDesc')}</p>
+                                </div>
+                                {theme === 'paper' && <Check size={16} className="text-amber-700" />}
+                            </div>
+                        </button>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-3">
+                        {t('settings.theme.hint')}
                     </p>
                 </div>
             </div>

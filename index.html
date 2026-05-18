@@ -14,6 +14,15 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
   <title>Meet4U</title>
+  <script>
+    // Apply saved theme before any rendering to avoid flash of unstyled content
+    try {
+      var __t = localStorage.getItem('meet4u_theme');
+      if (__t === 'galaxy' || __t === 'paper') {
+        document.documentElement.classList.add('theme-' + __t);
+      }
+    } catch (_) { /* ignore */ }
+  </script>
   <style>
     @keyframes gs25ZoomPulse {
       0%   { transform: scale(0.92); opacity: 0.45; }
