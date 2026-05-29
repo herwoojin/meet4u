@@ -16,7 +16,14 @@ import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
 import { compressImageToWebp } from '../../lib/imageUtils';
 import ImageLightbox from './ImageLightbox';
-import { romajiToHangul, pinyinToHangul } from '../../lib/phonetics';
+import {
+    romajiToHangul,
+    pinyinToHangul,
+    latinToHangul,
+    isLatinScript,
+    isNonLatinScript,
+    getPronunciationDisplay,
+} from '../../lib/phonetics';
 
 const SPEECH_LOCALE = {
     'ko': 'ko-KR',
@@ -648,24 +655,33 @@ const GlobalChat = () => {
                 translatingRef.current.add(pronKey);
                 try {
                     const translatedText = m.translations[myLang];
-                    // Fetch romanization of the already-translated text
-                    const romanUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(myLang)}&tl=en&dt=rm&q=${encodeURIComponent(translatedText)}`;
-                    const romanRes = await fetch(romanUrl);
-                    if (romanRes.ok) {
-                        const romanData = await romanRes.json();
-                        let pronunciation = '';
-                        if (romanData && romanData[0]) {
-                            const parts = romanData[0]
-                                .filter(seg => seg)
-                                .map(seg => seg[3] || seg[2] || '')
-                                .filter(Boolean);
-                            pronunciation = parts.join(' ').trim();
+                    let pronunciation = '';
+
+                    if (isLatinScript(myLang)) {
+                        // Latin-script target (fr/en/de/es/it/pt/vi/…): Google's
+                        // dt=rm returns nothing useful, so transliterate the
+                        // translated text directly into Hangul.
+                        pronunciation = latinToHangul(translatedText, myLang);
+                    } else if (isNonLatinScript(myLang)) {
+                        // Non-Latin target: fetch romanization from Google.
+                        const romanUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(myLang)}&tl=en&dt=rm&q=${encodeURIComponent(translatedText)}`;
+                        const romanRes = await fetch(romanUrl);
+                        if (romanRes.ok) {
+                            const romanData = await romanRes.json();
+                            if (romanData && romanData[0]) {
+                                const parts = romanData[0]
+                                    .filter(seg => seg)
+                                    .map(seg => seg[3] || seg[2] || '')
+                                    .filter(Boolean);
+                                pronunciation = parts.join(' ').trim();
+                            }
                         }
-                        if (pronunciation) {
-                            await updateDoc(doc(db, 'globalChatRooms', selectedRoomId, 'messages', m.id), {
-                                [`pronunciations.${myLang}`]: pronunciation
-                            });
-                        }
+                    }
+
+                    if (pronunciation) {
+                        await updateDoc(doc(db, 'globalChatRooms', selectedRoomId, 'messages', m.id), {
+                            [`pronunciations.${myLang}`]: pronunciation
+                        });
                     }
                 } catch (err) {
                     console.error("pronunciation backfill fail:", err);
@@ -1031,12 +1047,22 @@ const GlobalChat = () => {
                 }
             }
 
-            // 한국어 발음 가이드: 일본어/중국어 로마자를 한글로 음차 변환
+            // 한국어 발음 가이드:
+            //   - 일본어: Google 로마자 → 카나 한글 음차
+            //   - 중국어: Google 병음 → 한글 음차
+            //   - 그 외 비라틴(러시아어/태국어/아랍어 등): Google 로마자를 그대로 보여줌
+            //   - 라틴 문자 언어(프/영/독/스/이/포/베…): 번역문 자체를 한글로 음차
             let hangul = '';
             if (directSpeakLang === 'ja') {
                 hangul = romajiToHangul(roman);
             } else if (directSpeakLang === 'zh-CN' || directSpeakLang === 'zh') {
                 hangul = pinyinToHangul(roman);
+            } else if (isLatinScript(directSpeakLang)) {
+                hangul = latinToHangul(translated, directSpeakLang);
+            }
+            // 라틴 문자 언어는 Google 로마자가 비어있으므로, 음차한 한글을 로마자 칸 대신 노출.
+            if (!roman && isLatinScript(directSpeakLang)) {
+                roman = '';
             }
 
             setDirectSpeakResult({
@@ -1452,7 +1478,13 @@ const GlobalChat = () => {
                     const displayText = isMe ? m.text : (m.translations?.[myLang] || m.text);
                     const ttsText = isMe ? m.text : displayText;
                     const ttsLang = isMe ? srcLang : myLang;
-                    const pronunciation = !isMe ? m.pronunciations?.[myLang] : null;
+                    const pronunciation = !isMe
+                        ? (m.pronunciations?.[myLang] || getPronunciationDisplay({
+                            translatedText: m.translations?.[myLang],
+                            targetLang: myLang,
+                            romanFromServer: '',
+                        }))
+                        : null;
 
                     return (
                         <div key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
