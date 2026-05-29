@@ -27,6 +27,7 @@ export const handler = async (event) => {
             };
         }
 
+        // Step 1: Translate the text
         const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
 
         const response = await fetch(url);
@@ -50,10 +51,38 @@ export const handler = async (event) => {
             throw new Error('Empty translation result');
         }
 
+        // Step 2: Get romanization/pronunciation of the TRANSLATED text
+        // This helps users read and pronounce the translated text
+        // e.g., Korean "다시 회의를 시작하자" → "dasi hoeuileul sijakaja"
+        // e.g., English "I study" → "ai stadi" (when target user reads non-Latin)
+        let pronunciation = '';
+        try {
+            // We ask Google to romanize the translated text by requesting dt=rm
+            // sl = targetLang (since the translated text IS in targetLang)
+            // tl = en (just to get romanization output; the actual translation is irrelevant)
+            const romanUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(targetLang)}&tl=en&dt=rm&q=${encodeURIComponent(translatedText)}`;
+            const romanRes = await fetch(romanUrl);
+            if (romanRes.ok) {
+                const romanData = await romanRes.json();
+                // romanData[0] contains segments; the romanization is typically at index [3]
+                // e.g., [["I study", "나는 공부한다", null, "naneun gongbuhanda"], ...]
+                if (romanData && romanData[0]) {
+                    const parts = romanData[0]
+                        .filter(seg => seg)
+                        .map(seg => seg[3] || seg[2] || '')
+                        .filter(Boolean);
+                    pronunciation = parts.join(' ').trim();
+                }
+            }
+        } catch (romanErr) {
+            // Non-fatal: pronunciation is optional, translation still works
+            console.warn('Romanization fetch failed (translation OK):', romanErr.message);
+        }
+
         return {
             statusCode: 200,
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ translatedText })
+            body: JSON.stringify({ translatedText, pronunciation })
         };
     } catch (error) {
         console.error('Translation error:', error);

@@ -611,26 +611,66 @@ const GlobalChat = () => {
             if (!m.text) return; // nothing to translate (image-only message)
             const srcLang = m.sourceLanguage || 'ko';
             if (srcLang === myLang) return;
-            if (m.translations && m.translations[myLang]) return;
-            if (translatingRef.current.has(m.id)) return;
-            translatingRef.current.add(m.id);
-            try {
-                const res = await fetch('/.netlify/functions/translate-comment', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: m.text, sourceLang: srcLang, targetLang: myLang })
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.translatedText) {
-                        await updateDoc(doc(db, 'globalChatRooms', selectedRoomId, 'messages', m.id), {
-                            [`translations.${myLang}`]: data.translatedText
-                        });
+
+            // Case 1: Needs translation (no translation yet)
+            if (!m.translations?.[myLang]) {
+                if (translatingRef.current.has(m.id)) return;
+                translatingRef.current.add(m.id);
+                try {
+                    const res = await fetch('/.netlify/functions/translate-comment', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: m.text, sourceLang: srcLang, targetLang: myLang })
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.translatedText) {
+                            const updateData = {
+                                [`translations.${myLang}`]: data.translatedText
+                            };
+                            if (data.pronunciation) {
+                                updateData[`pronunciations.${myLang}`] = data.pronunciation;
+                            }
+                            await updateDoc(doc(db, 'globalChatRooms', selectedRoomId, 'messages', m.id), updateData);
+                        }
                     }
+                } catch (err) {
+                    console.error("translation fail:", err);
+                    translatingRef.current.delete(m.id);
                 }
-            } catch (err) {
-                console.error("translation fail:", err);
-                translatingRef.current.delete(m.id);
+                return;
+            }
+
+            // Case 2: Has translation but missing pronunciation — backfill
+            if (m.translations[myLang] && !m.pronunciations?.[myLang]) {
+                const pronKey = `pron_${m.id}`;
+                if (translatingRef.current.has(pronKey)) return;
+                translatingRef.current.add(pronKey);
+                try {
+                    const translatedText = m.translations[myLang];
+                    // Fetch romanization of the already-translated text
+                    const romanUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(myLang)}&tl=en&dt=rm&q=${encodeURIComponent(translatedText)}`;
+                    const romanRes = await fetch(romanUrl);
+                    if (romanRes.ok) {
+                        const romanData = await romanRes.json();
+                        let pronunciation = '';
+                        if (romanData && romanData[0]) {
+                            const parts = romanData[0]
+                                .filter(seg => seg)
+                                .map(seg => seg[3] || seg[2] || '')
+                                .filter(Boolean);
+                            pronunciation = parts.join(' ').trim();
+                        }
+                        if (pronunciation) {
+                            await updateDoc(doc(db, 'globalChatRooms', selectedRoomId, 'messages', m.id), {
+                                [`pronunciations.${myLang}`]: pronunciation
+                            });
+                        }
+                    }
+                } catch (err) {
+                    console.error("pronunciation backfill fail:", err);
+                    translatingRef.current.delete(pronKey);
+                }
             }
         });
     }, [messages, myLang, currentUser, selectedRoomId]);
@@ -1412,6 +1452,7 @@ const GlobalChat = () => {
                     const displayText = isMe ? m.text : (m.translations?.[myLang] || m.text);
                     const ttsText = isMe ? m.text : displayText;
                     const ttsLang = isMe ? srcLang : myLang;
+                    const pronunciation = !isMe ? m.pronunciations?.[myLang] : null;
 
                     return (
                         <div key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
@@ -1452,8 +1493,16 @@ const GlobalChat = () => {
                                     <div className={`px-3 py-2 rounded-lg text-sm break-words ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white border border-gray-200 text-gray-800 rounded-tl-none'}`}>
                                         {displayText}
                                         {isTranslated && (
-                                            <div className="text-[9px] text-gray-400 mt-1 flex items-center gap-1 border-t border-gray-100 pt-1">
-                                                {t('meeting.translated')} ({t('meeting.original')}: {m.text})
+                                            <div className="text-[9px] text-gray-400 mt-1 flex flex-col gap-0.5 border-t border-gray-100 pt-1">
+                                                <div className="flex items-center gap-1">
+                                                    {t('meeting.translated')} ({t('meeting.original')}: {m.text})
+                                                </div>
+                                                {pronunciation && (
+                                                    <div className="flex items-center gap-1 text-purple-500">
+                                                        <span className="font-semibold">발음:</span>
+                                                        <span className="font-mono tracking-wide">{pronunciation}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                         {isTranslating && (
