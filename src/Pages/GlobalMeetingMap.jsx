@@ -6,7 +6,7 @@ import { db } from '../lib/firebase';
 import 'leaflet/dist/leaflet.css';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { Globe, MapPin, Trash2, Loader, Plus, Search, X, Crosshair, Radio, Share2, Users, ChevronDown, ChevronUp } from 'lucide-react';
+import { Globe, MapPin, Trash2, Loader, Plus, Search, X, Crosshair, Radio, Share2, Users, ChevronDown, ChevronUp, Map } from 'lucide-react';
 import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -218,6 +218,19 @@ const GlobalMeetingMap = () => {
     const [searchResults, setSearchResults] = useState([]);
     const [searching, setSearching] = useState(false);
     const pendingCardRef = useRef(null);
+
+    // Map toggle
+    const [showMap, setShowMap] = useState(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('meet4u_showMap');
+            return saved !== null ? saved === 'true' : true;
+        }
+        return true;
+    });
+
+    useEffect(() => {
+        try { localStorage.setItem('meet4u_showMap', showMap ? 'true' : 'false'); } catch (_) { /* ignore */ }
+    }, [showMap]);
 
     // Load pins
     useEffect(() => {
@@ -698,197 +711,216 @@ const GlobalMeetingMap = () => {
                 </div>
             )}
 
-            {/* Map */}
-            <div className="relative w-full h-[60vh] md:h-[70vh] min-h-[400px] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                {loading && (
-                    <div className="absolute inset-0 z-[500] flex items-center justify-center bg-white/70 pointer-events-none">
-                        <Loader className="animate-spin text-blue-600" size={32} />
-                    </div>
-                )}
-                <MapContainer
-                    center={[37.5665, 126.9780]}
-                    zoom={6}
-                    style={{ height: '100%', width: '100%' }}
+            {/* Map toggle header */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <button
+                    type="button"
+                    onClick={() => setShowMap(v => !v)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
                 >
-                    <TileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                    <MapResizeFix />
-                    <ClickToPin onPick={handleMapClick} />
-                    {flyToTarget && <MapFlyTo target={flyToTarget} />}
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+                        <Map size={16} className="text-blue-600" />
+                        {t('global.mapToggle', '지도')}
+                    </span>
+                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors ${showMap ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>
+                        {showMap ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </span>
+                </button>
 
-                    {/* Pending (unsaved) pin */}
-                    {pendingPin && (
-                        <Marker
-                            position={[pendingPin.lat, pendingPin.lng]}
-                            icon={pendingIcon}
-                            eventHandlers={{ add: (e) => e.target.openPopup() }}
-                        >
-                            <Popup>
-                                <div className="min-w-[180px]">
-                                    <div className="font-bold text-orange-600 mb-1 text-sm">
-                                        {t('global.pendingTitle')}
-                                    </div>
-                                    <div className="text-xs text-slate-600">
-                                        {pendingPin.resolving
-                                            ? t('global.resolvingAddress')
-                                            : (pendingPin.address || `${pendingPin.lat.toFixed(5)}, ${pendingPin.lng.toFixed(5)}`)}
-                                    </div>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    )}
-
-                    <MarkerClusterGroup
-                        chunkedLoading
-                        showCoverageOnHover={false}
-                        spiderfyOnMaxZoom
-                        maxClusterRadius={60}
-                        disableClusteringAtZoom={17}
-                        iconCreateFunction={createClusterIcon}
-                    >
-                        {pins.map((pin) => (
-                            <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={savedPinIcon}>
-                                <Popup>
-                                    <div className="p-1 min-w-[180px]">
-                                        {pin.title && <h3 className="font-bold text-slate-800 mb-1">{pin.title}</h3>}
-                                        <div className="text-sm text-slate-700 mb-1">{pin.address}</div>
-                                        {pin.resolvedAddress && pin.resolvedAddress !== pin.address && (
-                                            <div className="text-[11px] text-slate-400 mb-1.5 truncate" title={pin.resolvedAddress}>
-                                                {pin.resolvedAddress}
-                                            </div>
-                                        )}
-                                        <div className="text-[11px] text-slate-500">
-                                            {t('global.byLabel')}: {pin.createdByName || pin.createdBy}
-                                        </div>
-                                        {(pin.createdBy === currentUser?.email || isAdmin) && (
-                                            <button
-                                                onClick={() => handleDeletePin(pin)}
-                                                className="mt-2 inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700"
-                                            >
-                                                <Trash2 size={12} />
-                                                {t('global.deletePin')}
-                                            </button>
-                                        )}
-                                    </div>
-                                </Popup>
-                            </Marker>
-                        ))}
-                    </MarkerClusterGroup>
-
-                    {/* My (one-time) current location dot */}
-                    {myLocation && !isSharing && (
-                        <Marker position={[myLocation.lat, myLocation.lng]} icon={myLocationIcon}>
-                            <Popup>{t('global.myLocation')}</Popup>
-                        </Marker>
-                    )}
-
-                    {/* Live shared locations (other users + self when sharing) */}
-                    {freshSharedUsers.map((u) => (
-                        <Marker
-                            key={u.id}
-                            position={[u.lat, u.lng]}
-                            icon={sharedLocationIcon(u.displayName, u.uid === currentUser?.uid)}
-                        >
-                            <Popup>
-                                <div className="text-sm">
-                                    <div className="font-bold text-slate-800">
-                                        {u.displayName}
-                                        {u.uid === currentUser?.uid && (
-                                            <span className="text-[10px] text-slate-400 ml-1">{t('global.youLabel')}</span>
-                                        )}
-                                    </div>
-                                    <div className="text-[11px] text-slate-500 mt-1">
-                                        {u.lat.toFixed(5)}, {u.lng.toFixed(5)}
-                                    </div>
-                                </div>
-                            </Popup>
-                        </Marker>
-                    ))}
-                </MapContainer>
-
-                {/* Top-right control stack: legend + share button + locate button */}
-                <div className="absolute top-3 right-3 z-[700] flex flex-col items-end gap-2 max-w-[260px]">
-                    {/* Legend (collapsible) */}
-                    <div className="bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden w-full">
-                        <button
-                            type="button"
-                            onClick={() => setShowSharedList(v => !v)}
-                            className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                        >
-                            <span className="inline-flex items-center gap-1.5">
-                                <Users size={13} className="text-emerald-600" />
-                                {t('global.sharedUsersTitle')}
-                                <span className="text-slate-400 font-normal">({freshSharedUsers.length})</span>
-                            </span>
-                            {showSharedList ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        </button>
-                        {showSharedList && (
-                            <div className="border-t border-slate-100 max-h-44 overflow-y-auto">
-                                {freshSharedUsers.length === 0 ? (
-                                    <div className="text-[11px] text-slate-400 text-center py-3 px-3">
-                                        {t('global.noSharedUsers')}
-                                    </div>
-                                ) : (
-                                    <ul className="divide-y divide-slate-50">
-                                        {freshSharedUsers.map(u => {
-                                            const isMe = u.uid === currentUser?.uid;
-                                            return (
-                                                <li key={u.id}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setFlyToTarget({ lat: u.lat, lng: u.lng, key: Date.now() })}
-                                                        className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center gap-2 text-xs"
-                                                    >
-                                                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isMe ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
-                                                        <span className="text-slate-700 truncate flex-1">
-                                                            {u.displayName}
-                                                            {isMe && <span className="text-slate-400 ml-1">{t('global.youLabel')}</span>}
-                                                        </span>
-                                                    </button>
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                )}
+                {/* Map content */}
+                {showMap && (
+                    <div className="relative w-full h-[60vh] md:h-[70vh] min-h-[400px] border-t border-slate-200">
+                        {loading && (
+                            <div className="absolute inset-0 z-[500] flex items-center justify-center bg-white/70 pointer-events-none">
+                                <Loader className="animate-spin text-blue-600" size={32} />
                             </div>
                         )}
+                        <MapContainer
+                            center={[37.5665, 126.9780]}
+                            zoom={6}
+                            style={{ height: '100%', width: '100%' }}
+                        >
+                            <TileLayer
+                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            />
+                            <MapResizeFix />
+                            <ClickToPin onPick={handleMapClick} />
+                            {flyToTarget && <MapFlyTo target={flyToTarget} />}
+
+                            {/* Pending (unsaved) pin */}
+                            {pendingPin && (
+                                <Marker
+                                    position={[pendingPin.lat, pendingPin.lng]}
+                                    icon={pendingIcon}
+                                    eventHandlers={{ add: (e) => e.target.openPopup() }}
+                                >
+                                    <Popup>
+                                        <div className="min-w-[180px]">
+                                            <div className="font-bold text-orange-600 mb-1 text-sm">
+                                                {t('global.pendingTitle')}
+                                            </div>
+                                            <div className="text-xs text-slate-600">
+                                                {pendingPin.resolving
+                                                    ? t('global.resolvingAddress')
+                                                    : (pendingPin.address || `${pendingPin.lat.toFixed(5)}, ${pendingPin.lng.toFixed(5)}`)}
+                                            </div>
+                                        </div>
+                                    </Popup>
+                                </Marker>
+                            )}
+
+                            <MarkerClusterGroup
+                                chunkedLoading
+                                showCoverageOnHover={false}
+                                spiderfyOnMaxZoom
+                                maxClusterRadius={60}
+                                disableClusteringAtZoom={17}
+                                iconCreateFunction={createClusterIcon}
+                            >
+                                {pins.map((pin) => (
+                                    <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={savedPinIcon}>
+                                        <Popup>
+                                            <div className="p-1 min-w-[180px]">
+                                                {pin.title && <h3 className="font-bold text-slate-800 mb-1">{pin.title}</h3>}
+                                                <div className="text-sm text-slate-700 mb-1">{pin.address}</div>
+                                                {pin.resolvedAddress && pin.resolvedAddress !== pin.address && (
+                                                    <div className="text-[11px] text-slate-400 mb-1.5 truncate" title={pin.resolvedAddress}>
+                                                        {pin.resolvedAddress}
+                                                    </div>
+                                                )}
+                                                <div className="text-[11px] text-slate-500">
+                                                    {t('global.byLabel')}: {pin.createdByName || pin.createdBy}
+                                                </div>
+                                                {(pin.createdBy === currentUser?.email || isAdmin) && (
+                                                    <button
+                                                        onClick={() => handleDeletePin(pin)}
+                                                        className="mt-2 inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700"
+                                                    >
+                                                        <Trash2 size={12} />
+                                                        {t('global.deletePin')}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </Popup>
+                                    </Marker>
+                                ))}
+                            </MarkerClusterGroup>
+
+                            {/* My (one-time) current location dot */}
+                            {myLocation && !isSharing && (
+                                <Marker position={[myLocation.lat, myLocation.lng]} icon={myLocationIcon}>
+                                    <Popup>{t('global.myLocation')}</Popup>
+                                </Marker>
+                            )}
+
+                            {/* Live shared locations (other users + self when sharing) */}
+                            {freshSharedUsers.map((u) => (
+                                <Marker
+                                    key={u.id}
+                                    position={[u.lat, u.lng]}
+                                    icon={sharedLocationIcon(u.displayName, u.uid === currentUser?.uid)}
+                                >
+                                    <Popup>
+                                        <div className="text-sm">
+                                            <div className="font-bold text-slate-800">
+                                                {u.displayName}
+                                                {u.uid === currentUser?.uid && (
+                                                    <span className="text-[10px] text-slate-400 ml-1">{t('global.youLabel')}</span>
+                                                )}
+                                            </div>
+                                            <div className="text-[11px] text-slate-500 mt-1">
+                                                {u.lat.toFixed(5)}, {u.lng.toFixed(5)}
+                                            </div>
+                                        </div>
+                                    </Popup>
+                                </Marker>
+                            ))}
+                        </MapContainer>
+
+                        {/* Top-right control stack: legend + share button + locate button */}
+                        <div className="absolute top-3 right-3 z-[700] flex flex-col items-end gap-2 max-w-[260px]">
+                            {/* Legend (collapsible) */}
+                            <div className="bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden w-full">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowSharedList(v => !v)}
+                                    className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <Users size={13} className="text-emerald-600" />
+                                        {t('global.sharedUsersTitle')}
+                                        <span className="text-slate-400 font-normal">({freshSharedUsers.length})</span>
+                                    </span>
+                                    {showSharedList ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                </button>
+                                {showSharedList && (
+                                    <div className="border-t border-slate-100 max-h-44 overflow-y-auto">
+                                        {freshSharedUsers.length === 0 ? (
+                                            <div className="text-[11px] text-slate-400 text-center py-3 px-3">
+                                                {t('global.noSharedUsers')}
+                                            </div>
+                                        ) : (
+                                            <ul className="divide-y divide-slate-50">
+                                                {freshSharedUsers.map(u => {
+                                                    const isMe = u.uid === currentUser?.uid;
+                                                    return (
+                                                        <li key={u.id}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFlyToTarget({ lat: u.lat, lng: u.lng, key: Date.now() })}
+                                                                className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center gap-2 text-xs"
+                                                            >
+                                                                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${isMe ? 'bg-red-500' : 'bg-emerald-500'}`}></span>
+                                                                <span className="text-slate-700 truncate flex-1">
+                                                                    {u.displayName}
+                                                                    {isMe && <span className="text-slate-400 ml-1">{t('global.youLabel')}</span>}
+                                                                </span>
+                                                            </button>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Share / Stop sharing button */}
+                            <button
+                                type="button"
+                                onClick={isSharing ? stopSharing : startSharing}
+                                disabled={sharingLoading || !currentUser}
+                                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-md border text-xs font-medium transition-colors disabled:opacity-60 ${isSharing
+                                    ? 'bg-red-500 text-white border-red-600 hover:bg-red-600'
+                                    : 'bg-white text-blue-700 border-slate-200 hover:bg-blue-50'
+                                    }`}
+                                title={isSharing ? t('global.stopSharing') : t('global.shareLocation')}
+                            >
+                                {sharingLoading ? (
+                                    <Loader size={14} className="animate-spin" />
+                                ) : isSharing ? (
+                                    <Radio size={14} className="animate-pulse" />
+                                ) : (
+                                    <Share2 size={14} />
+                                )}
+                                <span>{isSharing ? t('global.stopSharing') : t('global.shareLocation')}</span>
+                            </button>
+
+                            {/* My-location (one-shot) */}
+                            <button
+                                type="button"
+                                onClick={handleLocateMe}
+                                disabled={locating}
+                                className="bg-white hover:bg-blue-50 border border-slate-200 shadow-md rounded-full p-2.5 text-blue-600 disabled:opacity-60 transition-colors"
+                                title={t('global.myLocation')}
+                                aria-label={t('global.myLocation')}
+                            >
+                                {locating ? <Loader size={18} className="animate-spin" /> : <Crosshair size={18} />}
+                            </button>
+                        </div>
                     </div>
-
-                    {/* Share / Stop sharing button */}
-                    <button
-                        type="button"
-                        onClick={isSharing ? stopSharing : startSharing}
-                        disabled={sharingLoading || !currentUser}
-                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-md border text-xs font-medium transition-colors disabled:opacity-60 ${isSharing
-                            ? 'bg-red-500 text-white border-red-600 hover:bg-red-600'
-                            : 'bg-white text-blue-700 border-slate-200 hover:bg-blue-50'
-                            }`}
-                        title={isSharing ? t('global.stopSharing') : t('global.shareLocation')}
-                    >
-                        {sharingLoading ? (
-                            <Loader size={14} className="animate-spin" />
-                        ) : isSharing ? (
-                            <Radio size={14} className="animate-pulse" />
-                        ) : (
-                            <Share2 size={14} />
-                        )}
-                        <span>{isSharing ? t('global.stopSharing') : t('global.shareLocation')}</span>
-                    </button>
-
-                    {/* My-location (one-shot) */}
-                    <button
-                        type="button"
-                        onClick={handleLocateMe}
-                        disabled={locating}
-                        className="bg-white hover:bg-blue-50 border border-slate-200 shadow-md rounded-full p-2.5 text-blue-600 disabled:opacity-60 transition-colors"
-                        title={t('global.myLocation')}
-                        aria-label={t('global.myLocation')}
-                    >
-                        {locating ? <Loader size={18} className="animate-spin" /> : <Crosshair size={18} />}
-                    </button>
-                </div>
+                )}
             </div>
 
             {/* Info bar */}
