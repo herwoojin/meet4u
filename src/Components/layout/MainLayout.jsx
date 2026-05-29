@@ -7,6 +7,7 @@ import useGlobalChatNotifications from '../../hooks/useGlobalChatNotifications';
 import ChatModal from '../chat/ChatModal';
 import Sidebar from './Sidebar';
 import LanguageSwitcher from './LanguageSwitcher';
+import ServerCapacityIndicator from './ServerCapacityIndicator';
 import { Menu, Calendar, Bell, BellRing, BellOff } from 'lucide-react';
 
 const MainLayout = ({ children }) => {
@@ -124,6 +125,9 @@ const MainLayout = ({ children }) => {
                     />
                 )
             }
+
+            {/* Backend capacity traffic-light — always visible bottom-right */}
+            <ServerCapacityIndicator />
         </div>
     );
 };
