@@ -48,16 +48,11 @@ const PRINT_COLORS = {
     cyan: '#0891b2', lime: '#65a30d', emerald: '#059669', gray: '#374151',
 };
 
-const buildPrintHtml = ({ local, fullPron, phrasePron }) => {
-    const now = new Date();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const yyyy = now.getFullYear();
-    const dateLabel = `${mm}월${dd}일`;
+const renderPrintSection = (analysis, fullPron, phrasePron) => {
     const ciNums = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
     const phraseKey = (p) => (p.text || '') + (p.particle || '');
 
-    const chunksHtml = local.chunks.map((c, i) => `
+    const chunksHtml = analysis.chunks.map((c, i) => `
         <div class="chunk">
             <span class="num">${ciNums[i] || `(${i + 1})`}</span>
             <span class="chunk-text">${escapeHtml(c.originalChunk.trim())}</span>
@@ -65,11 +60,11 @@ const buildPrintHtml = ({ local, fullPron, phrasePron }) => {
         </div>
     `).join('');
 
-    const originalHtml = local.chunks.map((c, i) =>
-        `<span>${escapeHtml(c.originalChunk.trim())}</span>${i < local.chunks.length - 1 ? '<span class="divider">/</span>' : ''}`
+    const originalHtml = analysis.chunks.map((c, i) =>
+        `<span>${escapeHtml(c.originalChunk.trim())}</span>${i < analysis.chunks.length - 1 ? '<span class="divider">/</span>' : ''}`
     ).join('');
 
-    const phrasesHtml = local.phrases.map(p => {
+    const phrasesHtml = analysis.phrases.map(p => {
         const pron = phrasePron[phraseKey(p)] || '';
         const color = PRINT_COLORS[p.label?.color] || '#374151';
         return `
@@ -89,6 +84,19 @@ const buildPrintHtml = ({ local, fullPron, phrasePron }) => {
             </div>
         `;
     }).join('');
+
+    return { chunksHtml, originalHtml, phrasesHtml };
+};
+
+const buildPrintHtml = ({ local, fullPron, phrasePron, koreanLocal, koreanFullPron, koreanPhrasePron }) => {
+    const now = new Date();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    const dateLabel = `${mm}월${dd}일`;
+
+    const main = renderPrintSection(local, fullPron, phrasePron);
+    const korean = koreanLocal ? renderPrintSection(koreanLocal, koreanFullPron, koreanPhrasePron) : null;
 
     return `<!DOCTYPE html>
 <html lang="ko">
@@ -182,6 +190,13 @@ body {
     margin-top: 16px; text-align: center; color: #888;
     font-size: 8pt; border-top: 1px solid #eee; padding-top: 6px;
 }
+.ko-divider {
+    margin: 18px 0 10px 0; padding: 6px 10px;
+    background: #fff1f2; color: #be123c;
+    border: 1px dashed #fda4af; border-radius: 6px;
+    font-size: 10pt; font-weight: 700;
+    page-break-before: auto; page-break-after: avoid;
+}
 @media print {
     body { padding: 0; }
     .no-print { display: none !important; }
@@ -202,7 +217,7 @@ body {
 
 <div class="section">
     <h2>원문</h2>
-    <div class="original">${originalHtml}</div>
+    <div class="original">${main.originalHtml}</div>
 </div>
 
 ${fullPron ? `
@@ -215,13 +230,38 @@ ${local.note ? `<div class="section"><div class="note">${escapeHtml(local.note)}
 
 <div class="section">
     <h2>구조 (문장별)</h2>
-    ${chunksHtml}
+    ${main.chunksHtml}
 </div>
 
 <div class="section">
     <h2>어절 분해</h2>
-    <div class="phrases">${phrasesHtml}</div>
+    <div class="phrases">${main.phrasesHtml}</div>
 </div>
+
+${korean ? `
+<div class="ko-divider">🇰🇷 원문 한국어 분석 (참고)</div>
+
+<div class="section">
+    <h2>한국어 원문</h2>
+    <div class="original">${korean.originalHtml}</div>
+</div>
+
+${koreanFullPron ? `
+<div class="section">
+    <h2>한국어 발음</h2>
+    <div class="pron">${escapeHtml(koreanFullPron)}</div>
+</div>` : ''}
+
+<div class="section">
+    <h2>한국어 구조 (문장별)</h2>
+    ${korean.chunksHtml}
+</div>
+
+<div class="section">
+    <h2>한국어 어절 분해</h2>
+    <div class="phrases">${korean.phrasesHtml}</div>
+</div>
+` : ''}
 
 <div class="footer">Meet4U · PromiseU — 다국어 문법 공부 학습지 (${yyyy}-${mm}-${dd} 생성)</div>
 <script>
@@ -232,8 +272,8 @@ ${local.note ? `<div class="section"><div class="note">${escapeHtml(local.note)}
 </html>`;
 };
 
-const openPrintWindow = (local, fullPron, phrasePron) => {
-    const html = buildPrintHtml({ local, fullPron, phrasePron });
+const openPrintWindow = ({ local, fullPron, phrasePron, koreanLocal, koreanFullPron, koreanPhrasePron }) => {
+    const html = buildPrintHtml({ local, fullPron, phrasePron, koreanLocal, koreanFullPron, koreanPhrasePron });
     const w = window.open('', '_blank', 'width=900,height=1000');
     if (!w) {
         alert('팝업이 차단되었습니다. 브라우저에서 팝업을 허용한 뒤 다시 시도해 주세요.');
@@ -244,7 +284,140 @@ const openPrintWindow = (local, fullPron, phrasePron) => {
     w.document.close();
 };
 
-const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', isAdmin = false }) => {
+// Reusable in-popup analysis block: original text + pronunciation + structure
+// + phrase decomposition. Used for both the translated text and (when source
+// is Korean) the original Korean sentence.
+const AnalysisBlock = ({ analysis, fullPron, phrasePron, pronLoading }) => {
+    const pronChunks = useMemo(
+        () => splitPronunciationByChunks(fullPron, analysis.chunks),
+        [fullPron, analysis.chunks]
+    );
+    const phraseKey = (p) => (p.text || '') + (p.particle || '');
+    const ciNums = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+
+    return (
+        <div className="space-y-4">
+            {/* Original + pronunciation */}
+            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-3">
+                <div>
+                    <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">원문</div>
+                    <div className="text-base text-gray-900 leading-relaxed break-words">
+                        {analysis.chunks.length === 0 ? (
+                            <span className="italic text-gray-400">(빈 문장)</span>
+                        ) : analysis.chunks.map((c, i) => (
+                            <React.Fragment key={i}>
+                                <span>{c.originalChunk.trim()}</span>
+                                {i < analysis.chunks.length - 1 && (
+                                    <span className="text-indigo-400 mx-1.5 font-bold select-none">/</span>
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </div>
+                </div>
+
+                {(fullPron || pronLoading) && (
+                    <div>
+                        <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1 flex items-center gap-1">
+                            발음
+                            {pronLoading && <Loader size={9} className="animate-spin text-indigo-400" />}
+                        </div>
+                        {fullPron ? (
+                            <div className="text-sm text-indigo-700 font-mono leading-relaxed break-words">
+                                {pronChunks.map((c, i) => (
+                                    <React.Fragment key={i}>
+                                        <span>{c}</span>
+                                        {i < pronChunks.length - 1 && (
+                                            <span className="text-indigo-300 mx-1.5 font-bold select-none">/</span>
+                                        )}
+                                    </React.Fragment>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-xs text-gray-400 italic">발음 로딩 중…</div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Note */}
+            {analysis.note && (
+                <div className="text-xs leading-relaxed bg-indigo-50 text-indigo-900 rounded-lg px-3 py-2 border border-indigo-100">
+                    {analysis.note}
+                </div>
+            )}
+
+            {/* Structure per chunk */}
+            {analysis.chunks.length > 0 && (
+                <div>
+                    <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-2">구조 (문장별)</div>
+                    <ol className="space-y-1.5 text-xs">
+                        {analysis.chunks.map((c, i) => (
+                            <li key={i} className="flex items-start gap-2 rounded border border-gray-100 bg-white px-2.5 py-1.5">
+                                <span className="font-bold text-indigo-600 shrink-0 mt-0.5">{ciNums[i] || `(${i + 1})`}</span>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-gray-500 break-words">{c.originalChunk.trim()}</div>
+                                    <div className="font-semibold text-gray-800 mt-0.5">{c.structure || '(구조 불명)'}</div>
+                                </div>
+                            </li>
+                        ))}
+                    </ol>
+                </div>
+            )}
+
+            {/* Phrase breakdown */}
+            <div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-1">
+                    어절 분해
+                    {pronLoading && <Loader size={9} className="animate-spin text-indigo-400" />}
+                </div>
+                <div className="space-y-2">
+                    {analysis.phrases.length === 0 ? (
+                        <div className="text-sm text-gray-400 italic">분석할 어절이 없습니다.</div>
+                    ) : analysis.phrases.map((p, idx) => {
+                        const c = cls(p.label?.color || 'gray');
+                        const key = phraseKey(p);
+                        const pron = phrasePron[key];
+                        return (
+                            <div
+                                key={idx}
+                                className={`flex items-start gap-2 p-2.5 rounded-lg border ${c.border} ${c.bg}`}
+                            >
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-baseline gap-2 flex-wrap">
+                                        <span className={`text-base font-semibold ${c.text} break-words`}>
+                                            {p.text}
+                                            {p.particle && (
+                                                <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-white/60 border border-current">
+                                                    +{p.particle}
+                                                </span>
+                                            )}
+                                            {p.punct && <span className="text-gray-400 ml-0.5">{p.punct}</span>}
+                                        </span>
+                                        {pron ? (
+                                            <span className="text-xs font-mono text-indigo-600">[{pron}]</span>
+                                        ) : pronLoading ? (
+                                            <span className="text-[10px] text-gray-400 italic">발음…</span>
+                                        ) : null}
+                                    </div>
+                                    {p.label && (
+                                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${c.pill}`}>
+                                                {p.label.role}
+                                            </span>
+                                            <span className="text-xs text-gray-600 leading-snug">{p.label.detail}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', koreanOriginal = '', isAdmin = false }) => {
     const [geminiResult, setGeminiResult] = useState(null);
     const [geminiLoading, setGeminiLoading] = useState(false);
     const [geminiError, setGeminiError] = useState('');
@@ -257,16 +430,19 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', isAdm
     const [phrasePron, setPhrasePron] = useState({});
     const [pronLoading, setPronLoading] = useState(false);
 
+    // 한국어 원문 분석용 상태 (sourceLang === 'ko' && myLang !== 'ko' 일 때만 채워짐)
+    const [koreanFullPron, setKoreanFullPron] = useState('');
+    const [koreanPhrasePron, setKoreanPhrasePron] = useState({});
+
     const local = useMemo(() => analyzeSentence(text || '', lang), [text, lang]);
+    const koreanLocal = useMemo(
+        () => koreanOriginal ? analyzeSentence(koreanOriginal, 'ko') : null,
+        [koreanOriginal]
+    );
 
     const adminAvailable = hasAdminGeminiKey() && isAdmin;
     const resolvedKey = useMemo(() => getGeminiKey({ isAdmin }), [isAdmin, keyVersion, open]);
     const canUseGemini = Boolean(resolvedKey);
-
-    const pronChunks = useMemo(
-        () => splitPronunciationByChunks(fullPron, local.chunks),
-        [fullPron, local.chunks]
-    );
 
     useEffect(() => {
         if (!open) return;
@@ -283,21 +459,40 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', isAdm
         return () => window.removeEventListener('keydown', onKey);
     }, [open, onClose]);
 
-    // Resolve full + per-phrase pronunciation when the popup opens.
+    // Resolve full + per-phrase pronunciation for both the translated text
+    // and (when present) the original Korean sentence.
     useEffect(() => {
         if (!open || !text) {
             setFullPron('');
             setPhrasePron({});
+            setKoreanFullPron('');
+            setKoreanPhrasePron({});
             return;
         }
         let cancelled = false;
         (async () => {
             setPronLoading(true);
             try {
+                // Translated-text pronunciation
                 let full = fullPronunciation;
                 if (!full) full = await fetchFullPronunciation(text, lang);
                 if (cancelled) return;
                 setFullPron(full || '');
+
+                // Korean original pronunciation (parallel-safe via the same cache)
+                if (koreanOriginal && koreanLocal) {
+                    fetchFullPronunciation(koreanOriginal, 'ko').then(krFull => {
+                        if (!cancelled) setKoreanFullPron(krFull || '');
+                    });
+                    getPhrasePronunciations(
+                        koreanLocal.phrases,
+                        'ko',
+                        (partial) => { if (!cancelled) setKoreanPhrasePron({ ...partial }); }
+                    ).then(krMap => {
+                        if (!cancelled) setKoreanPhrasePron(krMap);
+                    });
+                }
+
                 const map = await getPhrasePronunciations(
                     local.phrases,
                     lang,
@@ -310,7 +505,7 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', isAdm
             }
         })();
         return () => { cancelled = true; };
-    }, [open, text, lang, fullPronunciation, local.phrases]);
+    }, [open, text, lang, fullPronunciation, koreanOriginal, local.phrases, koreanLocal]);
 
     const runGemini = async () => {
         if (!text || !lang) return;
@@ -344,11 +539,16 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', isAdm
 
     if (!open) return null;
 
-    const phraseKey = (p) => (p.text || '') + (p.particle || '');
-
     const now = new Date();
     const mmdd = `${String(now.getMonth() + 1).padStart(2, '0')}월${String(now.getDate()).padStart(2, '0')}일`;
-    const handlePrintPdf = () => openPrintWindow(local, fullPron, phrasePron);
+    const handlePrintPdf = () => openPrintWindow({
+        local,
+        fullPron,
+        phrasePron,
+        koreanLocal,
+        koreanFullPron,
+        koreanPhrasePron,
+    });
 
     return (
         <div
@@ -392,122 +592,29 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', isAdm
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {/* Original text + pronunciation, chunked by "/" */}
-                    <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-3">
-                        <div>
-                            <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">원문</div>
-                            <div className="text-base text-gray-900 leading-relaxed break-words">
-                                {local.chunks.length === 0 ? (
-                                    <span className="italic text-gray-400">(빈 문장)</span>
-                                ) : local.chunks.map((c, i) => (
-                                    <React.Fragment key={i}>
-                                        <span>{c.originalChunk.trim()}</span>
-                                        {i < local.chunks.length - 1 && (
-                                            <span className="text-indigo-400 mx-1.5 font-bold select-none">/</span>
-                                        )}
-                                    </React.Fragment>
-                                ))}
-                            </div>
-                        </div>
+                    {/* Primary (translated) analysis */}
+                    <AnalysisBlock
+                        analysis={local}
+                        fullPron={fullPron}
+                        phrasePron={phrasePron}
+                        pronLoading={pronLoading}
+                    />
 
-                        {(fullPron || pronLoading) && (
-                            <div>
-                                <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1 flex items-center gap-1">
-                                    발음
-                                    {pronLoading && <Loader size={9} className="animate-spin text-indigo-400" />}
-                                </div>
-                                {fullPron ? (
-                                    <div className="text-sm text-indigo-700 font-mono leading-relaxed break-words">
-                                        {pronChunks.map((c, i) => (
-                                            <React.Fragment key={i}>
-                                                <span>{c}</span>
-                                                {i < pronChunks.length - 1 && (
-                                                    <span className="text-indigo-300 mx-1.5 font-bold select-none">/</span>
-                                                )}
-                                            </React.Fragment>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-xs text-gray-400 italic">발음 로딩 중…</div>
-                                )}
+                    {/* Korean original analysis — only when source was Korean and viewer is not */}
+                    {koreanLocal && (
+                        <div className="pt-3 mt-3 border-t-2 border-dashed border-rose-200">
+                            <div className="flex items-center gap-2 mb-3 px-2 py-1.5 rounded bg-rose-50 border border-rose-200">
+                                <span className="text-xs font-bold text-rose-700">🇰🇷 원문 한국어 분석 (참고)</span>
+                                <span className="text-[10px] text-rose-500">상대가 한국어로 보낸 원문을 같은 형식으로 함께 익히세요.</span>
                             </div>
-                        )}
-                    </div>
-
-                    {/* Note */}
-                    {local.note && (
-                        <div className="text-xs leading-relaxed bg-indigo-50 text-indigo-900 rounded-lg px-3 py-2 border border-indigo-100">
-                            {local.note}
+                            <AnalysisBlock
+                                analysis={koreanLocal}
+                                fullPron={koreanFullPron}
+                                phrasePron={koreanPhrasePron}
+                                pronLoading={pronLoading}
+                            />
                         </div>
                     )}
-
-                    {/* Structure per chunk */}
-                    {local.chunks.length > 0 && (
-                        <div>
-                            <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-2">구조 (문장별)</div>
-                            <ol className="space-y-1.5 text-xs">
-                                {local.chunks.map((c, i) => (
-                                    <li key={i} className="flex items-start gap-2 rounded border border-gray-100 bg-white px-2.5 py-1.5">
-                                        <span className="font-bold text-indigo-600 shrink-0 mt-0.5">{['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'][i] || `(${i + 1})`}</span>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-gray-500 break-words">{c.originalChunk.trim()}</div>
-                                            <div className="font-semibold text-gray-800 mt-0.5">{c.structure || '(구조 불명)'}</div>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ol>
-                        </div>
-                    )}
-
-                    {/* Phrase breakdown with pronunciation */}
-                    <div>
-                        <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-1">
-                            어절 분해
-                            {pronLoading && <Loader size={9} className="animate-spin text-indigo-400" />}
-                        </div>
-                        <div className="space-y-2">
-                            {local.phrases.length === 0 ? (
-                                <div className="text-sm text-gray-400 italic">분석할 어절이 없습니다.</div>
-                            ) : local.phrases.map((p, idx) => {
-                                const c = cls(p.label?.color || 'gray');
-                                const key = phraseKey(p);
-                                const pron = phrasePron[key];
-                                return (
-                                    <div
-                                        key={idx}
-                                        className={`flex items-start gap-2 p-2.5 rounded-lg border ${c.border} ${c.bg}`}
-                                    >
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-baseline gap-2 flex-wrap">
-                                                <span className={`text-base font-semibold ${c.text} break-words`}>
-                                                    {p.text}
-                                                    {p.particle && (
-                                                        <span className="ml-1 text-xs px-1.5 py-0.5 rounded bg-white/60 border border-current">
-                                                            +{p.particle}
-                                                        </span>
-                                                    )}
-                                                    {p.punct && <span className="text-gray-400 ml-0.5">{p.punct}</span>}
-                                                </span>
-                                                {pron ? (
-                                                    <span className="text-xs font-mono text-indigo-600">[{pron}]</span>
-                                                ) : pronLoading ? (
-                                                    <span className="text-[10px] text-gray-400 italic">발음…</span>
-                                                ) : null}
-                                            </div>
-                                            {p.label && (
-                                                <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${c.pill}`}>
-                                                        {p.label.role}
-                                                    </span>
-                                                    <span className="text-xs text-gray-600 leading-snug">{p.label.detail}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
 
                     {/* Gemini section */}
                     <div className="border-t border-gray-100 pt-3">

@@ -1567,7 +1567,13 @@ const GlobalChat = () => {
                                         {displayText && (
                                             <button
                                                 type="button"
-                                                onClick={() => setGrammarTarget({ text: displayText, lang: ttsLang, pronunciation: pronunciation || '' })}
+                                                onClick={() => setGrammarTarget({
+                                                    text: displayText,
+                                                    lang: ttsLang,
+                                                    pronunciation: pronunciation || '',
+                                                    // 원문이 한국어이고 보고 있는 언어가 한국어가 아니면, 한국어 원문 분석도 함께 보여준다.
+                                                    koreanOriginal: (srcLang === 'ko' && ttsLang !== 'ko' && m.text) ? m.text : '',
+                                                })}
                                                 className="p-1.5 rounded-full transition-colors text-gray-400 hover:text-indigo-600 hover:bg-indigo-50"
                                                 title="문법 분석"
                                             >
@@ -1715,6 +1721,7 @@ const GlobalChat = () => {
                 text={grammarTarget?.text || ''}
                 lang={grammarTarget?.lang || ''}
                 fullPronunciation={grammarTarget?.pronunciation || ''}
+                koreanOriginal={grammarTarget?.koreanOriginal || ''}
                 isAdmin={isAdmin}
             />
         </div>
