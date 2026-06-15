@@ -1,7 +1,7 @@
 {
   "project": "Meet4U (PromiseU)",
   "description": "Meeting/약속 스케줄러 PWA. 사용자별 약속 생성, 글로벌 미팅 맵(Leaflet), 출석/댓글/글로벌 채팅 실시간 알림(FCM), 다국어(ko/en/zh), 음성 합성, 댓글 자동 번역을 제공한다.",
-  "lastUpdated": "2026-05-29",
+  "lastUpdated": "2026-06-16",
   "architectureSummary": "프론트엔드: React 19 + Vite 7 SPA를 PWA로 빌드. 백엔드: Firebase(Auth/Firestore/Storage/Analytics/FCM) + Netlify Functions(번역·TTS·푸시 전송). 다중 호스팅 대상(Netlify/Vercel/Firebase Hosting/gh-pages) 지원. 사용자 데이터는 모두 Firestore에 저장되며, 정적 자산만 호스팅 플랫폼이 서빙.",
   "repo": "/Users/heoujin/meet4u",
   "categories": [
@@ -67,7 +67,9 @@
         { "name": "Google Translate dt=rm (romanization)", "version": "translate.googleapis.com/translate_a/single?dt=rm", "purpose": "비라틴 문자(한·중·일·아랍·러시아·태국 등) 타겟의 발음 표기를 라틴 문자로 반환." },
         { "name": "Google Translate TTS", "version": "translate.googleapis.com/translate_tts", "purpose": "텍스트→음성 합성(텍스트 ~200자/요청)." },
         { "name": "Google Calendar API", "version": "via @firebase Auth googleProvider scope", "purpose": "Google 로그인 토큰으로 Calendar 읽기/쓰기", "config": "src/lib/googleCalendar.js, hooks/useGoogleCalendar.js" },
-        { "name": "라틴 → 한글 음차 (in-repo)", "version": "in-repo", "purpose": "프랑스어/영어/독일어/스페인어/이탈리아어/포르투갈어/베트남어 등 라틴 문자 타겟에 대해 한글 발음 가이드 생성. dt=rm이 빈 값을 돌려주는 경우의 fallback.", "config": "src/lib/phonetics.js (latinToHangul/getPronunciationDisplay), netlify/functions/translate-comment.js (서버 측 미러)" }
+        { "name": "라틴 → 한글 음차 (in-repo)", "version": "in-repo", "purpose": "프랑스어/영어/독일어/스페인어/이탈리아어/포르투갈어/베트남어 등 라틴 문자 타겟에 대해 한글 발음 가이드 생성. dt=rm이 빈 값을 돌려주는 경우의 fallback.", "config": "src/lib/phonetics.js (latinToHangul/getPronunciationDisplay), netlify/functions/translate-comment.js (서버 측 미러)" },
+        { "name": "다국어 문법 분석기 (in-repo)", "version": "in-repo", "purpose": "일본어/한국어/중국어/영어/프랑스어/스페인어/베트남어 등 myLang 별로 어절을 분해하고 주어/목적어/술어/부사어/조사/관사/전치사 역할을 라벨링. API 키 없이 동작.", "config": "src/lib/grammar.js (analyzeSentence/analyze*), src/Components/chat/GrammarPopup.jsx, GlobalChat.jsx 메시지 옆 'BookOpen' 버튼" },
+        { "name": "Gemini API (옵션 정밀 분석)", "version": "gemini-1.5-flash", "purpose": "관리자 모드 사용자는 VITE_GEMINI_ADMIN_API_KEY(공유)를 사용. 일반 사용자는 GrammarPopup의 ⚙️ 키 등록으로 본인 무료 키를 localStorage에 저장하여 업그레이드 분석 사용.", "config": ".env (VITE_GEMINI_ADMIN_API_KEY, gitignored), localStorage(meet4u_gemini_api_key), src/lib/grammar.js (analyzeWithGemini/getGeminiKey)" }
       ]
     },
     {

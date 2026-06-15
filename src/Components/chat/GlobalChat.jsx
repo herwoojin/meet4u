@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import {
-    Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX,
+    Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX, BookOpen,
     Plus, Users, LogOut, X, ChevronDown, Search, Loader, Image as ImageIcon,
     Copy, Check, Star, Edit2
 } from 'lucide-react';
@@ -16,6 +16,7 @@ import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
 import { compressImageToWebp } from '../../lib/imageUtils';
 import ImageLightbox from './ImageLightbox';
+import GrammarPopup from './GrammarPopup';
 import {
     romajiToHangul,
     pinyinToHangul,
@@ -370,7 +371,8 @@ const PhraseManagerModal = ({ phrases, onSave, onClose }) => {
 // ---------------- Main GlobalChat with rooms ----------------
 const GlobalChat = () => {
     const { t } = useTranslation();
-    const { currentUser, userProfile, updateUserProfile } = useAuth();
+    const { currentUser, userProfile, updateUserProfile, isAdmin } = useAuth();
+    const [grammarTarget, setGrammarTarget] = useState(null); // { text, lang } or null
     const myLang = userProfile?.preferredLanguage || 'ko';
     const myEmail = lower(currentUser?.email);
 
@@ -1562,6 +1564,16 @@ const GlobalChat = () => {
                                         >
                                             {copiedId === m.id ? <Check size={14} /> : <Copy size={14} />}
                                         </button>
+                                        {displayText && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setGrammarTarget({ text: displayText, lang: ttsLang })}
+                                                className="p-1.5 rounded-full transition-colors text-gray-400 hover:text-indigo-600 hover:bg-indigo-50"
+                                                title="문법 분석"
+                                            >
+                                                <BookOpen size={14} />
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -1696,6 +1708,14 @@ const GlobalChat = () => {
                     onClose={() => setShowPhraseManager(false)}
                 />
             )}
+
+            <GrammarPopup
+                open={Boolean(grammarTarget)}
+                onClose={() => setGrammarTarget(null)}
+                text={grammarTarget?.text || ''}
+                lang={grammarTarget?.lang || ''}
+                isAdmin={isAdmin}
+            />
         </div>
     );
 };
