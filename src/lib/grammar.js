@@ -1,3 +1,5 @@
+import { latinToHangul, isLatinScript, isNonLatinScript } from './phonetics.js';
+
 // Multi-language grammar analyzer for chat translations.
 //
 // The goal is to help a learner break a translated sentence into its
@@ -41,16 +43,55 @@
 
 const baseLang = (lang) => String(lang || '').split('-')[0].toLowerCase();
 
+// Group phrases into clauses based on punctuation that ends a phrase
+// (commas / periods / exclamation / question / semicolon). Each chunk has
+// its own structure summary so the popup can show numbered clauses like
+// "① 주제 + 주어 + 술어 ② 주제 + 술어" instead of one long line.
+const CLAUSE_PUNCT_RE = /[、。，．,.!?！？;；]/;
+
+// CJK languages run words together without spaces. Everything else (including
+// Korean, which separates eojeols with whitespace) needs a space between
+// phrases when we reconstruct a clause.
+const SPACE_JOINED_LANGS = new Set(['ja', 'zh']);
+
+const chunkPhrases = (phrases, language) => {
+    const useSpaces = !SPACE_JOINED_LANGS.has(language);
+    const chunks = [];
+    let cur = { phrases: [], originalChunk: '', structure: '' };
+    const append = (piece) => {
+        if (!piece) return;
+        if (useSpaces && cur.originalChunk && !/\s$/.test(cur.originalChunk)) cur.originalChunk += ' ';
+        cur.originalChunk += piece;
+    };
+    for (const p of phrases) {
+        cur.phrases.push(p);
+        append((p.text || '') + (p.particle || ''));
+        if (p.punct) cur.originalChunk += p.punct;
+        if (p.punct && CLAUSE_PUNCT_RE.test(p.punct)) {
+            cur.structure = cur.phrases.map(x => x.label?.role).filter(Boolean).join(' + ');
+            chunks.push(cur);
+            cur = { phrases: [], originalChunk: '', structure: '' };
+        }
+    }
+    if (cur.phrases.length) {
+        cur.structure = cur.phrases.map(x => x.label?.role).filter(Boolean).join(' + ');
+        chunks.push(cur);
+    }
+    return chunks;
+};
+
 const buildResult = (language, original, phrases, structurePartsFn, extras = {}) => {
     const structureParts = phrases.map(p => p.label?.role).filter(Boolean);
     const structure = structurePartsFn
         ? structurePartsFn(phrases)
         : structureParts.join(' + ');
+    const chunks = chunkPhrases(phrases, language);
     return {
         language,
         original,
         phrases,
         structure,
+        chunks,
         summary: phrases.length === 0
             ? '문장이 비어 있습니다.'
             : `${phrases.length}개 어절. ${structure || '구조 분석 불가'}.`,
@@ -656,6 +697,115 @@ export const analyzeGeneric = (text, lang) => {
     return buildResult(baseLang(lang) || 'xx', text, phrases, null, {
         note: '이 언어에는 내장된 정밀 분석기가 없어 어휘 단위만 보여 드립니다. 더 정확한 분석은 ⚙️ 에서 Gemini 무료 API 키를 추가하세요.',
     });
+};
+
+// ===========================================================================
+// Pronunciation helpers — used by the GrammarPopup to show phrase-level
+// readings next to each token so a learner can practice speaking.
+// ===========================================================================
+
+const ROMAN_CACHE = new Map();
+
+const fetchRomanizationOnce = async (text, lang) => {
+    const key = `${lang}:${text}`;
+    if (ROMAN_CACHE.has(key)) return ROMAN_CACHE.get(key);
+    if (!text || !text.trim()) return '';
+    try {
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(lang)}&tl=en&dt=rm&q=${encodeURIComponent(text)}`;
+        const res = await fetch(url);
+        if (!res.ok) { ROMAN_CACHE.set(key, ''); return ''; }
+        const data = await res.json();
+        if (data && data[0]) {
+            const parts = data[0]
+                .filter(seg => seg)
+                .map(seg => seg[3] || seg[2] || '')
+                .filter(Boolean);
+            const result = parts.join(' ').trim();
+            ROMAN_CACHE.set(key, result);
+            return result;
+        }
+    } catch { /* network errors are non-fatal */ }
+    ROMAN_CACHE.set(key, '');
+    return '';
+};
+
+// Compute pronunciation for a single phrase synchronously when possible.
+// Returns '' when an async fetch is required (caller must use
+// getPhrasePronunciations for that path).
+export const computePhrasePronunciation = (text, lang) => {
+    if (!text) return '';
+    if (isLatinScript(lang)) return latinToHangul(text, lang);
+    return '';
+};
+
+// Fetch per-phrase pronunciations for the entire phrase list, with a
+// concurrency cap so we don't fire 30+ simultaneous Google requests.
+// onProgress is called with a partial map as results trickle in so the UI
+// can render progressively. Returns the final map { key -> pronunciation }.
+export const getPhrasePronunciations = async (phrases, lang, onProgress, concurrency = 6) => {
+    const map = {};
+    if (!phrases || phrases.length === 0) return map;
+
+    if (isLatinScript(lang)) {
+        for (const p of phrases) {
+            const key = (p.text || '') + (p.particle || '');
+            const surface = (p.text || '') + (p.particle || '');
+            map[key] = latinToHangul(surface, lang);
+        }
+        if (onProgress) onProgress({ ...map });
+        return map;
+    }
+
+    if (!isNonLatinScript(lang) && !lang) return map;
+
+    const tasks = phrases.map(p => {
+        const key = (p.text || '') + (p.particle || '');
+        const query = (p.text || '') + (p.particle || '');
+        return { key, query };
+    });
+
+    let idx = 0;
+    const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => (async () => {
+        while (idx < tasks.length) {
+            const i = idx++;
+            const { key, query } = tasks[i];
+            const rom = await fetchRomanizationOnce(query, lang);
+            map[key] = rom;
+            if (onProgress) onProgress({ ...map });
+        }
+    })());
+    await Promise.all(workers);
+    return map;
+};
+
+// Fetch a single full-sentence romanization (used when no cached
+// pronunciation is available on the chat message itself).
+export const fetchFullPronunciation = async (text, lang) => {
+    if (!text) return '';
+    if (isLatinScript(lang)) return latinToHangul(text, lang);
+    if (isNonLatinScript(lang) || !lang) return await fetchRomanizationOnce(text, lang);
+    return '';
+};
+
+// Re-apply CLAUSE_PUNCT_RE so the popup can split the full pronunciation
+// string into the same number of chunks as the original text.
+export const splitPronunciationByChunks = (fullPron, chunks) => {
+    if (!fullPron || !chunks || chunks.length <= 1) return [fullPron || ''];
+    // If pronunciation contains "/", trust it.
+    if (fullPron.includes(' / ')) return fullPron.split(' / ');
+    // Otherwise distribute proportionally based on chunk character count.
+    const total = chunks.reduce((s, c) => s + (c.originalChunk?.length || 0), 0) || 1;
+    let cursor = 0;
+    const slices = [];
+    for (let i = 0; i < chunks.length; i++) {
+        const ratio = (chunks[i].originalChunk?.length || 0) / total;
+        const take = i === chunks.length - 1
+            ? fullPron.length - cursor
+            : Math.round(fullPron.length * ratio);
+        slices.push(fullPron.slice(cursor, cursor + take).trim());
+        cursor += take;
+    }
+    return slices;
 };
 
 // ===========================================================================

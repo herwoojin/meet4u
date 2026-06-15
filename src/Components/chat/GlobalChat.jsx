@@ -1567,7 +1567,7 @@ const GlobalChat = () => {
                                         {displayText && (
                                             <button
                                                 type="button"
-                                                onClick={() => setGrammarTarget({ text: displayText, lang: ttsLang })}
+                                                onClick={() => setGrammarTarget({ text: displayText, lang: ttsLang, pronunciation: pronunciation || '' })}
                                                 className="p-1.5 rounded-full transition-colors text-gray-400 hover:text-indigo-600 hover:bg-indigo-50"
                                                 title="문법 분석"
                                             >
@@ -1714,6 +1714,7 @@ const GlobalChat = () => {
                 onClose={() => setGrammarTarget(null)}
                 text={grammarTarget?.text || ''}
                 lang={grammarTarget?.lang || ''}
+                fullPronunciation={grammarTarget?.pronunciation || ''}
                 isAdmin={isAdmin}
             />
         </div>
