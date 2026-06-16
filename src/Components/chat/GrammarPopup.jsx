@@ -7,6 +7,8 @@ import {
     setGeminiKey,
     hasAdminGeminiKey,
     getPhrasePronunciations,
+    getPhraseTranslations,
+    pairKoreanChunks,
     fetchFullPronunciation,
     splitPronunciationByChunks,
 } from '../../lib/grammar';
@@ -88,15 +90,66 @@ const renderPrintSection = (analysis, fullPron, phrasePron) => {
     return { chunksHtml, originalHtml, phrasesHtml };
 };
 
-const buildPrintHtml = ({ local, fullPron, phrasePron, koreanLocal, koreanFullPron, koreanPhrasePron }) => {
+const renderUnifiedPrintSection = (local, fullPron, phrasePron, phraseMeanings, chunkKoreans, koreanOriginal, languageLabel) => {
+    const ciNums = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+    const phraseKey = (p) => (p.text || '') + (p.particle || '');
+    const pronSlices = splitPronunciationByChunks(fullPron, local.chunks);
+
+    const cardsHtml = local.chunks.map((chunk, idx) => {
+        const ko = chunkKoreans[idx] || '';
+        const pron = pronSlices[idx] || '';
+        const phrasesHtml = chunk.phrases.map(p => {
+            const color = PRINT_COLORS[p.label?.color] || '#374151';
+            const pronP = phrasePron[phraseKey(p)] || '';
+            const meaning = phraseMeanings[phraseKey(p)] || '';
+            return `
+                <div class="u-phrase" style="border-left-color:${color}">
+                    <div class="u-phrase-head">
+                        <span class="u-surface">${escapeHtml(p.text)}</span>
+                        ${p.particle ? `<span class="u-particle" style="color:${color};border-color:${color}">+${escapeHtml(p.particle)}</span>` : ''}
+                        ${p.punct ? `<span class="u-punct">${escapeHtml(p.punct)}</span>` : ''}
+                        ${pronP ? `<span class="u-pron">[${escapeHtml(pronP)}]</span>` : ''}
+                        ${meaning ? `<span class="u-meaning">— <b>${escapeHtml(meaning)}</b></span>` : ''}
+                    </div>
+                    ${p.label ? `
+                        <div class="u-role-row">
+                            <span class="u-role" style="background:${color}1a;color:${color}">${escapeHtml(p.label.role)}</span>
+                            <span class="u-role-desc">${escapeHtml(p.label.detail)}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="u-card">
+                <div class="u-card-head">
+                    <span class="u-num">${ciNums[idx] || `(${idx + 1})`}</span>
+                    <span class="u-struct">${escapeHtml(chunk.structure || '(구조 불명)')}</span>
+                </div>
+                <div class="u-row"><span class="u-label u-label-ko">1. 원문 (한국어)</span><div class="u-content">${escapeHtml(ko) || '<span class="u-empty">(매칭 없음)</span>'}</div></div>
+                <div class="u-row"><span class="u-label u-label-tr">2. 번역 (${escapeHtml(languageLabel || '')})</span><div class="u-content u-content-translated">${escapeHtml(chunk.originalChunk.trim())}</div></div>
+                <div class="u-row"><span class="u-label u-label-pr">3. 발음</span><div class="u-content u-content-pron">${escapeHtml(pron) || '<span class="u-empty">(없음)</span>'}</div></div>
+                <div class="u-row"><span class="u-label u-label-bd">4. 어절 분해 (단어 + 뜻)</span><div class="u-phrases">${phrasesHtml}</div></div>
+            </div>
+        `;
+    }).join('');
+
+    return { cardsHtml, fullPron };
+};
+
+const buildPrintHtml = ({ local, fullPron, phrasePron, koreanLocal, koreanFullPron, koreanPhrasePron, koreanOriginal, chunkKoreans, phraseMeanings }) => {
     const now = new Date();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const dd = String(now.getDate()).padStart(2, '0');
     const yyyy = now.getFullYear();
     const dateLabel = `${mm}월${dd}일`;
 
-    const main = renderPrintSection(local, fullPron, phrasePron);
-    const korean = koreanLocal ? renderPrintSection(koreanLocal, koreanFullPron, koreanPhrasePron) : null;
+    const unified = koreanLocal
+        ? renderUnifiedPrintSection(local, fullPron, phrasePron, phraseMeanings || {}, chunkKoreans || [], koreanOriginal || '', local.languageLabel)
+        : null;
+    const main = unified ? null : renderPrintSection(local, fullPron, phrasePron);
+    const korean = null; // legacy separate korean section retired in unified mode
 
     return `<!DOCTYPE html>
 <html lang="ko">
@@ -197,6 +250,73 @@ body {
     font-size: 10pt; font-weight: 700;
     page-break-before: auto; page-break-after: avoid;
 }
+/* Unified per-clause study cards */
+.u-overview {
+    background: linear-gradient(90deg, #fff1f2 0%, #eef2ff 100%);
+    border: 1px solid #fecdd3; border-radius: 8px;
+    padding: 10px; margin-bottom: 14px;
+}
+.u-overview .u-ov-row { margin-bottom: 4px; }
+.u-overview .u-ov-label {
+    display: inline-block; font-size: 8.5pt; font-weight: 700;
+    margin-right: 4px;
+}
+.u-overview .u-ov-label.ko { color: #be123c; }
+.u-overview .u-ov-label.tr { color: #4338ca; }
+.u-overview .u-ov-label.pr { color: #9333ea; }
+.u-card {
+    border: 1.5px solid #c7d2fe; border-radius: 8px;
+    margin-bottom: 8px; overflow: hidden;
+    page-break-inside: avoid; background: white;
+}
+.u-card-head {
+    display: flex; align-items: center; gap: 8px;
+    background: #eef2ff; padding: 4px 10px;
+    border-bottom: 1px solid #c7d2fe;
+}
+.u-num { font-size: 11pt; font-weight: 800; color: #4338ca; }
+.u-struct { font-size: 8.5pt; color: #4338ca; font-weight: 600; }
+.u-row {
+    display: flex; gap: 8px; padding: 5px 10px;
+    border-bottom: 1px solid #f3f4f6;
+}
+.u-row:last-child { border-bottom: none; }
+.u-label {
+    display: inline-block; flex: 0 0 90px;
+    font-size: 7.5pt; font-weight: 700; padding-top: 2px;
+}
+.u-label-ko { color: #be123c; }
+.u-label-tr { color: #4338ca; }
+.u-label-pr { color: #9333ea; }
+.u-label-bd { color: #047857; }
+.u-content { flex: 1; font-size: 10pt; line-height: 1.45; }
+.u-content-translated { font-size: 11pt; font-weight: 600; }
+.u-content-pron { color: #4338ca; font-family: 'Menlo', monospace; font-size: 9pt; }
+.u-empty { color: #999; font-style: italic; font-size: 9pt; }
+.u-phrases { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.u-phrase {
+    border: 1px solid #ddd; border-left-width: 3px; border-radius: 3px;
+    padding: 4px 6px; background: white; page-break-inside: avoid;
+}
+.u-phrase-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px; }
+.u-surface { font-size: 10pt; font-weight: 700; }
+.u-particle {
+    display: inline-block; padding: 0 3px; border: 1px solid;
+    border-radius: 3px; font-size: 7.5pt; background: white;
+}
+.u-punct { color: #999; }
+.u-pron {
+    color: #4338ca; font-family: 'Menlo', monospace;
+    font-size: 8pt;
+}
+.u-meaning { font-size: 9pt; color: #555; }
+.u-meaning b { color: #be123c; }
+.u-role-row { display: flex; align-items: baseline; gap: 4px; margin-top: 2px; flex-wrap: wrap; }
+.u-role {
+    display: inline-block; padding: 1px 4px; border-radius: 3px;
+    font-size: 7.5pt; font-weight: 700;
+}
+.u-role-desc { color: #555; font-size: 8pt; }
 @media print {
     body { padding: 0; }
     .no-print { display: none !important; }
@@ -215,6 +335,18 @@ body {
     <div class="date">${yyyy}-${mm}-${dd}</div>
 </div>
 
+${unified ? `
+<div class="u-overview">
+    <div class="u-ov-row"><span class="u-ov-label ko">🇰🇷 전체 원문 (한국어):</span> ${escapeHtml(koreanOriginal || '')}</div>
+    <div class="u-ov-row"><span class="u-ov-label tr">전체 번역 (${escapeHtml(local.languageLabel || '')}):</span> ${escapeHtml(local.original)}</div>
+    ${fullPron ? `<div class="u-ov-row"><span class="u-ov-label pr">전체 발음:</span> ${escapeHtml(fullPron)}</div>` : ''}
+</div>
+
+<div class="section">
+    <h2>문장별 학습 (원문 → 번역 → 발음 → 어절+뜻)</h2>
+    ${unified.cardsHtml}
+</div>
+` : `
 <div class="section">
     <h2>원문</h2>
     <div class="original">${main.originalHtml}</div>
@@ -237,31 +369,7 @@ ${local.note ? `<div class="section"><div class="note">${escapeHtml(local.note)}
     <h2>어절 분해</h2>
     <div class="phrases">${main.phrasesHtml}</div>
 </div>
-
-${korean ? `
-<div class="ko-divider">🇰🇷 원문 한국어 분석 (참고)</div>
-
-<div class="section">
-    <h2>한국어 원문</h2>
-    <div class="original">${korean.originalHtml}</div>
-</div>
-
-${koreanFullPron ? `
-<div class="section">
-    <h2>한국어 발음</h2>
-    <div class="pron">${escapeHtml(koreanFullPron)}</div>
-</div>` : ''}
-
-<div class="section">
-    <h2>한국어 구조 (문장별)</h2>
-    ${korean.chunksHtml}
-</div>
-
-<div class="section">
-    <h2>한국어 어절 분해</h2>
-    <div class="phrases">${korean.phrasesHtml}</div>
-</div>
-` : ''}
+`}
 
 <div class="footer">Meet4U · PromiseU — 다국어 문법 공부 학습지 (${yyyy}-${mm}-${dd} 생성)</div>
 <script>
@@ -272,8 +380,8 @@ ${koreanFullPron ? `
 </html>`;
 };
 
-const openPrintWindow = ({ local, fullPron, phrasePron, koreanLocal, koreanFullPron, koreanPhrasePron }) => {
-    const html = buildPrintHtml({ local, fullPron, phrasePron, koreanLocal, koreanFullPron, koreanPhrasePron });
+const openPrintWindow = (args) => {
+    const html = buildPrintHtml(args);
     const w = window.open('', '_blank', 'width=900,height=1000');
     if (!w) {
         alert('팝업이 차단되었습니다. 브라우저에서 팝업을 허용한 뒤 다시 시도해 주세요.');
@@ -284,9 +392,124 @@ const openPrintWindow = ({ local, fullPron, phrasePron, koreanLocal, koreanFullP
     w.document.close();
 };
 
+// Unified per-clause study layout used when the source message was Korean
+// and the viewer reads a different language. Each clause card shows:
+//   ① 원문 (한국어) → 번역 → 발음 → 어절(단어+뜻).
+const UnifiedClauseLayout = ({
+    analysis, fullPron, phrasePron, phraseMeanings,
+    chunkKoreans, languageLabel, pronLoading,
+}) => {
+    const pronChunks = useMemo(
+        () => splitPronunciationByChunks(fullPron, analysis.chunks),
+        [fullPron, analysis.chunks]
+    );
+    const ciNums = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
+    const phraseKey = (p) => (p.text || '') + (p.particle || '');
+
+    return (
+        <div>
+            <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-1">
+                문장별 학습 (원문 → 번역 → 발음 → 어절)
+                {pronLoading && <Loader size={9} className="animate-spin text-indigo-400" />}
+            </div>
+            <div className="space-y-3">
+                {analysis.chunks.map((chunk, idx) => {
+                    const ko = chunkKoreans[idx] || '';
+                    const pron = pronChunks[idx] || '';
+                    return (
+                        <div
+                            key={idx}
+                            className="rounded-xl border-2 border-indigo-100 bg-white shadow-sm overflow-hidden"
+                        >
+                            {/* Header: number + structure */}
+                            <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-indigo-50 border-b border-indigo-100">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-base font-bold text-indigo-700">{ciNums[idx] || `(${idx + 1})`}</span>
+                                    <span className="text-[10px] text-indigo-600 font-semibold">{chunk.structure || '(구조 불명)'}</span>
+                                </div>
+                            </div>
+
+                            {/* 1. Korean original */}
+                            <div className="px-3 py-2 border-b border-gray-100">
+                                <div className="text-[9px] uppercase tracking-wide text-rose-500 font-bold mb-0.5">1. 원문 (한국어)</div>
+                                <div className="text-sm text-gray-800 break-words leading-relaxed">
+                                    {ko || (pronLoading ? <span className="text-gray-400 italic text-xs">한국어 매칭 로딩…</span> : <span className="text-gray-400 italic text-xs">(없음)</span>)}
+                                </div>
+                            </div>
+
+                            {/* 2. Translated text */}
+                            <div className="px-3 py-2 border-b border-gray-100">
+                                <div className="text-[9px] uppercase tracking-wide text-indigo-500 font-bold mb-0.5">2. 번역 ({languageLabel})</div>
+                                <div className="text-base text-gray-900 break-words leading-relaxed">
+                                    {chunk.originalChunk.trim()}
+                                </div>
+                            </div>
+
+                            {/* 3. Pronunciation */}
+                            <div className="px-3 py-2 border-b border-gray-100">
+                                <div className="text-[9px] uppercase tracking-wide text-purple-500 font-bold mb-0.5">3. 발음</div>
+                                <div className="text-sm text-indigo-700 font-mono leading-relaxed break-words">
+                                    {pron || (pronLoading ? <span className="text-gray-400 italic text-xs not-italic">발음 로딩…</span> : <span className="text-gray-400 italic text-xs">(없음)</span>)}
+                                </div>
+                            </div>
+
+                            {/* 4. Phrase breakdown with meanings */}
+                            <div className="px-3 py-2">
+                                <div className="text-[9px] uppercase tracking-wide text-emerald-600 font-bold mb-1.5">4. 어절 분해 (단어 + 뜻)</div>
+                                <div className="space-y-1.5">
+                                    {chunk.phrases.map((p, pIdx) => {
+                                        const c = cls(p.label?.color || 'gray');
+                                        const key = phraseKey(p);
+                                        const wordPron = phrasePron[key];
+                                        const meaning = phraseMeanings[key];
+                                        return (
+                                            <div
+                                                key={pIdx}
+                                                className={`rounded border ${c.border} ${c.bg} p-2`}
+                                            >
+                                                <div className="flex items-baseline gap-1.5 flex-wrap">
+                                                    <span className={`text-sm font-bold ${c.text} break-words`}>
+                                                        {p.text}
+                                                        {p.particle && (
+                                                            <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-white/70 border border-current">
+                                                                +{p.particle}
+                                                            </span>
+                                                        )}
+                                                        {p.punct && <span className="text-gray-400 ml-0.5">{p.punct}</span>}
+                                                    </span>
+                                                    {wordPron && (
+                                                        <span className="text-[11px] font-mono text-indigo-600">[{wordPron}]</span>
+                                                    )}
+                                                    {meaning && (
+                                                        <span className="text-xs text-gray-700">— <span className="font-semibold text-rose-600">{meaning}</span></span>
+                                                    )}
+                                                    {!wordPron && !meaning && pronLoading && (
+                                                        <span className="text-[10px] text-gray-400 italic">로딩…</span>
+                                                    )}
+                                                </div>
+                                                {p.label && (
+                                                    <div className="mt-1 flex items-center gap-1 flex-wrap">
+                                                        <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${c.pill}`}>
+                                                            {p.label.role}
+                                                        </span>
+                                                        <span className="text-[10.5px] text-gray-600 leading-snug">{p.label.detail}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
 // Reusable in-popup analysis block: original text + pronunciation + structure
-// + phrase decomposition. Used for both the translated text and (when source
-// is Korean) the original Korean sentence.
+// + phrase decomposition. Used when only one language is being analyzed.
 const AnalysisBlock = ({ analysis, fullPron, phrasePron, pronLoading }) => {
     const pronChunks = useMemo(
         () => splitPronunciationByChunks(fullPron, analysis.chunks),
@@ -433,6 +656,9 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
     // 한국어 원문 분석용 상태 (sourceLang === 'ko' && myLang !== 'ko' 일 때만 채워짐)
     const [koreanFullPron, setKoreanFullPron] = useState('');
     const [koreanPhrasePron, setKoreanPhrasePron] = useState({});
+    // 통합 학습 레이아웃용: 청크별 한국어 원문 + 어절별 한국어 뜻
+    const [chunkKoreans, setChunkKoreans] = useState([]);
+    const [phraseMeanings, setPhraseMeanings] = useState({});
 
     const local = useMemo(() => analyzeSentence(text || '', lang), [text, lang]);
     const koreanLocal = useMemo(
@@ -460,13 +686,17 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
     }, [open, onClose]);
 
     // Resolve full + per-phrase pronunciation for both the translated text
-    // and (when present) the original Korean sentence.
+    // and (when present) the original Korean sentence. Also pre-fetch the
+    // Korean meaning of each translated phrase + the Korean equivalent of
+    // each clause so the unified study layout can render immediately.
     useEffect(() => {
         if (!open || !text) {
             setFullPron('');
             setPhrasePron({});
             setKoreanFullPron('');
             setKoreanPhrasePron({});
+            setChunkKoreans([]);
+            setPhraseMeanings({});
             return;
         }
         let cancelled = false;
@@ -479,7 +709,7 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
                 if (cancelled) return;
                 setFullPron(full || '');
 
-                // Korean original pronunciation (parallel-safe via the same cache)
+                // Korean original pronunciation (parallel-safe via the cache)
                 if (koreanOriginal && koreanLocal) {
                     fetchFullPronunciation(koreanOriginal, 'ko').then(krFull => {
                         if (!cancelled) setKoreanFullPron(krFull || '');
@@ -490,6 +720,19 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
                         (partial) => { if (!cancelled) setKoreanPhrasePron({ ...partial }); }
                     ).then(krMap => {
                         if (!cancelled) setKoreanPhrasePron(krMap);
+                    });
+
+                    // Unified-study extras: per-chunk Korean + per-phrase Korean meaning.
+                    pairKoreanChunks(local.chunks, koreanLocal, lang).then(arr => {
+                        if (!cancelled) setChunkKoreans(arr);
+                    });
+                    getPhraseTranslations(
+                        local.phrases,
+                        lang,
+                        'ko',
+                        (partial) => { if (!cancelled) setPhraseMeanings({ ...partial }); }
+                    ).then(meanMap => {
+                        if (!cancelled) setPhraseMeanings(meanMap);
                     });
                 }
 
@@ -505,7 +748,7 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
             }
         })();
         return () => { cancelled = true; };
-    }, [open, text, lang, fullPronunciation, koreanOriginal, local.phrases, koreanLocal]);
+    }, [open, text, lang, fullPronunciation, koreanOriginal, local.phrases, local.chunks, koreanLocal]);
 
     const runGemini = async () => {
         if (!text || !lang) return;
@@ -548,6 +791,9 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
         koreanLocal,
         koreanFullPron,
         koreanPhrasePron,
+        koreanOriginal,
+        chunkKoreans,
+        phraseMeanings,
     });
 
     return (
@@ -592,28 +838,45 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {/* Primary (translated) analysis */}
-                    <AnalysisBlock
-                        analysis={local}
-                        fullPron={fullPron}
-                        phrasePron={phrasePron}
-                        pronLoading={pronLoading}
-                    />
-
-                    {/* Korean original analysis — only when source was Korean and viewer is not */}
-                    {koreanLocal && (
-                        <div className="pt-3 mt-3 border-t-2 border-dashed border-rose-200">
-                            <div className="flex items-center gap-2 mb-3 px-2 py-1.5 rounded bg-rose-50 border border-rose-200">
-                                <span className="text-xs font-bold text-rose-700">🇰🇷 원문 한국어 분석 (참고)</span>
-                                <span className="text-[10px] text-rose-500">상대가 한국어로 보낸 원문을 같은 형식으로 함께 익히세요.</span>
+                    {koreanLocal ? (
+                        <>
+                            {/* Top reference: full Korean + full translated for at-a-glance compare */}
+                            <div className="bg-gradient-to-r from-rose-50 to-indigo-50 rounded-lg p-3 border border-rose-200 space-y-2">
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-wide text-rose-500 font-bold mb-1">전체 원문 (🇰🇷 한국어)</div>
+                                    <div className="text-sm text-gray-800 leading-relaxed break-words">{koreanOriginal}</div>
+                                </div>
+                                <div>
+                                    <div className="text-[10px] uppercase tracking-wide text-indigo-500 font-bold mb-1">전체 번역 ({local.languageLabel})</div>
+                                    <div className="text-base text-gray-900 leading-relaxed break-words">{local.original}</div>
+                                </div>
+                                {fullPron && (
+                                    <div>
+                                        <div className="text-[10px] uppercase tracking-wide text-purple-500 font-bold mb-1">전체 발음</div>
+                                        <div className="text-sm text-indigo-700 font-mono leading-relaxed break-words">{fullPron}</div>
+                                    </div>
+                                )}
                             </div>
-                            <AnalysisBlock
-                                analysis={koreanLocal}
-                                fullPron={koreanFullPron}
-                                phrasePron={koreanPhrasePron}
+
+                            {/* Per-clause unified study cards */}
+                            <UnifiedClauseLayout
+                                analysis={local}
+                                fullPron={fullPron}
+                                phrasePron={phrasePron}
+                                phraseMeanings={phraseMeanings}
+                                chunkKoreans={chunkKoreans}
+                                languageLabel={local.languageLabel}
                                 pronLoading={pronLoading}
                             />
-                        </div>
+                        </>
+                    ) : (
+                        /* Single-language analysis (no Korean source pairing) */
+                        <AnalysisBlock
+                            analysis={local}
+                            fullPron={fullPron}
+                            phrasePron={phrasePron}
+                            pronLoading={pronLoading}
+                        />
                     )}
 
                     {/* Gemini section */}

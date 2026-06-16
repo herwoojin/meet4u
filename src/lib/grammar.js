@@ -787,6 +787,89 @@ export const fetchFullPronunciation = async (text, lang) => {
     return '';
 };
 
+// ---------------------------------------------------------------------------
+// Translation helpers (for unified per-clause study layout)
+//
+// When the original message was Korean and the viewer reads a different
+// language, the popup pairs every translated clause with its Korean
+// equivalent and every word with its Korean meaning. We use Google
+// Translate (the same gtx endpoint used elsewhere) and cache results.
+// ---------------------------------------------------------------------------
+
+const TRANSLATION_CACHE = new Map();
+
+const fetchTranslationOnce = async (text, sourceLang, targetLang) => {
+    if (!text || !text.trim()) return '';
+    if (sourceLang === targetLang) return text;
+    const key = `${sourceLang}>${targetLang}:${text}`;
+    if (TRANSLATION_CACHE.has(key)) return TRANSLATION_CACHE.get(key);
+    try {
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${encodeURIComponent(sourceLang)}&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
+        const res = await fetch(url);
+        if (!res.ok) { TRANSLATION_CACHE.set(key, ''); return ''; }
+        const data = await res.json();
+        if (data && data[0]) {
+            const parts = data[0]
+                .filter(seg => seg && seg[0])
+                .map(seg => seg[0])
+                .join('');
+            const result = parts.trim();
+            TRANSLATION_CACHE.set(key, result);
+            return result;
+        }
+    } catch { /* network errors are non-fatal */ }
+    TRANSLATION_CACHE.set(key, '');
+    return '';
+};
+
+// Fetch per-phrase translations (e.g. each Japanese word → Korean meaning).
+// Concurrency-limited so we don't overload Google's unofficial gtx endpoint.
+export const getPhraseTranslations = async (phrases, sourceLang, targetLang, onProgress, concurrency = 6) => {
+    const map = {};
+    if (!phrases || phrases.length === 0) return map;
+    if (sourceLang === targetLang) {
+        for (const p of phrases) {
+            const key = (p.text || '') + (p.particle || '');
+            map[key] = p.text || '';
+        }
+        if (onProgress) onProgress({ ...map });
+        return map;
+    }
+    const tasks = phrases.map(p => ({
+        key: (p.text || '') + (p.particle || ''),
+        query: (p.text || '').trim(),
+    }));
+    let idx = 0;
+    const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => (async () => {
+        while (idx < tasks.length) {
+            const i = idx++;
+            const { key, query } = tasks[i];
+            if (!query) { map[key] = ''; continue; }
+            const t = await fetchTranslationOnce(query, sourceLang, targetLang);
+            map[key] = t;
+            if (onProgress) onProgress({ ...map });
+        }
+    })());
+    await Promise.all(workers);
+    return map;
+};
+
+// Pair each translated chunk with its Korean equivalent. If the analyzer's
+// Korean chunk count matches, we use the user's actual original wording.
+// Otherwise we fall back to back-translating each translated chunk.
+export const pairKoreanChunks = async (translatedChunks, koreanLocal, sourceLang) => {
+    if (!translatedChunks?.length) return [];
+    const koChunks = koreanLocal?.chunks || [];
+    if (koChunks.length === translatedChunks.length) {
+        return koChunks.map(c => c.originalChunk.trim());
+    }
+    // Fallback: back-translate each translated chunk to Korean
+    const result = await Promise.all(
+        translatedChunks.map(c => fetchTranslationOnce(c.originalChunk.trim(), sourceLang, 'ko'))
+    );
+    return result;
+};
+
 // Re-apply CLAUSE_PUNCT_RE so the popup can split the full pronunciation
 // string into the same number of chunks as the original text.
 export const splitPronunciationByChunks = (fullPron, chunks) => {
