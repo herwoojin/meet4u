@@ -40,6 +40,57 @@ const escapeHtml = (s) => String(s ?? '')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+// JSX: render a chunk by inserting "/" between consecutive phrases so that
+// subject / object / predicate / complement boundaries are visible at a
+// glance. Works for every supported language because each analyzer returns
+// the same phrase shape.
+const renderChunkPhrasesJSX = (chunk) => {
+    if (!chunk?.phrases?.length) {
+        return <span>{chunk?.originalChunk?.trim() || ''}</span>;
+    }
+    return chunk.phrases.map((p, i) => (
+        <React.Fragment key={i}>
+            <span>{p.text}{p.particle || ''}{p.punct || ''}</span>
+            {i < chunk.phrases.length - 1 && (
+                <span className="text-indigo-400 mx-1.5 font-bold select-none">/</span>
+            )}
+        </React.Fragment>
+    ));
+};
+
+const renderAllPhrasesJSX = (analysis) => {
+    const allPhrases = (analysis?.chunks || []).flatMap(c => c.phrases);
+    if (!allPhrases.length) return <span>{analysis?.original || ''}</span>;
+    return allPhrases.map((p, i) => (
+        <React.Fragment key={i}>
+            <span>{p.text}{p.particle || ''}{p.punct || ''}</span>
+            {i < allPhrases.length - 1 && (
+                <span className="text-indigo-400 mx-1.5 font-bold select-none">/</span>
+            )}
+        </React.Fragment>
+    ));
+};
+
+// HTML string variants for the printable PDF.
+const renderChunkPhrasesHtml = (chunk) => {
+    if (!chunk?.phrases?.length) return escapeHtml(chunk?.originalChunk?.trim() || '');
+    return chunk.phrases.map((p, i) => {
+        const piece = escapeHtml(p.text) + escapeHtml(p.particle || '') + escapeHtml(p.punct || '');
+        const sep = i < chunk.phrases.length - 1 ? '<span class="phrase-slash">/</span>' : '';
+        return piece + sep;
+    }).join('');
+};
+
+const renderAllPhrasesHtml = (analysis) => {
+    const allPhrases = (analysis?.chunks || []).flatMap(c => c.phrases);
+    if (!allPhrases.length) return escapeHtml(analysis?.original || '');
+    return allPhrases.map((p, i) => {
+        const piece = escapeHtml(p.text) + escapeHtml(p.particle || '') + escapeHtml(p.punct || '');
+        const sep = i < allPhrases.length - 1 ? '<span class="phrase-slash">/</span>' : '';
+        return piece + sep;
+    }).join('');
+};
+
 // Map our Tailwind color tokens to print-friendly hex pairs so the PDF
 // keeps role-coloring even when Tailwind is unavailable in the print
 // window.
@@ -57,14 +108,12 @@ const renderPrintSection = (analysis, fullPron, phrasePron) => {
     const chunksHtml = analysis.chunks.map((c, i) => `
         <div class="chunk">
             <span class="num">${ciNums[i] || `(${i + 1})`}</span>
-            <span class="chunk-text">${escapeHtml(c.originalChunk.trim())}</span>
+            <span class="chunk-text">${renderChunkPhrasesHtml(c)}</span>
             <div class="struct">${escapeHtml(c.structure || '구조 불명')}</div>
         </div>
     `).join('');
 
-    const originalHtml = analysis.chunks.map((c, i) =>
-        `<span>${escapeHtml(c.originalChunk.trim())}</span>${i < analysis.chunks.length - 1 ? '<span class="divider">/</span>' : ''}`
-    ).join('');
+    const originalHtml = renderAllPhrasesHtml(analysis);
 
     const phrasesHtml = analysis.phrases.map(p => {
         const pron = phrasePron[phraseKey(p)] || '';
@@ -128,7 +177,7 @@ const renderUnifiedPrintSection = (local, fullPron, phrasePron, phraseMeanings, 
                     <span class="u-struct">${escapeHtml(chunk.structure || '(구조 불명)')}</span>
                 </div>
                 <div class="u-row"><span class="u-label u-label-ko">1. 원문 (한국어)</span><div class="u-content">${escapeHtml(ko) || '<span class="u-empty">(매칭 없음)</span>'}</div></div>
-                <div class="u-row"><span class="u-label u-label-tr">2. 번역 (${escapeHtml(languageLabel || '')})</span><div class="u-content u-content-translated">${escapeHtml(chunk.originalChunk.trim())}</div></div>
+                <div class="u-row"><span class="u-label u-label-tr">2. 번역 (${escapeHtml(languageLabel || '')})</span><div class="u-content u-content-translated">${renderChunkPhrasesHtml(chunk)}</div></div>
                 <div class="u-row"><span class="u-label u-label-pr">3. 발음</span><div class="u-content u-content-pron">${escapeHtml(pron) || '<span class="u-empty">(없음)</span>'}</div></div>
                 <div class="u-row"><span class="u-label u-label-bd">4. 어절 분해 (단어 + 뜻)</span><div class="u-phrases">${phrasesHtml}</div></div>
             </div>
@@ -195,6 +244,7 @@ body {
     background: #f7f7fb; border-radius: 6px; border: 1px solid #eef;
 }
 .divider { color: #4338ca; font-weight: bold; padding: 0 5px; }
+.phrase-slash { color: #6366f1; font-weight: bold; padding: 0 5px; }
 .pron {
     font-family: 'Menlo', 'Courier New', monospace;
     font-size: 9.5pt; color: #4338ca;
@@ -338,7 +388,7 @@ body {
 ${unified ? `
 <div class="u-overview">
     <div class="u-ov-row"><span class="u-ov-label ko">🇰🇷 전체 원문 (한국어):</span> ${escapeHtml(koreanOriginal || '')}</div>
-    <div class="u-ov-row"><span class="u-ov-label tr">전체 번역 (${escapeHtml(local.languageLabel || '')}):</span> ${escapeHtml(local.original)}</div>
+    <div class="u-ov-row"><span class="u-ov-label tr">전체 번역 (${escapeHtml(local.languageLabel || '')}):</span> ${renderAllPhrasesHtml(local)}</div>
     ${fullPron ? `<div class="u-ov-row"><span class="u-ov-label pr">전체 발음:</span> ${escapeHtml(fullPron)}</div>` : ''}
 </div>
 
@@ -437,11 +487,11 @@ const UnifiedClauseLayout = ({
                                 </div>
                             </div>
 
-                            {/* 2. Translated text */}
+                            {/* 2. Translated text — phrase-by-phrase with "/" for role boundaries */}
                             <div className="px-3 py-2 border-b border-gray-100">
                                 <div className="text-[9px] uppercase tracking-wide text-indigo-500 font-bold mb-0.5">2. 번역 ({languageLabel})</div>
                                 <div className="text-base text-gray-900 break-words leading-relaxed">
-                                    {chunk.originalChunk.trim()}
+                                    {renderChunkPhrasesJSX(chunk)}
                                 </div>
                             </div>
 
@@ -523,18 +573,11 @@ const AnalysisBlock = ({ analysis, fullPron, phrasePron, pronLoading }) => {
             {/* Original + pronunciation */}
             <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-3">
                 <div>
-                    <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">원문</div>
+                    <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">원문 (어절은 "/" 로 끊어 표시)</div>
                     <div className="text-base text-gray-900 leading-relaxed break-words">
                         {analysis.chunks.length === 0 ? (
                             <span className="italic text-gray-400">(빈 문장)</span>
-                        ) : analysis.chunks.map((c, i) => (
-                            <React.Fragment key={i}>
-                                <span>{c.originalChunk.trim()}</span>
-                                {i < analysis.chunks.length - 1 && (
-                                    <span className="text-indigo-400 mx-1.5 font-bold select-none">/</span>
-                                )}
-                            </React.Fragment>
-                        ))}
+                        ) : renderAllPhrasesJSX(analysis)}
                     </div>
                 </div>
 
@@ -578,7 +621,7 @@ const AnalysisBlock = ({ analysis, fullPron, phrasePron, pronLoading }) => {
                             <li key={i} className="flex items-start gap-2 rounded border border-gray-100 bg-white px-2.5 py-1.5">
                                 <span className="font-bold text-indigo-600 shrink-0 mt-0.5">{ciNums[i] || `(${i + 1})`}</span>
                                 <div className="flex-1 min-w-0">
-                                    <div className="text-gray-500 break-words">{c.originalChunk.trim()}</div>
+                                    <div className="text-gray-500 break-words">{renderChunkPhrasesJSX(c)}</div>
                                     <div className="font-semibold text-gray-800 mt-0.5">{c.structure || '(구조 불명)'}</div>
                                 </div>
                             </li>
@@ -848,7 +891,7 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
                                 </div>
                                 <div>
                                     <div className="text-[10px] uppercase tracking-wide text-indigo-500 font-bold mb-1">전체 번역 ({local.languageLabel})</div>
-                                    <div className="text-base text-gray-900 leading-relaxed break-words">{local.original}</div>
+                                    <div className="text-base text-gray-900 leading-relaxed break-words">{renderAllPhrasesJSX(local)}</div>
                                 </div>
                                 {fullPron && (
                                     <div>
