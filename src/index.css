@@ -2,6 +2,86 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   FONT: Paperlogy (한글 가변형) — fonts-archive/Paperlogy
+   jsDelivr CDN 으로 woff2 만 로드. font-display: swap 으로
+   초기 렌더링 차단 없이 빠르게 교체.
+   ============================================================ */
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 100;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-1Thin.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 200;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-2ExtraLight.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-3Light.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-4Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-5Medium.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-6SemiBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-7Bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-8ExtraBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Paperlogy';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('https://cdn.jsdelivr.net/gh/fonts-archive/Paperlogy@main/Paperlogy-9Black.woff2') format('woff2');
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: 'Paperlogy', system-ui, -apple-system, BlinkMacSystemFont,
+               'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic',
+               'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
 html,
 body {
   width: 100%;

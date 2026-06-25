@@ -1,7 +1,7 @@
 {
   "project": "Meet4U (PromiseU)",
   "description": "Meeting/약속 스케줄러 PWA. 사용자별 약속 생성, 글로벌 미팅 맵(Leaflet), 출석/댓글/글로벌 채팅 실시간 알림(FCM), 다국어(ko/en/zh), 음성 합성, 댓글 자동 번역을 제공한다.",
-  "lastUpdated": "2026-06-16-4",
+  "lastUpdated": "2026-06-16-5",
   "architectureSummary": "프론트엔드: React 19 + Vite 7 SPA를 PWA로 빌드. 백엔드: Firebase(Auth/Firestore/Storage/Analytics/FCM) + Netlify Functions(번역·TTS·푸시 전송). 다중 호스팅 대상(Netlify/Vercel/Firebase Hosting/gh-pages) 지원. 사용자 데이터는 모두 Firestore에 저장되며, 정적 자산만 호스팅 플랫폼이 서빙.",
   "repo": "/Users/heoujin/meet4u",
   "categories": [
@@ -23,6 +23,7 @@
         { "name": "PostCSS", "version": "^8.5.6", "purpose": "Tailwind 처리용 CSS 트랜스파일러" },
         { "name": "autoprefixer", "version": "^10.4.24", "purpose": "벤더 프리픽스 자동 추가" },
         { "name": "lucide-react", "version": "^0.563.0", "purpose": "SVG 아이콘 라이브러리(메뉴/벨/달력 등)" },
+        { "name": "Paperlogy (한글 가변형 폰트)", "version": "fonts-archive/Paperlogy @main", "purpose": "전체 페이지 기본 폰트. 9개 weight(100~900) 모두 jsDelivr CDN 으로 woff2 로드, font-display: swap. Tailwind 의 기본 sans 패밀리에 등록되어 모든 텍스트가 자동 적용.", "config": "src/index.css (@font-face × 9), tailwind.config.js (theme.extend.fontFamily.sans), index.html (preconnect jsDelivr + splash font-family)" },
         { "name": "clsx", "version": "^2.1.1", "purpose": "조건부 className 결합" },
         { "name": "tailwind-merge", "version": "^3.4.0", "purpose": "충돌하는 Tailwind 클래스 병합" },
         { "name": "Galaxy/Paper 테마", "version": "in-repo", "purpose": "사용자 선택형 화면 테마 2종(우주/종이) — index.html에서 사전 클래스 적용", "config": "index.html inline script, document.documentElement.classList.add('theme-galaxy'|'theme-paper')" }
