@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Clock, Users, Trash2, Edit, Check, HelpCircle, XCircle, AlignLeft, EyeOff, Eye, DollarSign } from 'lucide-react';
+import { X, Clock, Users, Trash2, Edit, Check, XCircle, AlignLeft, EyeOff, Eye, DollarSign, ShieldCheck } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { deleteDoc, doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { format, isValid } from 'date-fns';
@@ -8,6 +8,7 @@ import { ko, enUS, zhCN } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from './CommentSection';
 import ScoreBoard from './ScoreBoard';
+import AdminAttendanceEditor from './AdminAttendanceEditor';
 
 const DATE_FNS_LOCALES = { ko, en: enUS, zh: zhCN };
 
@@ -44,6 +45,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
     };
 
     const [selectedStatus, setSelectedStatus] = React.useState(null);
+    const [adminEditorOpen, setAdminEditorOpen] = React.useState(false);
 
     // Initialize selected status from existing response
     React.useEffect(() => {
@@ -352,14 +354,10 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                             <Users size={18} className="text-gray-700" />
                             {t('meeting.attendanceTitle')}
                         </div>
-                        <div className="grid grid-cols-4 gap-2 text-center">
+                        <div className="grid grid-cols-3 gap-2 text-center">
                             <div>
                                 <div className="text-2xl font-bold text-green-600">{getResponseCount('attend')}</div>
                                 <div className="text-xs text-gray-500 font-medium mt-1">{t('meeting.attend')}</div>
-                            </div>
-                            <div>
-                                <div className="text-2xl font-bold text-orange-500">{getResponseCount('maybe')}</div>
-                                <div className="text-xs text-gray-500 font-medium mt-1">{t('meeting.maybe')}</div>
                             </div>
                             <div>
                                 <div className="text-2xl font-bold text-red-500">{getResponseCount('decline')}</div>
@@ -417,7 +415,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     {meeting.status !== 'completed' && (
                         <div>
                             <h3 className="text-sm font-bold text-gray-900 mb-3">{t('meeting.responseTitle')}</h3>
-                            <div className="grid grid-cols-3 gap-3 mb-4">
+                            <div className={`grid ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-3 mb-4`}>
                                 <button
                                     onClick={() => setSelectedStatus('attend')}
                                     className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border ${selectedStatus === 'attend'
@@ -428,15 +426,6 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                     <Check size={16} /> {t('meeting.attend')}
                                 </button>
                                 <button
-                                    onClick={() => setSelectedStatus('maybe')}
-                                    className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border ${selectedStatus === 'maybe'
-                                        ? 'bg-orange-500 text-white border-orange-500 ring-2 ring-orange-100'
-                                        : 'bg-white text-gray-700 border-gray-200 hover:bg-orange-50 hover:border-orange-200 hover:text-orange-700'
-                                        }`}
-                                >
-                                    <HelpCircle size={16} /> {t('meeting.maybe')}
-                                </button>
-                                <button
                                     onClick={() => setSelectedStatus('decline')}
                                     className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border ${selectedStatus === 'decline'
                                         ? 'bg-red-500 text-white border-red-500 ring-2 ring-red-100'
@@ -445,6 +434,15 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                 >
                                     <XCircle size={16} /> {t('meeting.decline')}
                                 </button>
+                                {isAdmin && (
+                                    <button
+                                        onClick={() => setAdminEditorOpen(true)}
+                                        className="py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border bg-white text-amber-700 border-amber-300 hover:bg-amber-50 hover:border-amber-400"
+                                        title="등록된 회원을 골라 참석/불참 직접 지정"
+                                    >
+                                        <ShieldCheck size={16} /> 관리자수정
+                                    </button>
+                                )}
                             </div>
                             <button
                                 onClick={saveResponse}
@@ -531,6 +529,15 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Admin: 등록된 회원을 골라 참석/불참 직접 지정 */}
+            {isAdmin && (
+                <AdminAttendanceEditor
+                    open={adminEditorOpen}
+                    onClose={() => setAdminEditorOpen(false)}
+                    meeting={meeting}
+                />
+            )}
         </div>
     );
 };
