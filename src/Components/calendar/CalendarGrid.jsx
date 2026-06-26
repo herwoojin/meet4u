@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, parseISO, isValid } from 'date-fns';
 import { ko, enUS, zhCN } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Loader, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader, Users, Calendar as CalendarIcon, ListChecks, Clock } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
@@ -22,6 +22,18 @@ const CalendarGrid = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedMeeting, setSelectedMeeting] = useState(null);
+    // 'grid' (default 월 캘린더) | 'list' (모아보기 — 약속있는 날짜만 모아서)
+    const [viewMode, setViewMode] = useState(() => {
+        try { return localStorage.getItem('meet4u_calendar_view') || 'grid'; }
+        catch { return 'grid'; }
+    });
+    const toggleViewMode = () => {
+        setViewMode(prev => {
+            const next = prev === 'grid' ? 'list' : 'grid';
+            try { localStorage.setItem('meet4u_calendar_view', next); } catch { /* ignore */ }
+            return next;
+        });
+    };
 
     const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
     const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
@@ -88,6 +100,17 @@ const CalendarGrid = () => {
                     </button>
                     <button onClick={nextMonth} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-600">
                         <ChevronRight size={20} />
+                    </button>
+                    <button
+                        onClick={toggleViewMode}
+                        className={`ml-2 px-3 py-1.5 border rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${viewMode === 'list'
+                            ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                            }`}
+                        title={viewMode === 'list' ? '월 캘린더로 돌아가기' : '약속있는 날짜만 모아보기'}
+                    >
+                        {viewMode === 'list' ? <CalendarIcon size={14} /> : <ListChecks size={14} />}
+                        {viewMode === 'list' ? '캘린더' : '모아보기'}
                     </button>
                     <button
                         onClick={() => navigate('/schedule')}
@@ -198,6 +221,121 @@ const CalendarGrid = () => {
         }
     };
 
+    // 모아보기: 현재 표시 중인 달의 약속있는 날짜만 골라 날짜별로 그룹화.
+    const monthMeetingsByDate = useMemo(() => {
+        const start = startOfMonth(currentMonth);
+        const end = endOfMonth(currentMonth);
+        const visible = meetings.filter(m => !m.hidden || isAdmin);
+        const groups = new Map();
+        for (const m of visible) {
+            if (!m.date) continue;
+            const d = parseISO(m.date);
+            if (!isValid(d)) continue;
+            if (d < start || d > end) continue;
+            const key = m.date;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(m);
+        }
+        // 날짜 오름차순 + 같은 날 안에서는 시작시각 오름차순
+        const sorted = Array.from(groups.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([dateStr, items]) => ({
+                dateStr,
+                date: parseISO(dateStr),
+                items: items.slice().sort((x, y) => (x.startTime || '').localeCompare(y.startTime || '')),
+            }));
+        return sorted;
+    }, [meetings, currentMonth, isAdmin]);
+
+    const renderListView = () => {
+        const totalMeetings = monthMeetingsByDate.reduce((s, g) => s + g.items.length, 0);
+        return (
+            <div className="space-y-3">
+                <div className="flex items-center justify-between px-1 text-xs text-gray-500">
+                    <span>
+                        {format(currentMonth, t('dashboard.weekHeaderFormat'), { locale: dateLocale })} ·
+                        <span className="font-semibold text-amber-700 ml-1">
+                            약속있는 날 {monthMeetingsByDate.length}일 / 총 {totalMeetings}건
+                        </span>
+                    </span>
+                </div>
+                {monthMeetingsByDate.length === 0 ? (
+                    <div className="text-center py-16 text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">
+                        이번 달에 등록된 약속이 없습니다.
+                    </div>
+                ) : (
+                    <ul className="space-y-3">
+                        {monthMeetingsByDate.map(({ dateStr, date, items }) => {
+                            const dow = date.getDay();
+                            const dowColor = dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-gray-700';
+                            const isToday = isSameDay(date, new Date());
+                            return (
+                                <li key={dateStr} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+                                    <div className={`flex items-baseline justify-between px-4 py-2 border-b border-gray-100 ${isToday ? 'bg-amber-50' : 'bg-gray-50'}`}>
+                                        <div className="flex items-baseline gap-2">
+                                            <span className={`text-base font-bold ${dowColor}`}>
+                                                {format(date, 'M월 d일', { locale: dateLocale })}
+                                            </span>
+                                            <span className={`text-xs font-medium ${dowColor}`}>
+                                                ({format(date, 'EEEE', { locale: dateLocale })})
+                                            </span>
+                                            {isToday && (
+                                                <span className="text-[10px] px-1.5 py-0.5 bg-gray-900 text-white rounded-full">오늘</span>
+                                            )}
+                                        </div>
+                                        <span className="text-[11px] text-gray-500">{items.length}건</span>
+                                    </div>
+                                    <ul className="divide-y divide-gray-100">
+                                        {items.map(meeting => {
+                                            const isCompleted = meeting.status === 'completed';
+                                            const attendCount = Object.values(meeting.responses || {}).filter(v => v === 'attend').length;
+                                            return (
+                                                <li
+                                                    key={meeting.id}
+                                                    onClick={() => setSelectedMeeting(meeting)}
+                                                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors hover:bg-blue-50/60 ${isCompleted ? 'opacity-70' : ''}`}
+                                                >
+                                                    <div className="flex items-center gap-1.5 text-xs font-mono text-gray-600 shrink-0 w-[88px]">
+                                                        <Clock size={12} className="text-blue-500" />
+                                                        <span>{meeting.startTime || '--:--'}</span>
+                                                        {meeting.endTime && (
+                                                            <span className="text-gray-300">~{meeting.endTime}</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className={`text-sm font-semibold truncate ${isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                                            {meeting.title || '(제목 없음)'}
+                                                        </div>
+                                                        {meeting.description && (
+                                                            <div className="text-[11px] text-gray-500 truncate mt-0.5">{meeting.description}</div>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        {meeting.attendeesList?.length > 0 && (
+                                                            <span className="text-[10px] flex items-center gap-0.5 text-gray-500">
+                                                                <Users size={10} /> {attendCount}/{meeting.attendeesList.length}
+                                                            </span>
+                                                        )}
+                                                        {isCompleted && (
+                                                            <span className="text-[9px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full border border-red-200 font-medium">완료</span>
+                                                        )}
+                                                        {meeting.hidden && (
+                                                            <span className="text-[9px] px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded-full border border-yellow-200 font-medium">숨김</span>
+                                                        )}
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                )}
+            </div>
+        );
+    };
+
     if (error) {
         return (
             <div className="flex flex-col min-h-full bg-white p-6 rounded-xl shadow-sm border border-gray-200 justify-center items-center">
@@ -216,13 +354,15 @@ const CalendarGrid = () => {
     return (
         <div className="flex flex-col min-h-full bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             {renderHeader()}
-            {renderDays()}
+            {viewMode === 'grid' && renderDays()}
             {loading ? (
                 <div className="flex-1 flex items-center justify-center min-h-[300px]">
                     <Loader className="animate-spin text-blue-600" size={40} />
                 </div>
-            ) : (
+            ) : viewMode === 'grid' ? (
                 renderCells()
+            ) : (
+                renderListView()
             )}
 
             {selectedMeeting && (
