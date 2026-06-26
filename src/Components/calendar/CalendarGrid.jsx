@@ -11,6 +11,17 @@ import { useNavigate } from 'react-router-dom';
 
 const DATE_FNS_LOCALES = { ko, en: enUS, zh: zhCN };
 
+// 모아보기 리스트는 날짜 헤더가 위에 있으므로, 제목 앞에 붙은
+// 한국식 날짜 접두어("6월 28일(일)", "6월28일", "2026년 6월 28일(토)"
+// 등)와 그 뒤에 따라오는 구분 기호("·", "/", "-", "—" 등)를 잘라
+// 핵심 정보만 노출한다.
+const stripDatePrefix = (title) => {
+    if (!title) return '';
+    return title
+        .replace(/^\s*(?:\d{4}\s*년\s*)?\d{1,2}\s*월\s*\d{1,2}\s*일\s*(?:\([^)]+\))?\s*[·/\-—,]*\s*/u, '')
+        .trim();
+};
+
 const CalendarGrid = () => {
     const { t, i18n } = useTranslation();
     const dateLocale = DATE_FNS_LOCALES[i18n.language?.split('-')[0]] || ko;
@@ -304,7 +315,7 @@ const CalendarGrid = () => {
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <div className={`text-sm font-semibold truncate ${isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                                                            {meeting.title || '(제목 없음)'}
+                                                            {stripDatePrefix(meeting.title) || '(제목 없음)'}
                                                         </div>
                                                         {meeting.description && (
                                                             <div className="text-[11px] text-gray-500 truncate mt-0.5">{meeting.description}</div>
