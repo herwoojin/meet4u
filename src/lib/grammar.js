@@ -902,6 +902,9 @@ const LANG_DISPLAY = {
     pt: '🇵🇹 포르투갈어', ru: '🇷🇺 러시아어', ar: '🇸🇦 아랍어',
     mn: '🇲🇳 몽골어', km: '🇰🇭 크메르어', th: '🇹🇭 태국어',
     hi: '🇮🇳 힌디어', id: '🇮🇩 인도네시아어', tr: '🇹🇷 터키어',
+    // 추가 8개
+    bn: '🇧🇩 벵골어', uz: '🇺🇿 우즈베크어', si: '🇱🇰 신할라어',
+    my: '🇲🇲 미얀마어', tl: '🇵🇭 타갈로그어', ne: '🇳🇵 네팔어',
 };
 
 export const getLanguageDisplay = (lang) => LANG_DISPLAY[baseLang(lang)] || `🌐 ${lang || 'unknown'}`;

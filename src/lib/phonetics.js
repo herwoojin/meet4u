@@ -20,6 +20,7 @@ const SCRIPT_LATIN = new Set([
     'fi', 'pl', 'cs', 'sk', 'hu', 'ro', 'tr', 'vi', 'id', 'ms',
     'tl', 'sw', 'af', 'ca', 'gl', 'eu', 'is', 'lt', 'lv', 'et',
     'sl', 'hr', 'sr', 'mt', 'ga', 'cy', 'la', 'eo', 'sq',
+    'uz', // 우즈베크어(현대 라틴 표기)
 ]);
 
 const SCRIPT_NON_LATIN = new Set([

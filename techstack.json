@@ -1,7 +1,7 @@
 {
   "project": "Meet4U (PromiseU)",
   "description": "Meeting/약속 스케줄러 PWA. 사용자별 약속 생성, 글로벌 미팅 맵(Leaflet), 출석/댓글/글로벌 채팅 실시간 알림(FCM), 다국어(ko/en/zh), 음성 합성, 댓글 자동 번역을 제공한다.",
-  "lastUpdated": "2026-06-26",
+  "lastUpdated": "2026-06-27",
   "architectureSummary": "프론트엔드: React 19 + Vite 7 SPA를 PWA로 빌드. 백엔드: Firebase(Auth/Firestore/Storage/Analytics/FCM) + Netlify Functions(번역·TTS·푸시 전송). 다중 호스팅 대상(Netlify/Vercel/Firebase Hosting/gh-pages) 지원. 사용자 데이터는 모두 Firestore에 저장되며, 정적 자산만 호스팅 플랫폼이 서빙.",
   "repo": "/Users/heoujin/meet4u",
   "categories": [
@@ -37,6 +37,7 @@
         { "name": "react-i18next", "version": "^17.0.4", "purpose": "React 바인딩(useTranslation)" },
         { "name": "i18next-browser-languagedetector", "version": "^8.2.1", "purpose": "브라우저 언어 자동 감지(zh-CN→zh fallback 등)" },
         { "name": "지원 언어", "version": "ko/en/zh", "purpose": "한국어/영어/중국어 UI 번역", "config": "src/i18n/locales/{ko,en,zh}.json" },
+        { "name": "글로벌 채팅 번역 지원 언어 (19개)", "version": "in-repo", "purpose": "글로벌 채팅 메시지 번역 대상 언어: 기존 12개(ko/en/ja/zh-CN/ru/es/vi/mn/ar/fr/km) + 신규 8개(bn 방글라데시·uz 우즈베크·si 신할라·my 미얀마·tl 필리핀·th 태국·id 인니·ne 네팔). LANG_LABEL/LANG_FLAG/SPEECH_LOCALE 사전에 모두 등록.", "config": "src/Components/chat/GlobalChat.jsx" },
         { "name": "date-fns", "version": "^4.1.0", "purpose": "날짜 포맷/계산(미팅/달력)" }
       ]
     },
@@ -72,7 +73,8 @@
         { "name": "다국어 문법 분석기 (in-repo)", "version": "in-repo", "purpose": "일본어/한국어/중국어/영어/프랑스어/스페인어/베트남어 등 myLang 별로 어절을 분해하고 주어/목적어/술어/부사어/조사/관사/전치사 역할을 라벨링. 청크 단위 '/' 분할 + 어절별 발음 표시(라틴은 latinToHangul, 비라틴은 Google dt=rm 병렬 fetch + 캐시). API 키 없이 동작.", "config": "src/lib/grammar.js (analyzeSentence/getPhrasePronunciations/fetchFullPronunciation/splitPronunciationByChunks), src/Components/chat/GrammarPopup.jsx, GlobalChat.jsx 메시지 옆 'BookOpen' 버튼" },
         { "name": "오늘의 공부 PDF 학습지", "version": "in-repo", "purpose": "GrammarPopup 의 상단 버튼으로 새 창을 띄워 원문/발음/구조/어절 분해를 A4 portrait 14mm margin 으로 정렬하고 window.print()로 PDF 저장. 외부 PDF 라이브러리 없음. 원문이 한국어이고 보는 사람의 언어가 한국어가 아닐 때는 PDF 에도 '🇰🇷 원문 한국어 분석 (참고)' 섹션이 함께 출력됨.", "config": "src/Components/chat/GrammarPopup.jsx (buildPrintHtml/openPrintWindow/renderPrintSection), @page A4 + role 색상 인라인 적용" },
         { "name": "한국어 원문 통합 학습 레이아웃", "version": "in-repo", "purpose": "GlobalChat 메시지의 srcLang==='ko' 이고 viewer lang!=='ko' 일 때, 한국어/번역/발음/어절 분해를 분리하지 않고 [① 원문(한국어) → 번역 → 발음 → 어절(단어+뜻)] 4단계 카드로 문장별 묶어서 표시. 어절별 한국어 뜻은 Google Translate dt=t 로 병렬 fetch. 한국어 청크 매칭은 챕터 수 동일 시 원문 사용, 다를 시 번역문을 백번역.", "config": "src/Components/chat/GrammarPopup.jsx (UnifiedClauseLayout, renderUnifiedPrintSection), grammar.js (getPhraseTranslations/pairKoreanChunks/TRANSLATION_CACHE)" }
-        { "name": "Gemini API (옵션 정밀 분석)", "version": "gemini-1.5-flash", "purpose": "관리자 모드 사용자는 VITE_GEMINI_ADMIN_API_KEY(공유)를 사용. 일반 사용자는 GrammarPopup의 ⚙️ 키 등록으로 본인 무료 키를 localStorage에 저장하여 업그레이드 분석 사용.", "config": ".env (VITE_GEMINI_ADMIN_API_KEY, gitignored), localStorage(meet4u_gemini_api_key), src/lib/grammar.js (analyzeWithGemini/getGeminiKey)" }
+        { "name": "Gemini API (옵션 정밀 분석)", "version": "gemini-1.5-flash", "purpose": "관리자 모드 사용자는 VITE_GEMINI_ADMIN_API_KEY(공유)를 사용. 일반 사용자는 GrammarPopup의 ⚙️ 키 등록으로 본인 무료 키를 localStorage에 저장하여 업그레이드 분석 사용.", "config": ".env (VITE_GEMINI_ADMIN_API_KEY, gitignored), localStorage(meet4u_gemini_api_key), src/lib/grammar.js (analyzeWithGemini/getGeminiKey)" },
+        { "name": "Gemini Live API (실시간 양방향 통역)", "version": "gemini-2.0-flash-exp", "purpose": "wss://generativelanguage.googleapis.com BidiGenerateContent 로 마이크 PCM 16kHz 입력 → 모델이 상대 언어로 통역하여 24kHz PCM 또는 텍스트로 응답. WebAudio API 로 캡처/리샘플/재생 큐 직접 구현, 외부 SDK 없음. 키는 grammar.js 의 getGeminiKey({isAdmin}) 공유.", "config": "src/lib/liveApi.js (LiveTranslatorSession 클래스), src/Components/chat/LiveTranslatorModal.jsx, GlobalChat 헤더의 Radio 아이콘 버튼" }
       ]
     },
     {

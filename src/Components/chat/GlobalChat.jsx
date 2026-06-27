@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import {
-    Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX, BookOpen,
+    Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX, BookOpen, Radio,
     Plus, Users, LogOut, X, ChevronDown, Search, Loader, Image as ImageIcon,
     Copy, Check, Star, Edit2
 } from 'lucide-react';
@@ -17,6 +17,7 @@ import { useAuth } from '../../context/AuthContext';
 import { compressImageToWebp } from '../../lib/imageUtils';
 import ImageLightbox from './ImageLightbox';
 import GrammarPopup from './GrammarPopup';
+import LiveTranslatorModal from './LiveTranslatorModal';
 import {
     romajiToHangul,
     pinyinToHangul,
@@ -39,18 +40,34 @@ const SPEECH_LOCALE = {
     'ar': 'ar-SA',
     'fr': 'fr-FR',
     'km': 'km-KH',
+    // 신규 8개 — 더 많은 외국인 사용자 지원
+    'bn': 'bn-BD',  // 방글라데시(벵골어)
+    'uz': 'uz-UZ',  // 우즈베키스탄(우즈베크어)
+    'si': 'si-LK',  // 스리랑카(신할라어)
+    'my': 'my-MM',  // 미얀마(버마어)
+    'tl': 'fil-PH', // 필리핀(타갈로그/필리핀어)
+    'th': 'th-TH',  // 태국어
+    'id': 'id-ID',  // 인도네시아어
+    'ne': 'ne-NP',  // 네팔어
 };
 
 const LANG_LABEL = {
     'ko': '한국어', 'en': 'English', 'ja': '日本語', 'zh-CN': '中文(简)', 'zh': '中文',
     'ru': 'Русский', 'es': 'Español', 'vi': 'Tiếng Việt', 'mn': 'Монгол',
     'ar': 'العربية', 'fr': 'Français', 'km': 'ភាសាខ្មែរ',
+    // 신규 8개
+    'bn': 'বাংলা(방글라)', 'uz': 'Oʻzbek(우즈베크)', 'si': 'සිංහල(신할라)',
+    'my': 'မြန်မာ(미얀마)', 'tl': 'Filipino(필리핀)', 'th': 'ไทย(태국)',
+    'id': 'Indonesia(인니)', 'ne': 'नेपाली(네팔)',
 };
 
 const LANG_FLAG = {
     'ko': '🇰🇷', 'en': '🇺🇸', 'ja': '🇯🇵', 'zh-CN': '🇨🇳', 'zh': '🇨🇳',
     'ru': '🇷🇺', 'es': '🇪🇸', 'vi': '🇻🇳', 'mn': '🇲🇳',
     'ar': '🇸🇦', 'fr': '🇫🇷', 'km': '🇰🇭',
+    // 신규 8개
+    'bn': '🇧🇩', 'uz': '🇺🇿', 'si': '🇱🇰', 'my': '🇲🇲',
+    'tl': '🇵🇭', 'th': '🇹🇭', 'id': '🇮🇩', 'ne': '🇳🇵',
 };
 
 const lower = (s) => (s || '').toLowerCase();
@@ -373,6 +390,7 @@ const GlobalChat = () => {
     const { t } = useTranslation();
     const { currentUser, userProfile, updateUserProfile, isAdmin } = useAuth();
     const [grammarTarget, setGrammarTarget] = useState(null); // { text, lang } or null
+    const [liveOpen, setLiveOpen] = useState(false);
     const myLang = userProfile?.preferredLanguage || 'ko';
     const myEmail = lower(currentUser?.email);
 
@@ -1273,6 +1291,17 @@ const GlobalChat = () => {
                     <MessageSquare size={16} />
                 </button>
 
+                {/* Live Translator (Gemini Live API) */}
+                <button
+                    type="button"
+                    onClick={() => setLiveOpen(true)}
+                    disabled={!currentUser}
+                    className="shrink-0 p-1.5 rounded-lg border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors disabled:opacity-40"
+                    title="라이브 통역 — 마이크로 말하면 상대 언어로 실시간 통역"
+                >
+                    <Radio size={16} />
+                </button>
+
                 {/* New room button */}
                 <button
                     type="button"
@@ -1722,6 +1751,14 @@ const GlobalChat = () => {
                 lang={grammarTarget?.lang || ''}
                 fullPronunciation={grammarTarget?.pronunciation || ''}
                 koreanOriginal={grammarTarget?.koreanOriginal || ''}
+                isAdmin={isAdmin}
+            />
+
+            <LiveTranslatorModal
+                open={liveOpen}
+                onClose={() => setLiveOpen(false)}
+                defaultSourceLang={myLang || 'ko'}
+                defaultTargetLang={myLang === 'en' ? 'ko' : 'en'}
                 isAdmin={isAdmin}
             />
         </div>
