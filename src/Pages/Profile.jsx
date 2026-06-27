@@ -7,17 +7,26 @@ import { auth, db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 
 const SUPPORTED_LANGUAGES = [
-    { code: 'ko', label: '한국어(Korean)' },
-    { code: 'en', label: 'English(영어)' },
-    { code: 'zh-CN', label: '中文(Chinese)' },
-    { code: 'ja', label: '日本語(Japanese)' },
-    { code: 'ru', label: 'Русский(Russian)' },
-    { code: 'es', label: 'Español(Spanish)' },
-    { code: 'vi', label: 'Tiếng Việt(Vietnamese)' },
-    { code: 'mn', label: 'Монгол(Mongolian)' },
-    { code: 'ar', label: 'العربية(Arabic)' },
-    { code: 'fr', label: 'Français(French)' },
-    { code: 'km', label: 'ភាសាខ្មែរ(Cambodian)' },
+    { code: 'ko', label: '🇰🇷 한국어(Korean)' },
+    { code: 'en', label: '🇺🇸 English(영어)' },
+    { code: 'zh-CN', label: '🇨🇳 中文(Chinese)' },
+    { code: 'ja', label: '🇯🇵 日本語(Japanese)' },
+    { code: 'ru', label: '🇷🇺 Русский(Russian)' },
+    { code: 'es', label: '🇪🇸 Español(Spanish)' },
+    { code: 'vi', label: '🇻🇳 Tiếng Việt(Vietnamese)' },
+    { code: 'mn', label: '🇲🇳 Монгол(Mongolian)' },
+    { code: 'ar', label: '🇸🇦 العربية(Arabic)' },
+    { code: 'fr', label: '🇫🇷 Français(French)' },
+    { code: 'km', label: '🇰🇭 ភាសាខ្មែរ(Cambodian)' },
+    // 신규 8개 — 글로벌 채팅과 동일하게 노출
+    { code: 'bn', label: '🇧🇩 বাংলা(Bengali / 방글라데시)' },
+    { code: 'uz', label: '🇺🇿 Oʻzbek(Uzbek / 우즈베키스탄)' },
+    { code: 'si', label: '🇱🇰 සිංහල(Sinhala / 스리랑카)' },
+    { code: 'my', label: '🇲🇲 မြန်မာ(Burmese / 미얀마)' },
+    { code: 'tl', label: '🇵🇭 Filipino(Tagalog / 필리핀)' },
+    { code: 'th', label: '🇹🇭 ไทย(Thai / 태국)' },
+    { code: 'id', label: '🇮🇩 Bahasa Indonesia(인도네시아)' },
+    { code: 'ne', label: '🇳🇵 नेपाली(Nepali / 네팔)' },
 ];
 
 const Profile = () => {
