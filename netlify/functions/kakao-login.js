@@ -37,17 +37,50 @@ const headers = {
 
 const json = (statusCode, body) => ({ statusCode, headers, body: JSON.stringify(body) });
 
+// Diagnostic endpoint — GET /?diag=1 returns which env vars are set.
+// 함수 자체가 정상적으로 트리거되는지 확인하는 용도.
+const diagnose = () => ({
+    diag: true,
+    env: {
+        KAKAO_REST_API_KEY: !!process.env.KAKAO_REST_API_KEY,
+        FIREBASE_PROJECT_ID: !!process.env.FIREBASE_PROJECT_ID,
+        FIREBASE_CLIENT_EMAIL: !!process.env.FIREBASE_CLIENT_EMAIL,
+        FIREBASE_PRIVATE_KEY: !!process.env.FIREBASE_PRIVATE_KEY,
+        privateKeyLooksValid:
+            (process.env.FIREBASE_PRIVATE_KEY || '').includes('BEGIN PRIVATE KEY'),
+    },
+    adminInitialized: admin.apps.length > 0,
+});
+
 export const handler = async (event) => {
     if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
-    if (event.httpMethod !== 'POST')   return json(405, { error: 'Method not allowed' });
+
+    // 진단 모드 (브라우저로 직접 호출 가능)
+    if (event.httpMethod === 'GET' && (event.queryStringParameters || {}).diag) {
+        return json(200, diagnose());
+    }
+
+    if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' });
 
     try {
         const { code, redirectUri } = JSON.parse(event.body || '{}');
         if (!code) return json(400, { error: 'Missing code' });
         if (!redirectUri) return json(400, { error: 'Missing redirectUri' });
 
+        // 필수 env var 사전 검증 — 어느 단계에서 막혔는지 명확하게.
+        const missing = [];
+        if (!process.env.KAKAO_REST_API_KEY) missing.push('KAKAO_REST_API_KEY');
+        if (!process.env.FIREBASE_PROJECT_ID) missing.push('FIREBASE_PROJECT_ID');
+        if (!process.env.FIREBASE_CLIENT_EMAIL) missing.push('FIREBASE_CLIENT_EMAIL');
+        if (!process.env.FIREBASE_PRIVATE_KEY) missing.push('FIREBASE_PRIVATE_KEY');
+        if (missing.length > 0) {
+            return json(500, {
+                error: 'Server env var missing: ' + missing.join(', '),
+                hint: 'Netlify Site → Settings → Environment variables 에 등록 후 재배포 필요',
+            });
+        }
+
         const restKey = process.env.KAKAO_REST_API_KEY;
-        if (!restKey) return json(500, { error: 'KAKAO_REST_API_KEY not configured on the server' });
 
         // ── Step 1: code → access_token ───────────────────────────────────
         const tokenRes = await fetch('https://kauth.kakao.com/oauth/token', {

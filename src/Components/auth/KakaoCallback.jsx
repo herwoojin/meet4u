@@ -1,15 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
+import { Loader, AlertCircle, CheckCircle, ArrowRight, Activity } from 'lucide-react';
 import { completeKakaoLogin } from '../../lib/kakao';
 import { useAuth } from '../../context/AuthContext';
 import { auth } from '../../lib/firebase';
 
-// 카카오 콜백 — 자동 redirect 가 race condition 으로 실패할 수 있어
-// 모든 단계를 화면에 표시하고, 완료 후 사용자가 명시적으로 버튼을 눌러
-// 진입하도록 한다. version 라벨로 캐시된 옛 코드 여부도 확인 가능.
-
-const VERSION = 'k8';
+// 버전 라벨 — 화면 좌상단에 크게 표시. 사용자가 이 라벨을 확인해
+// 새 코드가 로드되었는지 즉시 검증할 수 있다. 이번 빌드는 'k9-DIAG'.
+const VERSION = 'k9-DIAG';
 
 const KakaoCallback = () => {
     const [params] = useSearchParams();
@@ -18,6 +16,7 @@ const KakaoCallback = () => {
     const [steps, setSteps] = useState([]);
     const [error, setError] = useState('');
     const [ready, setReady] = useState(false);
+    const [diag, setDiag] = useState(null);
     const ran = useRef(false);
 
     const addStep = (msg, ok = true) => {
@@ -35,6 +34,7 @@ const KakaoCallback = () => {
         const errorDesc = params.get('error_description');
 
         addStep('콜백 페이지 진입');
+        addStep(`현재 URL: ${window.location.href.slice(0, 120)}`);
 
         if (errorParam) {
             const m = `카카오 로그인 거부됨 (${errorParam}) ${errorDesc || ''}`.trim();
@@ -55,13 +55,12 @@ const KakaoCallback = () => {
         completeKakaoLogin(code)
             .then((user) => {
                 addStep(`Firebase signInWithCustomToken 성공 — uid=${user?.uid}`);
-                // Firebase 의 동기 API 로 currentUser 직접 확인
-                addStep(`auth.currentUser.uid (직접) = ${auth.currentUser?.uid || 'null'}`);
-                addStep('AuthContext 동기화 대기 (최대 3 초)');
-                // AuthContext.onAuthStateChanged 가 fire 될 시간을 잠시 줌
+                addStep(`auth.currentUser.uid (Firebase 동기) = ${auth.currentUser?.uid || 'null'}`);
+                addStep('AuthContext 동기화 300ms 대기');
                 return new Promise(r => setTimeout(r, 300));
             })
             .then(() => {
+                addStep('완료 — 아래 버튼으로 진입');
                 setReady(true);
             })
             .catch(err => {
@@ -71,77 +70,98 @@ const KakaoCallback = () => {
             });
     }, [params]);
 
-    // currentUser 가 set 되면 자동 진입 시도 (실패해도 수동 버튼이 있음)
-    useEffect(() => {
-        if (ready && currentUser) {
-            addStep(`AuthContext.currentUser 확인 — 자동 진입`);
-            const t = setTimeout(() => navigate('/', { replace: true }), 200);
-            return () => clearTimeout(t);
+    const runDiag = async () => {
+        try {
+            const res = await fetch('/.netlify/functions/kakao-login?diag=1', { method: 'GET' });
+            const json = await res.json();
+            setDiag(json);
+            addStep(`진단: env=${JSON.stringify(json.env)} init=${json.adminInitialized}`);
+        } catch (e) {
+            addStep(`진단 실패: ${e.message}`, false);
         }
-    }, [ready, currentUser, navigate]);
-
-    const goManually = () => {
-        navigate('/', { replace: true });
     };
 
     const isAuthed = Boolean(currentUser || auth.currentUser);
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-            <div className="bg-white rounded-2xl p-6 shadow-lg max-w-lg w-full">
-                <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-lg font-bold text-gray-800">카카오 로그인</h2>
-                    <span className="text-[10px] text-gray-300">v{VERSION}</span>
-                </div>
+        <div className="min-h-screen bg-yellow-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl max-w-xl w-full overflow-hidden border-4 border-yellow-400">
+                {/* 큰 노란색 헤더 — 옛 코드와 절대 헷갈리지 않게 */}
+                <header className="bg-[#FEE500] px-5 py-3 flex items-center justify-between border-b-4 border-yellow-500">
+                    <div className="flex items-center gap-2">
+                        <span className="text-2xl">💬</span>
+                        <h2 className="text-lg font-extrabold text-[#3C1E1E]">카카오 로그인 콜백</h2>
+                    </div>
+                    <span className="text-xs font-mono bg-[#3C1E1E] text-[#FEE500] px-2 py-1 rounded font-bold">
+                        v {VERSION}
+                    </span>
+                </header>
 
-                {error ? (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
-                        <div className="flex items-center gap-2 text-red-700 font-bold text-sm mb-1">
-                            <AlertCircle size={14} /> 로그인 실패
+                <div className="p-5 space-y-3">
+                    {error ? (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                            <div className="flex items-center gap-2 text-red-700 font-bold text-sm mb-1">
+                                <AlertCircle size={14} /> 로그인 실패
+                            </div>
+                            <div className="text-xs text-red-700 break-words whitespace-pre-wrap">{error}</div>
                         </div>
-                        <div className="text-xs text-red-700 break-words whitespace-pre-wrap">{error}</div>
-                    </div>
-                ) : ready && isAuthed ? (
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3 flex items-center gap-2 text-emerald-700 font-bold text-sm">
-                        <CheckCircle size={14} /> 로그인 완료 — 잠시 후 자동 이동합니다.
-                    </div>
-                ) : (
-                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3 flex items-center gap-2 text-gray-700 text-sm">
-                        <Loader size={14} className="animate-spin" /> 처리 중…
-                    </div>
-                )}
-
-                <div className="border border-gray-100 rounded-lg overflow-hidden mb-3">
-                    <div className="px-3 py-1.5 bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500 font-bold border-b border-gray-100">
-                        진행 로그
-                    </div>
-                    <ol className="max-h-72 overflow-y-auto text-[11px] font-mono divide-y divide-gray-50">
-                        {steps.map((s, i) => (
-                            <li key={i} className={`px-3 py-1.5 ${s.ok ? 'text-gray-700' : 'text-red-700 bg-red-50'}`}>
-                                {s.msg}
-                            </li>
-                        ))}
-                    </ol>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    {ready && isAuthed ? (
-                        <button
-                            type="button"
-                            onClick={goManually}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700"
-                        >
-                            홈으로 들어가기 <ArrowRight size={14} />
-                        </button>
+                    ) : ready && isAuthed ? (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center gap-2 text-emerald-700 font-bold text-sm">
+                            <CheckCircle size={14} /> 로그인 성공. 아래 버튼으로 진입하세요.
+                        </div>
                     ) : (
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center gap-2 text-gray-700 text-sm">
+                            <Loader size={14} className="animate-spin" /> 처리 중…
+                        </div>
+                    )}
+
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="px-3 py-1.5 bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500 font-bold border-b border-gray-200">
+                            진행 로그
+                        </div>
+                        <ol className="max-h-72 overflow-y-auto text-[11px] font-mono divide-y divide-gray-50">
+                            {steps.map((s, i) => (
+                                <li key={i} className={`px-3 py-1.5 ${s.ok ? 'text-gray-700' : 'text-red-700 bg-red-50'}`}>
+                                    {s.msg}
+                                </li>
+                            ))}
+                        </ol>
+                    </div>
+
+                    {/* 진단 결과 */}
+                    {diag && (
+                        <div className="border border-blue-200 rounded-lg p-3 bg-blue-50">
+                            <div className="text-[10px] uppercase tracking-wide text-blue-700 font-bold mb-1">함수 진단</div>
+                            <pre className="text-[10px] text-blue-900 overflow-x-auto">{JSON.stringify(diag, null, 2)}</pre>
+                        </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                        {ready && isAuthed ? (
+                            <button
+                                type="button"
+                                onClick={() => navigate('/', { replace: true })}
+                                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-bold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700"
+                            >
+                                홈으로 들어가기 <ArrowRight size={14} />
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => navigate('/login', { replace: true })}
+                                className="flex-1 px-3 py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                            >
+                                로그인 화면으로
+                            </button>
+                        )}
                         <button
                             type="button"
-                            onClick={() => navigate('/login', { replace: true })}
-                            className="flex-1 px-3 py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                            onClick={runDiag}
+                            className="px-3 py-2.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 flex items-center gap-1"
                         >
-                            로그인 화면으로
+                            <Activity size={12} /> 함수 진단
                         </button>
-                    )}
+                    </div>
                 </div>
             </div>
         </div>
