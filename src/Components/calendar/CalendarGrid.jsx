@@ -6,6 +6,8 @@ import { ChevronLeft, ChevronRight, Loader, Users, Calendar as CalendarIcon, Lis
 import { db } from '../../lib/firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
+import { useProjects } from '../../context/ProjectContext';
+import { DEFAULT_PROJECT_ID } from '../../lib/projects';
 import MeetingDetailModal from '../meeting/MeetingDetailModal';
 import { useNavigate } from 'react-router-dom';
 
@@ -26,6 +28,7 @@ const CalendarGrid = () => {
     const { t, i18n } = useTranslation();
     const dateLocale = DATE_FNS_LOCALES[i18n.language?.split('-')[0]] || ko;
     const { currentUser, isAdmin } = useAuth();
+    const { currentProjectId, currentProject } = useProjects();
     const navigate = useNavigate();
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -90,8 +93,15 @@ const CalendarGrid = () => {
         return () => unsubscribe();
     }, [currentUser, t]);
 
+    // Scope meetings to the active project. Legacy meetings without a
+    // projectId are treated as belonging to the default project.
+    const scopedMeetings = useMemo(
+        () => meetings.filter(m => (m.projectId || DEFAULT_PROJECT_ID) === currentProjectId),
+        [meetings, currentProjectId]
+    );
+
     const getMeetingsForDate = (date) => {
-        return meetings
+        return scopedMeetings
             .filter(meeting => !meeting.hidden || isAdmin)
             .filter(meeting => meeting.date === format(date, 'yyyy-MM-dd'));
     };
@@ -99,9 +109,18 @@ const CalendarGrid = () => {
     const renderHeader = () => {
         return (
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">
-                    {format(currentMonth, t('dashboard.weekHeaderFormat'), { locale: dateLocale })}
-                </h2>
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900">
+                        {format(currentMonth, t('dashboard.weekHeaderFormat'), { locale: dateLocale })}
+                    </h2>
+                    {currentProject && (
+                        <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                            <span>{currentProject.icon || '📁'}</span>
+                            <span className="font-semibold text-gray-700">{currentProject.name}</span>
+                            <span className="text-gray-400">· {(currentProject.memberEmails || []).length}명</span>
+                        </div>
+                    )}
+                </div>
                 <div className="flex space-x-2">
                     <button onClick={prevMonth} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-600">
                         <ChevronLeft size={20} />
@@ -236,7 +255,7 @@ const CalendarGrid = () => {
     const monthMeetingsByDate = useMemo(() => {
         const start = startOfMonth(currentMonth);
         const end = endOfMonth(currentMonth);
-        const visible = meetings.filter(m => !m.hidden || isAdmin);
+        const visible = scopedMeetings.filter(m => !m.hidden || isAdmin);
         const groups = new Map();
         for (const m of visible) {
             if (!m.date) continue;
@@ -256,7 +275,7 @@ const CalendarGrid = () => {
                 items: items.slice().sort((x, y) => (x.startTime || '').localeCompare(y.startTime || '')),
             }));
         return sorted;
-    }, [meetings, currentMonth, isAdmin]);
+    }, [scopedMeetings, currentMonth, isAdmin]);
 
     const renderListView = () => {
         const totalMeetings = monthMeetingsByDate.reduce((s, g) => s + g.items.length, 0);

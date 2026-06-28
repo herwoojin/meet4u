@@ -6,6 +6,8 @@ import { ChevronLeft, ChevronRight, Users, Clock } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
+import { useProjects } from '../../context/ProjectContext';
+import { DEFAULT_PROJECT_ID } from '../../lib/projects';
 import MeetingDetailModal from '../meeting/MeetingDetailModal';
 import { useNavigate } from 'react-router-dom';
 
@@ -15,6 +17,7 @@ const WeeklyCalendar = () => {
     const { t, i18n } = useTranslation();
     const dateLocale = DATE_FNS_LOCALES[i18n.language?.split('-')[0]] || ko;
     const { currentUser, isAdmin } = useAuth();
+    const { currentProjectId, currentProject } = useProjects();
     const navigate = useNavigate();
     const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 })); // Monday start
     const [meetings, setMeetings] = useState([]);
@@ -41,6 +44,7 @@ const WeeklyCalendar = () => {
 
     const getMeetingsForDate = (date) => {
         return meetings
+            .filter(meeting => (meeting.projectId || DEFAULT_PROJECT_ID) === currentProjectId)
             .filter(meeting => !meeting.hidden || isAdmin)
             .filter(meeting => meeting.date === format(date, 'yyyy-MM-dd'));
     };
@@ -117,9 +121,17 @@ const WeeklyCalendar = () => {
     return (
         <div className="w-full">
             <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-gray-900">
-                    {format(currentWeekStart, t('dashboard.weekHeaderFormat'), { locale: dateLocale })}
-                </h2>
+                <div>
+                    <h2 className="text-xl font-bold text-gray-900">
+                        {format(currentWeekStart, t('dashboard.weekHeaderFormat'), { locale: dateLocale })}
+                    </h2>
+                    {currentProject && (
+                        <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                            <span>{currentProject.icon || '📁'}</span>
+                            <span className="font-semibold text-gray-700">{currentProject.name}</span>
+                        </div>
+                    )}
+                </div>
                 <div className="flex items-center gap-2">
                     <button onClick={prevWeek} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-600"><ChevronLeft size={20} /></button>
                     <button onClick={goToToday} className="px-3 py-1.5 text-sm font-medium bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700">{t('dashboard.today')}</button>

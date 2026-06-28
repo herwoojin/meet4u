@@ -1,7 +1,7 @@
 {
   "project": "Meet4U (PromiseU)",
   "description": "Meeting/약속 스케줄러 PWA. 사용자별 약속 생성, 글로벌 미팅 맵(Leaflet), 출석/댓글/글로벌 채팅 실시간 알림(FCM), 다국어(ko/en/zh), 음성 합성, 댓글 자동 번역을 제공한다.",
-  "lastUpdated": "2026-06-27",
+  "lastUpdated": "2026-06-28",
   "architectureSummary": "프론트엔드: React 19 + Vite 7 SPA를 PWA로 빌드. 백엔드: Firebase(Auth/Firestore/Storage/Analytics/FCM) + Netlify Functions(번역·TTS·푸시 전송). 다중 호스팅 대상(Netlify/Vercel/Firebase Hosting/gh-pages) 지원. 사용자 데이터는 모두 Firestore에 저장되며, 정적 자산만 호스팅 플랫폼이 서빙.",
   "repo": "/Users/heoujin/meet4u",
   "categories": [

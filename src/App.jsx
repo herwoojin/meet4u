@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { ProjectProvider } from './context/ProjectContext';
 import Login from './Components/Login';
 import Dashboard from './Pages/Dashboard';
 import MeetingForm from './Components/meeting/MeetingForm';
@@ -13,6 +14,7 @@ import MainLayout from './Components/layout/MainLayout';
 import Settings from './Pages/Settings';
 import MyDashboard from './Pages/MyDashboard';
 import GlobalMeetingMap from './Pages/GlobalMeetingMap';
+import ProjectsPage from './Pages/Projects';
 import { useFCM } from './hooks/useFCM';
 
 const PrivateRoute = ({ children }) => {
@@ -31,6 +33,7 @@ const App = () => {
     return (
         <AuthProvider>
             <FCMInitializer />
+            <ProjectProvider>
             <ToastProvider>
                 <Routes>
                     <Route path="/login" element={<Login />} />
@@ -49,12 +52,14 @@ const App = () => {
                                     <Route path="/my-dashboard" element={<MyDashboard />} />
                                     <Route path="/settings" element={<Settings />} />
                                     <Route path="/global-meeting" element={<GlobalMeetingMap />} />
+                                    <Route path="/projects" element={<ProjectsPage />} />
                                 </Routes>
                             </MainLayout>
                         </PrivateRoute>
                     } />
                 </Routes>
             </ToastProvider>
+            </ProjectProvider>
         </AuthProvider>
     );
 };

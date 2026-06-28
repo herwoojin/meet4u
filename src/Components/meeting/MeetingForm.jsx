@@ -4,6 +4,8 @@ import { Calendar, Clock, MapPin, AlignLeft, Loader, DollarSign, User, Plus, Tra
 import { db } from '../../lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
+import { useProjects } from '../../context/ProjectContext';
+import { DEFAULT_PROJECT_ID } from '../../lib/projects';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useGoogleCalendar from '../../hooks/useGoogleCalendar';
 
@@ -91,6 +93,7 @@ const UserSearchDropdown = ({ value, onChange, users }) => {
 const MeetingForm = () => {
     const { t } = useTranslation();
     const { currentUser } = useAuth();
+    const { currentProjectId, currentProject } = useProjects();
     const navigate = useNavigate();
     const gcal = useGoogleCalendar();
     const location = useLocation();
@@ -188,7 +191,8 @@ const MeetingForm = () => {
             bookedBy: validCostEntries.length === 1 ? validCostEntries[0].bookedBy : '',
             createdBy: currentUser.uid,
             status: 'upcoming',
-            attendeesList: []
+            attendeesList: [],
+            projectId: currentProjectId || DEFAULT_PROJECT_ID,
         };
 
         try {
@@ -230,7 +234,13 @@ const MeetingForm = () => {
 
     return (
         <div className="max-w-2xl mx-auto">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">{isEditing ? t('meeting.editTitle') : t('meeting.newTitle')}</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">{isEditing ? t('meeting.editTitle') : t('meeting.newTitle')}</h2>
+            {currentProject && (
+                <div className="mb-6 flex items-center gap-2 text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                    <span className="text-lg">{currentProject.icon || '📁'}</span>
+                    <span>이 미팅은 <b className="text-blue-800">{currentProject.name}</b> 프로젝트에 등록됩니다.</span>
+                </div>
+            )}
             <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl border border-gray-200 space-y-6 shadow-sm">
 
                 {/* Title */}

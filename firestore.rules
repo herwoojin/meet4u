@@ -63,6 +63,23 @@ service cloud.firestore {
         && (resource.data.createdBy == myUid() || isAdmin());
     }
 
+    // ---------- Projects ----------
+    // 모든 인증 사용자가 읽기/생성 가능. 갱신은 멤버 본인 또는 관리자.
+    // 삭제는 생성자 또는 관리자만(soft-delete 권장: deleted=true).
+    match /projects/{projectId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn()
+        && (resource.data.createdBy == request.auth.token.email.lower() || isAdmin());
+    }
+
+    // ---------- Meta / migration flags ----------
+    match /meta/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && isAdmin();
+    }
+
     // ---------- Per-meeting comments ----------
     // Read/create by signed-in user. Update for readBy arrayUnion + translations cache.
     // Delete by the original sender only.

@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useMenuPermissions, canAccessMenu } from '../../lib/menuPermissions';
-import { Calendar, Home, LogOut, PlusCircle, Settings, X, Shield, BarChart3, Globe, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { useProjects } from '../../context/ProjectContext';
+import { Calendar, Home, LogOut, PlusCircle, Settings, X, Shield, BarChart3, Globe, PanelLeftClose, PanelLeftOpen, Folder, FolderPlus, Check } from 'lucide-react';
 
 const SidebarItem = ({ to, icon: Icon, label, onClick, collapsed }) => {
     const location = useLocation();
@@ -26,6 +27,7 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
     const { t } = useTranslation();
     const { logout, currentUser, userProfile, isAdmin } = useAuth();
     const { permissions } = useMenuPermissions();
+    const { projects, currentProjectId, currentProject, setCurrentProjectId } = useProjects();
     const displayAppTitle = (userProfile?.appTitle && userProfile.appTitle.trim()) || t('app.name');
 
     const allItems = [
@@ -73,6 +75,57 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
             {!isCollapsed && (
                 <div className="px-4 pt-3 hidden md:flex justify-end">
                     <LanguageSwitcher compact />
+                </div>
+            )}
+
+            {/* Project switcher — visible only when user has at least one project */}
+            {!isCollapsed && projects.length > 0 && (
+                <div className="px-4 pt-2 pb-1">
+                    <div className="text-[10px] uppercase tracking-wide text-blue-500/70 font-bold mb-1.5 flex items-center gap-1">
+                        <Folder size={11} /> 프로젝트
+                    </div>
+                    <ul className="space-y-1 max-h-44 overflow-y-auto pr-1">
+                        {projects.map(p => {
+                            const active = p.id === currentProjectId;
+                            return (
+                                <li key={p.id}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCurrentProjectId(p.id)}
+                                        title={p.name}
+                                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-left transition-colors ${active
+                                            ? 'bg-white shadow-sm text-blue-800 font-bold border border-blue-200'
+                                            : 'text-blue-900/70 hover:bg-white/60'
+                                        }`}
+                                    >
+                                        <span className="text-sm shrink-0">{p.icon || '📁'}</span>
+                                        <span className="flex-1 truncate">{p.name}</span>
+                                        {active && <Check size={10} className="text-blue-600 shrink-0" />}
+                                    </button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                    <Link
+                        to="/projects"
+                        onClick={closeMobileMenu}
+                        className="mt-2 w-full flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold text-blue-700 bg-white/70 hover:bg-white border border-blue-100"
+                    >
+                        <FolderPlus size={11} /> 프로젝트 관리
+                    </Link>
+                </div>
+            )}
+
+            {isCollapsed && currentProject && (
+                <div className="px-2 pt-2 flex justify-center">
+                    <Link
+                        to="/projects"
+                        onClick={closeMobileMenu}
+                        title={currentProject.name}
+                        className="w-10 h-10 flex items-center justify-center rounded-lg bg-white/70 hover:bg-white border border-blue-100 text-lg"
+                    >
+                        {currentProject.icon || '📁'}
+                    </Link>
                 </div>
             )}
 
