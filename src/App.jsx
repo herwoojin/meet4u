@@ -16,6 +16,7 @@ import MyDashboard from './Pages/MyDashboard';
 import GlobalMeetingMap from './Pages/GlobalMeetingMap';
 import ProjectsPage from './Pages/Projects';
 import HomeRedirect from './Components/HomeRedirect';
+import KakaoCallback from './Components/auth/KakaoCallback';
 import { useFCM } from './hooks/useFCM';
 
 const PrivateRoute = ({ children }) => {
@@ -38,6 +39,7 @@ const App = () => {
             <ToastProvider>
                 <Routes>
                     <Route path="/login" element={<Login />} />
+                    <Route path="/auth/kakao/callback" element={<KakaoCallback />} />
                     <Route path="/*" element={
                         <PrivateRoute>
                             <MainLayout>
