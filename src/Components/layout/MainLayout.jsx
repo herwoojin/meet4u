@@ -8,11 +8,14 @@ import ChatModal from '../chat/ChatModal';
 import Sidebar from './Sidebar';
 import LanguageSwitcher from './LanguageSwitcher';
 import ServerCapacityIndicator from './ServerCapacityIndicator';
+import { useRouteTracker } from '../../hooks/useRouteTracker';
 import { Menu, Calendar, Bell, BellRing, BellOff } from 'lucide-react';
 
 const MainLayout = ({ children }) => {
     const { t } = useTranslation();
     const { activeChatUser, closeChat, userProfile } = useAuth();
+    // 라우트가 바뀔 때마다 마지막 화면을 기억해 다음 로그인 시 복원
+    useRouteTracker();
     const displayAppTitle = (userProfile?.appTitle && userProfile.appTitle.trim()) || t('app.name');
 
     // Sync browser tab title (next to favicon) with the user's custom app title

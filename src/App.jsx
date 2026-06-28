@@ -15,6 +15,7 @@ import Settings from './Pages/Settings';
 import MyDashboard from './Pages/MyDashboard';
 import GlobalMeetingMap from './Pages/GlobalMeetingMap';
 import ProjectsPage from './Pages/Projects';
+import HomeRedirect from './Components/HomeRedirect';
 import { useFCM } from './hooks/useFCM';
 
 const PrivateRoute = ({ children }) => {
@@ -41,8 +42,8 @@ const App = () => {
                         <PrivateRoute>
                             <MainLayout>
                                 <Routes>
-                                    {/* 권한이 없는 사용자도 안전하게 접근 가능한 글로벌 미팅을 기본 진입 페이지로 사용 */}
-                                    <Route path="/" element={<Navigate to="/global-meeting" replace />} />
+                                    {/* 첫 로그인: /settings 로, 재방문: 마지막 본 화면으로 복원 */}
+                                    <Route path="/" element={<HomeRedirect />} />
                                     <Route path="/weekly" element={<Dashboard />} />
                                     <Route path="/calendar" element={<CalendarGrid />} />
                                     <Route path="/schedule" element={<MeetingForm />} />
