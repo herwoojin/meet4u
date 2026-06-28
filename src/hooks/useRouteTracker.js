@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 // landing.
 
 const LAST_ROUTE_KEY = 'meet4u_last_route';
-const EXCLUDED = new Set(['/', '/login']);
+const EXCLUDED = new Set(['/', '/login', '/auth/kakao/callback']);
 
 export const useRouteTracker = () => {
     const { currentUser } = useAuth();

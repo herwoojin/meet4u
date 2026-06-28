@@ -4,10 +4,10 @@
 /index.html
   Cache-Control: no-cache
 
-/sw.js
+/firebase-messaging-sw.js
   Cache-Control: no-cache, no-store
 
-/firebase-messaging-sw.js
+/firebase-messaging-sw-custom.js
   Cache-Control: no-cache, no-store
 
 /assets/*
