@@ -87,17 +87,22 @@ export const AuthProvider = ({ children }) => {
                     const userDocRef = doc(db, "users", user.uid);
                     const userSnapshot = await getDoc(userDocRef);
 
+                    // 카카오 로그인 사용자는 user.email 이 null 일 수 있어
+                    // 안전한 fallback 으로 sanitize 한다.
+                    const safeEmail = user.email || `${user.uid}@kakao.local`;
+                    const safeEmailSanitized = safeEmail.replace(/\./g, '_');
+
                     if (!userSnapshot.exists()) {
                         // Create new user profile if it doesn't exist
                         const newProfile = {
-                            email: user.email,
+                            email: safeEmail,
                             displayName: user.displayName,
                             photoURL: user.photoURL,
                             role: 'user',
                             preferredLanguage: 'ko',
                             createdAt: new Date().toISOString(),
                             lastSeen: new Date().toISOString(),
-                            emailSanitized: user.email.replace(/\./g, '_')
+                            emailSanitized: safeEmailSanitized,
                         };
                         await setDoc(userDocRef, newProfile);
                         setUserProfile(newProfile);
@@ -108,14 +113,13 @@ export const AuthProvider = ({ children }) => {
                             setIsAdmin(true);
                         }
                         setUserProfile(userData);
-                        
+
                         // Note: sessionStorage admin status is preserved via useState init
                         // Only update lastSeen and photoURL (if changed) to avoid overwriting custom displayName
                         await setDoc(userDocRef, {
                             lastSeen: new Date().toISOString(),
-                            emailSanitized: user.email.replace(/\./g, '_'),
-                            // Optional definition: could also sync photoURL if we want auth to be source of truth for photo
-                            photoURL: user.photoURL
+                            emailSanitized: safeEmailSanitized,
+                            photoURL: user.photoURL,
                         }, { merge: true });
                     }
                 } catch (error) {
