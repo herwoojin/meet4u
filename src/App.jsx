@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ProjectProvider } from './context/ProjectContext';
+import { auth } from './lib/firebase';
 import Login from './Components/Login';
 import Dashboard from './Pages/Dashboard';
 import MeetingForm from './Components/meeting/MeetingForm';
@@ -21,7 +22,11 @@ import { useFCM } from './hooks/useFCM';
 
 const PrivateRoute = ({ children }) => {
     const { currentUser } = useAuth();
-    return currentUser ? children : <Navigate to="/login" />;
+    // React state(AuthContext.currentUser) 가 아직 갱신되지 않은 짧은 시점에도
+    // Firebase SDK 의 동기 API(auth.currentUser) 가 set 되어 있으면 통과시킨다.
+    // 카카오 로그인 직후 race condition 으로 /login 으로 튕기는 현상 방지.
+    const authed = Boolean(currentUser || auth.currentUser);
+    return authed ? children : <Navigate to="/login" />;
 };
 
 // FCM 토큰 자동 갱신 + 포그라운드 알림 수신
