@@ -11,13 +11,15 @@ const LIVE_MODEL = 'gemini-2.0-flash-exp';
 const ENDPOINT_BASE =
     'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 
-// Gemini API 키 (AIza...) 는 ?key= 로, AI Studio 의 새 OAuth 형식 토큰
-// (AQ....) 은 ?access_token= 으로 전달한다. 기타 형식은 우선 ?key= 로
-// 시도한다 (구글 서버가 거절하면 명확한 close code 가 떨어짐).
+// Generative Language API 의 인증 컨벤션:
+//   • API Key (AIza...)  → ?key=<KEY>          ← 브라우저 WebSocket OK
+//   • OAuth Token (AQ.)  → Authorization 헤더  ← 브라우저 WebSocket 에서 불가
+//
+// 따라서 모든 형식을 일단 ?key= 로 전달한다. 잘못된 형식이면 서버가
+// 1008 unregistered caller 로 닫는다(아래 onclose 에서 친절히 안내).
 const buildEndpoint = (rawKey) => {
     const k = String(rawKey || '').trim();
-    const param = k.startsWith('AQ.') ? 'access_token' : 'key';
-    return `${ENDPOINT_BASE}?${param}=${encodeURIComponent(k)}`;
+    return `${ENDPOINT_BASE}?key=${encodeURIComponent(k)}`;
 };
 
 const INPUT_RATE = 16000;
@@ -155,9 +157,16 @@ export class LiveTranslatorSession {
         }
 
         this.setState('connecting');
-        const authParam = this.apiKey.trim().startsWith('AQ.') ? 'access_token' : 'key';
+        const isAQ = this.apiKey.trim().startsWith('AQ.');
         this.log(`모델=${LIVE_MODEL} / source=${this.sourceLang} → target=${this.targetLang}`);
-        this.log(`키 prefix=${this.apiKey.slice(0, 6)}…(len ${this.apiKey.length}) — URL param: ?${authParam}=`);
+        this.log(`키 prefix=${this.apiKey.slice(0, 6)}…(len ${this.apiKey.length}) — URL param: ?key=`);
+        if (isAQ) {
+            this.log(
+                "⚠ 'AQ.' 형식은 OAuth 액세스 토큰입니다. 브라우저 WebSocket 은 헤더를 보낼 수 없어 보통 1008 로 거절됩니다. " +
+                'AI Studio (aistudio.google.com/app/apikey) 의 \"Create API key\" 로 발급되는 AIza... 형식 키를 사용하세요.',
+                'error'
+            );
+        }
         this.log(`엔드포인트: wss://…v1beta.GenerativeService.BidiGenerateContent`);
 
         // ── 1) WebSocket open ─────────────────────────────────────────────
@@ -183,8 +192,25 @@ export class LiveTranslatorSession {
         this.ws.onclose = (e) => {
             const reason = e.reason || '(no reason)';
             this.log(`WebSocket CLOSED code=${e.code} reason=${reason}`, e.code === 1000 ? 'info' : 'error');
+
+            let userMsg = `연결이 종료되었습니다. code=${e.code} ${reason}`;
+            const reasonLow = reason.toLowerCase();
+
+            if (e.code === 1008 && (reasonLow.includes('unregistered') || reasonLow.includes('api key'))) {
+                userMsg =
+                    'Google Live API 가 키 인증을 거절했습니다.\n\n' +
+                    '👉 해결: AI Studio (https://aistudio.google.com/app/apikey) 에 접속해\n' +
+                    '   "Create API key" 버튼으로 발급받은 \"AIza...\" 형식의 키를 사용하세요.\n\n' +
+                    '현재 키 형식: ' + this.apiKey.slice(0, 5) + '…\n' +
+                    '주의: \"AQ.\" 형식은 OAuth 액세스 토큰이라 브라우저 WebSocket 에서는 사용할 수 없습니다.';
+            } else if (e.code === 1011) {
+                userMsg = '서버 내부 오류. 잠시 후 다시 시도해 주세요. (code 1011)';
+            } else if (e.code === 1007) {
+                userMsg = '잘못된 페이로드. 모델 호환성 문제일 수 있습니다.\n원본: ' + reason;
+            }
+
             if (this.state !== 'idle' && e.code !== 1000) {
-                this.onError(new Error(`연결이 종료되었습니다. code=${e.code} ${reason}`));
+                this.onError(new Error(userMsg));
             }
             if (this.state !== 'idle') this.setState('closed');
         };

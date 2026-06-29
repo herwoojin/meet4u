@@ -221,14 +221,29 @@ const LiveTranslatorModal = ({ open, onClose, defaultSourceLang = 'ko', defaultT
 
                     {showKey && (
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
-                            <div className="text-[11px] text-amber-900 leading-snug">
-                                Google AI Studio 에서 발급한 무료 Gemini API 키를 입력하세요. 본인 브라우저(localStorage)에만 저장됩니다.
+                            <div className="text-[11px] text-amber-900 leading-snug space-y-1">
+                                <p>
+                                    <a
+                                        href="https://aistudio.google.com/app/apikey"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-amber-900 underline font-bold"
+                                    >
+                                        Google AI Studio → Create API key
+                                    </a>{' '}
+                                    로 발급된 <b>“AIza…”</b> 형식의 키를 붙여넣으세요.
+                                </p>
+                                <p className="text-red-700">
+                                    ⚠ <b>“AQ.”</b> 로 시작하는 토큰은 OAuth 액세스 토큰이라
+                                    브라우저 WebSocket 에서 Live API 호출에 사용할 수 없습니다.
+                                </p>
+                                <p className="text-amber-700">키는 본인 브라우저(localStorage)에만 저장됩니다.</p>
                             </div>
                             <input
                                 type="password"
                                 value={keyInput}
                                 onChange={e => setKeyInput(e.target.value)}
-                                placeholder="AIza..."
+                                placeholder="AIzaSy..."
                                 className="w-full px-2 py-1.5 text-xs border border-amber-300 rounded bg-white"
                             />
                             <button
