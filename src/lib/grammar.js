@@ -934,15 +934,11 @@ const GEMINI_MODEL = 'gemini-1.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // Resolve the Gemini key in priority order:
-//   1) Admin shared key (VITE_GEMINI_ADMIN_API_KEY) — when caller is admin
-//      AND that key looks like a real Gemini API key (AIza prefix).
-//   2) The user's personal key from localStorage.
-//   3) Empty string when neither is available.
-//
-// 두 가지 형식 모두 허용:
-//   • AIza... — 전통적인 Gemini API 키
-//   • AQ....  — AI Studio 의 새 OAuth/IAM 바인딩 토큰
-// (.env 에 명백히 잘못된 짧은 placeholder 같은 게 들어 있을 때만 폴백)
+//   1) 본인 localStorage 키 — 입력했으면 무조건 우선. 관리자도 동일 UI
+//      에서 본인 AIza 키를 등록해 admin 공유 키를 즉시 override 가능.
+//   2) admin 공유 키 (VITE_GEMINI_ADMIN_API_KEY) — caller 가 admin
+//      이고 형식이 그럴듯할 때 (AIza 또는 AQ. prefix, len>=20).
+//   3) 빈 문자열.
 const looksLikeGeminiKey = (k) => {
     if (typeof k !== 'string') return false;
     const v = k.trim();
@@ -951,11 +947,15 @@ const looksLikeGeminiKey = (k) => {
 };
 
 export const getGeminiKey = ({ isAdmin = false } = {}) => {
+    let myKey = '';
+    try { myKey = (localStorage.getItem(GEMINI_KEY_STORAGE) || '').trim(); } catch { /* ignore */ }
+    if (myKey) return myKey;
+
     if (isAdmin) {
         const adminKey = (import.meta?.env?.VITE_GEMINI_ADMIN_API_KEY || '').trim();
         if (adminKey && looksLikeGeminiKey(adminKey)) return adminKey;
     }
-    try { return localStorage.getItem(GEMINI_KEY_STORAGE) || ''; } catch { return ''; }
+    return '';
 };
 
 export const setGeminiKey = (key) => {
