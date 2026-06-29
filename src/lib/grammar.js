@@ -939,9 +939,16 @@ const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models
 //   2) The user's personal key from localStorage.
 //   3) Empty string when neither is available.
 //
-// 잘못된 형식의 admin 키가 set 되어 있으면 사용자 본인 키로 폴백한다.
-// (.env 에 OAuth 토큰 같은 게 잘못 들어 있는 경우 방지)
-const looksLikeGeminiKey = (k) => typeof k === 'string' && k.trim().startsWith('AIza') && k.trim().length >= 30;
+// 두 가지 형식 모두 허용:
+//   • AIza... — 전통적인 Gemini API 키
+//   • AQ....  — AI Studio 의 새 OAuth/IAM 바인딩 토큰
+// (.env 에 명백히 잘못된 짧은 placeholder 같은 게 들어 있을 때만 폴백)
+const looksLikeGeminiKey = (k) => {
+    if (typeof k !== 'string') return false;
+    const v = k.trim();
+    if (v.length < 20) return false;
+    return v.startsWith('AIza') || v.startsWith('AQ.');
+};
 
 export const getGeminiKey = ({ isAdmin = false } = {}) => {
     if (isAdmin) {

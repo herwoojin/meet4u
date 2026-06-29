@@ -8,8 +8,17 @@
 //  • API 키 형식 검증 — Live API 는 AIza... 형식의 Gemini 키 필요.
 
 const LIVE_MODEL = 'gemini-2.0-flash-exp';
-const ENDPOINT = (key) =>
-    `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(key)}`;
+const ENDPOINT_BASE =
+    'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
+
+// Gemini API 키 (AIza...) 는 ?key= 로, AI Studio 의 새 OAuth 형식 토큰
+// (AQ....) 은 ?access_token= 으로 전달한다. 기타 형식은 우선 ?key= 로
+// 시도한다 (구글 서버가 거절하면 명확한 close code 가 떨어짐).
+const buildEndpoint = (rawKey) => {
+    const k = String(rawKey || '').trim();
+    const param = k.startsWith('AQ.') ? 'access_token' : 'key';
+    return `${ENDPOINT_BASE}?${param}=${encodeURIComponent(k)}`;
+};
 
 const INPUT_RATE = 16000;
 const OUTPUT_RATE = 24000;
@@ -66,21 +75,22 @@ const resampleFloat32 = (input, inputRate, outputRate) => {
     return out;
 };
 
-// Gemini Live 는 표준 Gemini API 키(AIza...)를 요구한다. 다른 형식은 보통
-// 401/403 으로 즉시 거절되므로 사전에 경고를 띄운다.
+// AI Studio 의 키 형식은 다음 두 가지 모두 허용한다.
+//   • 'AIza' prefix — 전통적인 Gemini API 키. URL ?key= 로 전달.
+//   • 'AQ.' prefix — AI Studio 의 새 OAuth/IAM 바인딩 토큰.
+//                    URL ?access_token= 로 전달.
+// 둘 다 아닌 형식이라도 길이만 충분하면 일단 통과시켜 서버 응답으로
+// 판단한다(클라이언트 사이드 하드코딩 거부 방지).
 export const validateGeminiKey = (k) => {
     if (!k || !k.trim()) return { ok: false, reason: '키가 비어 있습니다.' };
     const key = k.trim();
-    if (!key.startsWith('AIza')) {
-        return {
-            ok: false,
-            reason: `Live API 는 'AIza' 로 시작하는 Gemini API 키가 필요합니다. (현재: ${key.slice(0, 4)}…)`,
-        };
+    if (key.length < 20) {
+        return { ok: false, reason: `키 길이가 너무 짧습니다. (${key.length}자)` };
     }
-    if (key.length < 30) {
-        return { ok: false, reason: '키 길이가 너무 짧습니다.' };
-    }
-    return { ok: true };
+    if (key.startsWith('AIza')) return { ok: true, type: 'apiKey' };
+    if (key.startsWith('AQ.'))  return { ok: true, type: 'oauthToken' };
+    // 알 수 없는 prefix — 일단 통과시키되 어떤 형식으로 보내는지 표시.
+    return { ok: true, type: 'unknown' };
 };
 
 // ---------------------------------------------------------------------------
@@ -145,13 +155,14 @@ export class LiveTranslatorSession {
         }
 
         this.setState('connecting');
+        const authParam = this.apiKey.trim().startsWith('AQ.') ? 'access_token' : 'key';
         this.log(`모델=${LIVE_MODEL} / source=${this.sourceLang} → target=${this.targetLang}`);
-        this.log(`키 prefix=${this.apiKey.slice(0, 6)}…(len ${this.apiKey.length})`);
+        this.log(`키 prefix=${this.apiKey.slice(0, 6)}…(len ${this.apiKey.length}) — URL param: ?${authParam}=`);
         this.log(`엔드포인트: wss://…v1beta.GenerativeService.BidiGenerateContent`);
 
         // ── 1) WebSocket open ─────────────────────────────────────────────
         try {
-            this.ws = new WebSocket(ENDPOINT(this.apiKey));
+            this.ws = new WebSocket(buildEndpoint(this.apiKey));
         } catch (e) {
             this.log(`WebSocket 생성 실패: ${e.message}`, 'error');
             throw e;
