@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, Mic, MicOff, Loader, Radio, Volume2, VolumeX, KeyRound } from 'lucide-react';
-import { LiveTranslatorSession } from '../../lib/liveApi';
+import { X, Mic, MicOff, Loader, Radio, Volume2, VolumeX, KeyRound, Terminal } from 'lucide-react';
+import { LiveTranslatorSession, validateGeminiKey } from '../../lib/liveApi';
 import { getGeminiKey, setGeminiKey, hasAdminGeminiKey } from '../../lib/grammar';
 
 // Real-time bidirectional voice translation modal powered by Gemini Live API.
@@ -36,7 +36,10 @@ const LiveTranslatorModal = ({ open, onClose, defaultSourceLang = 'ko', defaultT
     const [errorMsg, setErrorMsg] = useState('');
     const [keyInput, setKeyInput] = useState('');
     const [showKey, setShowKey] = useState(false);
+    const [logs, setLogs] = useState([]);
+    const [showLogs, setShowLogs] = useState(true);
     const sessionRef = useRef(null);
+    const logsEndRef = useRef(null);
 
     const resolvedKey = useMemo(() => getGeminiKey({ isAdmin }), [isAdmin, open]);
     const adminAvailable = hasAdminGeminiKey() && isAdmin;
@@ -46,6 +49,7 @@ const LiveTranslatorModal = ({ open, onClose, defaultSourceLang = 'ko', defaultT
         if (!open) return;
         setErrorMsg('');
         setTranscript('');
+        setLogs([]);
         setKeyInput(getGeminiKey({ isAdmin: false }));
         return () => {
             // Cleanup when modal closes
@@ -64,8 +68,17 @@ const LiveTranslatorModal = ({ open, onClose, defaultSourceLang = 'ko', defaultT
 
     const handleStart = async () => {
         if (!resolvedKey) { setShowKey(true); return; }
+
+        // 사전 키 형식 검증 — Live API 는 AIza... 형식 Gemini 키가 필요.
+        const v = validateGeminiKey(resolvedKey);
+        if (!v.ok) {
+            setErrorMsg(v.reason + '\nGoogle AI Studio (aistudio.google.com/app/apikey) 에서 발급한 키여야 합니다.');
+            return;
+        }
+
         setErrorMsg('');
         setTranscript('');
+        setLogs([]);
         try {
             const session = new LiveTranslatorSession({
                 apiKey: resolvedKey,
@@ -82,6 +95,15 @@ const LiveTranslatorModal = ({ open, onClose, defaultSourceLang = 'ko', defaultT
                 onError: (err) => {
                     console.error('Live error:', err);
                     setErrorMsg(err?.message || 'Live API 오류');
+                },
+                onLog: (entry) => {
+                    setLogs(prev => {
+                        const next = [...prev, entry];
+                        // 최근 60 개만 유지
+                        return next.length > 60 ? next.slice(-60) : next;
+                    });
+                    // 다음 paint 에서 스크롤 맨 아래로
+                    setTimeout(() => logsEndRef.current?.scrollIntoView({ behavior: 'auto' }), 0);
                 },
             });
             sessionRef.current = session;
@@ -220,13 +242,46 @@ const LiveTranslatorModal = ({ open, onClose, defaultSourceLang = 'ko', defaultT
                     )}
 
                     {/* Transcript */}
-                    <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 min-h-[140px] max-h-[40vh] overflow-y-auto text-sm whitespace-pre-wrap leading-relaxed">
+                    <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 min-h-[100px] max-h-[28vh] overflow-y-auto text-sm whitespace-pre-wrap leading-relaxed">
                         {transcript ? (
                             <span className="text-gray-800">{transcript}</span>
                         ) : (
                             <span className="text-gray-400 italic text-xs">
                                 {isLive ? '듣고 있어요. 자유롭게 말씀하세요…' : '시작 버튼을 누르고 마이크에 말씀해 주세요.'}
                             </span>
+                        )}
+                    </div>
+
+                    {/* Live diagnostic log */}
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <button
+                            type="button"
+                            onClick={() => setShowLogs(s => !s)}
+                            className="w-full flex items-center justify-between px-3 py-1.5 bg-gray-50 border-b border-gray-200 text-[10px] uppercase tracking-wide text-gray-500 font-bold hover:bg-gray-100"
+                        >
+                            <span className="flex items-center gap-1">
+                                <Terminal size={11} /> 진행 로그 ({logs.length})
+                            </span>
+                            <span>{showLogs ? '▼' : '▶'}</span>
+                        </button>
+                        {showLogs && (
+                            <div className="max-h-48 overflow-y-auto text-[10px] font-mono">
+                                {logs.length === 0 ? (
+                                    <div className="px-3 py-2 text-gray-400 italic">아직 로그가 없습니다.</div>
+                                ) : (
+                                    <>
+                                        {logs.map((l, i) => (
+                                            <div
+                                                key={i}
+                                                className={`px-3 py-1 border-b border-gray-50 ${l.level === 'error' ? 'text-red-700 bg-red-50' : 'text-gray-700'}`}
+                                            >
+                                                {l.msg}
+                                            </div>
+                                        ))}
+                                        <div ref={logsEndRef} />
+                                    </>
+                                )}
+                            </div>
                         )}
                     </div>
 

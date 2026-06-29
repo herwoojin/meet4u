@@ -1,28 +1,22 @@
-// Gemini Live API client for real-time bidirectional voice translation.
-//
-// Protocol summary (BidiGenerateContent):
-//   • Client → Server WebSocket on
-//     wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage
-//        .v1alpha.GenerativeService.BidiGenerateContent?key=API_KEY
-//   • First message: { setup: { model, generationConfig, systemInstruction } }
-//   • Then stream:   { realtimeInput: { mediaChunks: [{ mimeType, data }] } }
-//   • Server pushes: { serverContent: { modelTurn: { parts: [...] }, turnComplete?: true } }
-//     Parts may contain text or inlineData (audio/pcm;rate=24000).
-//
-// We capture mic at 16 kHz mono PCM via the WebAudio graph (resampling in JS
-// if AudioContext can't honor the requested rate). Outgoing chunks are
-// base64-encoded Int16 PCM. Incoming audio chunks (24 kHz) are queued and
-// scheduled on a single output AudioContext for gap-free playback.
+// Gemini Live API client — verbose-logging 버전.
+// 핵심 개선:
+//  • onLog 콜백으로 모든 단계를 UI 로그 패널에 표시.
+//  • setupComplete 메시지를 받기 전엔 절대 오디오를 보내지 않음
+//    (이전엔 WS open 직후 무차별로 보내서 무시되거나 끊김 유발).
+//  • WebSocket onclose 의 code/reason 을 사용자가 볼 수 있게 노출.
+//  • AudioContext.resume() 명시 호출 (iOS Safari 대응).
+//  • API 키 형식 검증 — Live API 는 AIza... 형식의 Gemini 키 필요.
 
 const LIVE_MODEL = 'gemini-2.0-flash-exp';
-const ENDPOINT = (key) => `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(key)}`;
+const ENDPOINT = (key) =>
+    `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(key)}`;
 
 const INPUT_RATE = 16000;
 const OUTPUT_RATE = 24000;
-const FRAME_SIZE = 2048; // samples per ScriptProcessor callback (~128ms at 16 kHz)
+const FRAME_SIZE = 2048;
 
 // ---------------------------------------------------------------------------
-// Helpers — PCM ↔ base64
+// Helpers
 // ---------------------------------------------------------------------------
 
 const floatToInt16 = (f32) => {
@@ -57,7 +51,6 @@ const int16ToFloat32 = (int16) => {
     return out;
 };
 
-// Down/up-sample by simple linear interpolation. Good enough for speech.
 const resampleFloat32 = (input, inputRate, outputRate) => {
     if (inputRate === outputRate) return input;
     const ratio = inputRate / outputRate;
@@ -73,12 +66,32 @@ const resampleFloat32 = (input, inputRate, outputRate) => {
     return out;
 };
 
+// Gemini Live 는 표준 Gemini API 키(AIza...)를 요구한다. 다른 형식은 보통
+// 401/403 으로 즉시 거절되므로 사전에 경고를 띄운다.
+export const validateGeminiKey = (k) => {
+    if (!k || !k.trim()) return { ok: false, reason: '키가 비어 있습니다.' };
+    const key = k.trim();
+    if (!key.startsWith('AIza')) {
+        return {
+            ok: false,
+            reason: `Live API 는 'AIza' 로 시작하는 Gemini API 키가 필요합니다. (현재: ${key.slice(0, 4)}…)`,
+        };
+    }
+    if (key.length < 30) {
+        return { ok: false, reason: '키 길이가 너무 짧습니다.' };
+    }
+    return { ok: true };
+};
+
 // ---------------------------------------------------------------------------
-// Main session class
+// Session
 // ---------------------------------------------------------------------------
 
 export class LiveTranslatorSession {
-    constructor({ apiKey, sourceLang, targetLang, audioOut = true, onState, onText, onError, onTurnComplete }) {
+    constructor({
+        apiKey, sourceLang, targetLang, audioOut = true,
+        onState, onText, onError, onTurnComplete, onLog,
+    }) {
         this.apiKey = apiKey;
         this.sourceLang = sourceLang;
         this.targetLang = targetLang;
@@ -87,6 +100,7 @@ export class LiveTranslatorSession {
         this.onText = onText || (() => { });
         this.onError = onError || (() => { });
         this.onTurnComplete = onTurnComplete || (() => { });
+        this.onLog = onLog || (() => { });
 
         this.ws = null;
         this.micCtx = null;
@@ -97,6 +111,15 @@ export class LiveTranslatorSession {
         this.playheadTime = 0;
         this.state = 'idle';
         this.setupAck = false;
+        this.sentChunks = 0;
+        this.recvAudioChunks = 0;
+    }
+
+    log(msg, level = 'info') {
+        const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        // eslint-disable-next-line no-console
+        console.log('[Live]', line);
+        this.onLog({ msg: line, level });
     }
 
     setState(s) { this.state = s; this.onState(s); }
@@ -114,26 +137,50 @@ export class LiveTranslatorSession {
 
     async start() {
         if (this.state !== 'idle') return;
-        if (!this.apiKey) throw new Error('Gemini API 키가 필요합니다.');
-        this.setState('connecting');
 
-        // 1) Open WebSocket
-        this.ws = new WebSocket(ENDPOINT(this.apiKey));
+        const v = validateGeminiKey(this.apiKey);
+        if (!v.ok) {
+            this.log(`키 형식 오류: ${v.reason}`, 'error');
+            throw new Error(v.reason);
+        }
+
+        this.setState('connecting');
+        this.log(`모델=${LIVE_MODEL} / source=${this.sourceLang} → target=${this.targetLang}`);
+        this.log(`키 prefix=${this.apiKey.slice(0, 6)}…(len ${this.apiKey.length})`);
+        this.log(`엔드포인트: wss://…v1beta.GenerativeService.BidiGenerateContent`);
+
+        // ── 1) WebSocket open ─────────────────────────────────────────────
+        try {
+            this.ws = new WebSocket(ENDPOINT(this.apiKey));
+        } catch (e) {
+            this.log(`WebSocket 생성 실패: ${e.message}`, 'error');
+            throw e;
+        }
         this.ws.binaryType = 'arraybuffer';
 
         const openPromise = new Promise((resolve, reject) => {
-            this.ws.onopen = () => resolve();
-            this.ws.onerror = (e) => reject(e);
+            const onOpen = () => { this.log('WebSocket OPEN'); resolve(); };
+            const onErr = (e) => {
+                this.log(`WebSocket onerror — 보통 API 키 권한 / 네트워크 문제`, 'error');
+                reject(new Error('WebSocket 연결 실패. 키가 Gemini Live API 권한을 가지고 있는지 확인하세요.'));
+            };
+            this.ws.addEventListener('open', onOpen, { once: true });
+            this.ws.addEventListener('error', onErr, { once: true });
         });
 
         this.ws.onmessage = (ev) => this.handleServerMessage(ev);
-        this.ws.onclose = () => {
+        this.ws.onclose = (e) => {
+            const reason = e.reason || '(no reason)';
+            this.log(`WebSocket CLOSED code=${e.code} reason=${reason}`, e.code === 1000 ? 'info' : 'error');
+            if (this.state !== 'idle' && e.code !== 1000) {
+                this.onError(new Error(`연결이 종료되었습니다. code=${e.code} ${reason}`));
+            }
             if (this.state !== 'idle') this.setState('closed');
         };
 
         await openPromise;
 
-        // 2) Send setup
+        // ── 2) Send setup ─────────────────────────────────────────────────
         const setup = {
             setup: {
                 model: `models/${LIVE_MODEL}`,
@@ -149,17 +196,27 @@ export class LiveTranslatorSession {
             },
         };
         this.ws.send(JSON.stringify(setup));
+        this.log(`setup 전송 — responseModalities=${this.audioOut ? 'AUDIO' : 'TEXT'}`);
         this.setState('starting');
 
-        // 3) Prepare audio output context (gap-free queue)
+        // ── 3) Output AudioContext (iOS Safari 는 resume 필요) ────────────
         if (typeof window !== 'undefined') {
             this.outCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: OUTPUT_RATE });
+            try { await this.outCtx.resume(); } catch { /* ignore */ }
             this.playheadTime = this.outCtx.currentTime;
+            this.log(`출력 AudioContext 준비 (rate=${this.outCtx.sampleRate}, state=${this.outCtx.state})`);
         }
 
-        // 4) Mic capture (deferred until setup ack)
-        await this.startMic();
+        // ── 4) Mic capture ────────────────────────────────────────────────
+        try {
+            await this.startMic();
+        } catch (e) {
+            this.log(`마이크 시작 실패: ${e.message}`, 'error');
+            throw e;
+        }
+
         this.setState('listening');
+        this.log(`청취 시작 — setupComplete 수신 전엔 청크가 누적만 됩니다.`);
     }
 
     async startMic() {
@@ -169,17 +226,17 @@ export class LiveTranslatorSession {
         this.stream = await navigator.mediaDevices.getUserMedia({
             audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
         });
+        this.log('마이크 권한 OK');
 
-        // Try to construct a 16 kHz AudioContext (Chrome supports). Fall back
-        // to default rate + JS resample.
-        let ctxRate = INPUT_RATE;
+        let ctxRate;
         try {
             this.micCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: INPUT_RATE });
-            ctxRate = this.micCtx.sampleRate;
         } catch {
             this.micCtx = new (window.AudioContext || window.webkitAudioContext)();
-            ctxRate = this.micCtx.sampleRate;
         }
+        try { await this.micCtx.resume(); } catch { /* ignore */ }
+        ctxRate = this.micCtx.sampleRate;
+        this.log(`입력 AudioContext rate=${ctxRate} (목표 ${INPUT_RATE})`);
 
         this.source = this.micCtx.createMediaStreamSource(this.stream);
         // eslint-disable-next-line no-undef
@@ -187,15 +244,25 @@ export class LiveTranslatorSession {
 
         this.processor.onaudioprocess = (e) => {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+            if (!this.setupAck) return; // setup 완료 전엔 보내지 않음
+
             const f32 = e.inputBuffer.getChannelData(0);
             const resampled = ctxRate === INPUT_RATE ? f32 : resampleFloat32(f32, ctxRate, INPUT_RATE);
             const int16 = floatToInt16(resampled);
             const b64 = int16ToBase64(int16);
-            this.ws.send(JSON.stringify({
-                realtimeInput: {
-                    mediaChunks: [{ mimeType: `audio/pcm;rate=${INPUT_RATE}`, data: b64 }],
-                },
-            }));
+            try {
+                this.ws.send(JSON.stringify({
+                    realtimeInput: {
+                        mediaChunks: [{ mimeType: `audio/pcm;rate=${INPUT_RATE}`, data: b64 }],
+                    },
+                }));
+                this.sentChunks++;
+                if (this.sentChunks === 1 || this.sentChunks % 25 === 0) {
+                    this.log(`송신 청크 누적 ${this.sentChunks}`);
+                }
+            } catch (err) {
+                this.log(`청크 송신 실패: ${err.message}`, 'error');
+            }
         };
 
         this.source.connect(this.processor);
@@ -207,12 +274,13 @@ export class LiveTranslatorSession {
         try {
             msg = JSON.parse(typeof ev.data === 'string' ? ev.data : new TextDecoder().decode(ev.data));
         } catch (err) {
-            console.warn('Live: bad server message', err);
+            this.log(`서버 응답 파싱 실패: ${err.message}`, 'error');
             return;
         }
 
         if (msg.setupComplete) {
             this.setupAck = true;
+            this.log('서버: setupComplete — 이제 청크 송신 시작');
             return;
         }
 
@@ -220,34 +288,50 @@ export class LiveTranslatorSession {
             const sc = msg.serverContent;
             const parts = sc.modelTurn?.parts || [];
             for (const p of parts) {
-                if (p.text) this.onText({ text: p.text, partial: !sc.turnComplete });
+                if (p.text) {
+                    this.onText({ text: p.text, partial: !sc.turnComplete });
+                    this.log(`텍스트 수신 (${p.text.length}자)`);
+                }
                 if (p.inlineData?.data && p.inlineData.mimeType?.startsWith('audio/')) {
+                    this.recvAudioChunks++;
+                    if (this.recvAudioChunks === 1 || this.recvAudioChunks % 10 === 0) {
+                        this.log(`수신 오디오 청크 ${this.recvAudioChunks}`);
+                    }
                     this.queueAudio(p.inlineData.data);
                 }
             }
-            if (sc.turnComplete) this.onTurnComplete();
+            if (sc.turnComplete) {
+                this.log('서버: turnComplete');
+                this.onTurnComplete();
+            }
         }
 
         if (msg.error) {
-            this.onError(new Error(msg.error.message || 'Live API 오류'));
+            const m = msg.error.message || JSON.stringify(msg.error);
+            this.log(`서버 에러: ${m}`, 'error');
+            this.onError(new Error(m));
         }
     }
 
     queueAudio(base64) {
         if (!this.outCtx) return;
-        const int16 = base64ToInt16(base64);
-        const f32 = int16ToFloat32(int16);
-        const buf = this.outCtx.createBuffer(1, f32.length, OUTPUT_RATE);
-        buf.copyToChannel(f32, 0);
+        try {
+            const int16 = base64ToInt16(base64);
+            const f32 = int16ToFloat32(int16);
+            const buf = this.outCtx.createBuffer(1, f32.length, OUTPUT_RATE);
+            buf.copyToChannel(f32, 0);
 
-        const src = this.outCtx.createBufferSource();
-        src.buffer = buf;
-        src.connect(this.outCtx.destination);
+            const src = this.outCtx.createBufferSource();
+            src.buffer = buf;
+            src.connect(this.outCtx.destination);
 
-        const now = this.outCtx.currentTime;
-        const startAt = Math.max(this.playheadTime, now);
-        src.start(startAt);
-        this.playheadTime = startAt + buf.duration;
+            const now = this.outCtx.currentTime;
+            const startAt = Math.max(this.playheadTime, now);
+            src.start(startAt);
+            this.playheadTime = startAt + buf.duration;
+        } catch (e) {
+            this.log(`오디오 재생 큐 실패: ${e.message}`, 'error');
+        }
     }
 
     sendText(text) {
@@ -261,13 +345,18 @@ export class LiveTranslatorSession {
     }
 
     async stop() {
+        if (this.state === 'idle') return;
+        this.log('세션 종료');
         this.setState('idle');
         try { this.processor?.disconnect(); } catch { /* ignore */ }
         try { this.source?.disconnect(); } catch { /* ignore */ }
         try { this.stream?.getTracks().forEach(t => t.stop()); } catch { /* ignore */ }
         try { await this.micCtx?.close(); } catch { /* ignore */ }
         try { await this.outCtx?.close(); } catch { /* ignore */ }
-        try { this.ws?.close(); } catch { /* ignore */ }
+        try { this.ws?.close(1000, 'client stop'); } catch { /* ignore */ }
         this.processor = this.source = this.stream = this.micCtx = this.outCtx = this.ws = null;
+        this.setupAck = false;
+        this.sentChunks = 0;
+        this.recvAudioChunks = 0;
     }
 }

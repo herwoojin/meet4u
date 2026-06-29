@@ -934,13 +934,19 @@ const GEMINI_MODEL = 'gemini-1.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // Resolve the Gemini key in priority order:
-//   1) Admin shared key (VITE_GEMINI_ADMIN_API_KEY) — when caller is admin.
+//   1) Admin shared key (VITE_GEMINI_ADMIN_API_KEY) — when caller is admin
+//      AND that key looks like a real Gemini API key (AIza prefix).
 //   2) The user's personal key from localStorage.
 //   3) Empty string when neither is available.
+//
+// 잘못된 형식의 admin 키가 set 되어 있으면 사용자 본인 키로 폴백한다.
+// (.env 에 OAuth 토큰 같은 게 잘못 들어 있는 경우 방지)
+const looksLikeGeminiKey = (k) => typeof k === 'string' && k.trim().startsWith('AIza') && k.trim().length >= 30;
+
 export const getGeminiKey = ({ isAdmin = false } = {}) => {
     if (isAdmin) {
         const adminKey = (import.meta?.env?.VITE_GEMINI_ADMIN_API_KEY || '').trim();
-        if (adminKey) return adminKey;
+        if (adminKey && looksLikeGeminiKey(adminKey)) return adminKey;
     }
     try { return localStorage.getItem(GEMINI_KEY_STORAGE) || ''; } catch { return ''; }
 };
