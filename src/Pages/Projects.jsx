@@ -266,23 +266,42 @@ const ProjectsPage = () => {
                                             <Users size={11} /> {(p.memberEmails || []).length}명
                                         </div>
                                         <div className="mt-2 flex flex-wrap gap-1">
-                                            {(p.memberEmails || []).slice(0, 12).map(em => (
-                                                <span key={em} className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 bg-white border border-gray-200 rounded-full">
-                                                    <span>{findUserLabel(em)}</span>
-                                                    {isCreator && lower(em) !== me && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleKick(p.id, em)}
-                                                            disabled={busy[p.id]}
-                                                            className="text-gray-300 hover:text-red-500"
-                                                            title="제외"
-                                                        >
-                                                            <X size={10} />
-                                                        </button>
-                                                    )}
-                                                </span>
-                                            ))}
+                                            {(p.memberEmails || []).map(em => {
+                                                const canKick = isCreator && lower(em) !== me;
+                                                return (
+                                                    <span
+                                                        key={em}
+                                                        className={`inline-flex items-center gap-1 text-[11px] pl-2 py-0.5 rounded-full border ${
+                                                            canKick
+                                                                ? 'bg-white border-gray-200 pr-0.5'
+                                                                : 'bg-gray-50 border-gray-100 pr-2'
+                                                        }`}
+                                                    >
+                                                        <span className={lower(em) === me ? 'font-bold text-blue-700' : 'text-gray-700'}>
+                                                            {findUserLabel(em)}
+                                                            {lower(em) === me && ' (나)'}
+                                                        </span>
+                                                        {canKick && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleKick(p.id, em)}
+                                                                disabled={busy[p.id]}
+                                                                className="ml-0.5 w-5 h-5 inline-flex items-center justify-center rounded-full text-red-500 bg-red-50 hover:bg-red-500 hover:text-white border border-red-200 transition-colors disabled:opacity-40"
+                                                                title={`${findUserLabel(em)} 님을 프로젝트에서 제거`}
+                                                                aria-label="제거"
+                                                            >
+                                                                <X size={11} strokeWidth={3} />
+                                                            </button>
+                                                        )}
+                                                    </span>
+                                                );
+                                            })}
                                         </div>
+                                        {isCreator && (
+                                            <div className="mt-1.5 text-[10px] text-gray-500 italic">
+                                                💡 각 멤버 옆 빨간 ✕ 버튼으로 프로젝트에서 제거할 수 있습니다.
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="shrink-0 flex flex-col gap-1.5">
                                         {!isActive && (

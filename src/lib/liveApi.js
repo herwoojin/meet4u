@@ -7,7 +7,14 @@
 //  • AudioContext.resume() 명시 호출 (iOS Safari 대응).
 //  • API 키 형식 검증 — Live API 는 AIza... 형식의 Gemini 키 필요.
 
-const LIVE_MODEL = 'gemini-2.0-flash-exp';
+// 시도할 모델 후보 — 첫 번째가 실패하면(1008 not found) 자동으로 다음으로 재시도.
+// gemini-2.0-flash-exp 는 신규 사용 불가가 되어 제외.
+const LIVE_MODELS = [
+    'gemini-2.0-flash-live-001',                       // GA Live API
+    'gemini-live-2.5-flash-preview',                   // newer preview
+    'gemini-2.5-flash-preview-native-audio-dialog',    // native-audio preview
+];
+
 const ENDPOINT_BASE =
     'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 
@@ -125,7 +132,11 @@ export class LiveTranslatorSession {
         this.setupAck = false;
         this.sentChunks = 0;
         this.recvAudioChunks = 0;
+        this.modelIndex = 0;
+        this.intentionalStop = false;
     }
+
+    get currentModel() { return LIVE_MODELS[this.modelIndex]; }
 
     log(msg, level = 'info') {
         const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
@@ -158,7 +169,7 @@ export class LiveTranslatorSession {
 
         this.setState('connecting');
         const isAQ = this.apiKey.trim().startsWith('AQ.');
-        this.log(`모델=${LIVE_MODEL} / source=${this.sourceLang} → target=${this.targetLang}`);
+        this.log(`모델=${this.currentModel} / source=${this.sourceLang} → target=${this.targetLang}`);
         this.log(`키 prefix=${this.apiKey.slice(0, 6)}…(len ${this.apiKey.length}) — URL param: ?key=`);
         if (isAQ) {
             this.log(
@@ -192,17 +203,34 @@ export class LiveTranslatorSession {
         this.ws.onclose = (e) => {
             const reason = e.reason || '(no reason)';
             this.log(`WebSocket CLOSED code=${e.code} reason=${reason}`, e.code === 1000 ? 'info' : 'error');
-
-            let userMsg = `연결이 종료되었습니다. code=${e.code} ${reason}`;
             const reasonLow = reason.toLowerCase();
 
-            if (e.code === 1008 && (reasonLow.includes('unregistered') || reasonLow.includes('api key'))) {
+            // 1) 모델이 v1beta 에서 없거나 bidiGenerateContent 미지원 →
+            //    다음 후보 모델로 자동 재시도
+            const modelNotFound =
+                e.code === 1008 &&
+                (reasonLow.includes('not found') || reasonLow.includes('not supported')) &&
+                reasonLow.includes('model');
+            if (modelNotFound && this.modelIndex < LIVE_MODELS.length - 1 && !this.intentionalStop) {
+                const nextIdx = this.modelIndex + 1;
+                this.log(`모델 ${this.currentModel} 사용 불가 — ${LIVE_MODELS[nextIdx]} 로 재시도`);
+                this.modelIndex = nextIdx;
+                // 현재 세션 정리 후 재시도
+                this.tearDownAndRetry();
+                return;
+            }
+
+            let userMsg = `연결이 종료되었습니다. code=${e.code} ${reason}`;
+            if (modelNotFound) {
+                userMsg =
+                    `시도한 모든 Live API 모델이 사용 불가입니다:\n` +
+                    LIVE_MODELS.map((m, i) => (i <= this.modelIndex ? '✗ ' : '· ') + m).join('\n') +
+                    `\n\n원본: ${reason}`;
+            } else if (e.code === 1008 && (reasonLow.includes('unregistered') || reasonLow.includes('api key'))) {
                 userMsg =
                     'Google Live API 가 키 인증을 거절했습니다.\n\n' +
-                    '👉 해결: AI Studio (https://aistudio.google.com/app/apikey) 에 접속해\n' +
-                    '   "Create API key" 버튼으로 발급받은 \"AIza...\" 형식의 키를 사용하세요.\n\n' +
-                    '현재 키 형식: ' + this.apiKey.slice(0, 5) + '…\n' +
-                    '주의: \"AQ.\" 형식은 OAuth 액세스 토큰이라 브라우저 WebSocket 에서는 사용할 수 없습니다.';
+                    '👉 AI Studio (https://aistudio.google.com/app/apikey) 에서 발급받은 "AIza..." 키를 사용하세요.\n' +
+                    `현재 키 prefix: ${this.apiKey.slice(0, 5)}…`;
             } else if (e.code === 1011) {
                 userMsg = '서버 내부 오류. 잠시 후 다시 시도해 주세요. (code 1011)';
             } else if (e.code === 1007) {
@@ -220,7 +248,7 @@ export class LiveTranslatorSession {
         // ── 2) Send setup ─────────────────────────────────────────────────
         const setup = {
             setup: {
-                model: `models/${LIVE_MODEL}`,
+                model: `models/${this.currentModel}`,
                 generationConfig: {
                     responseModalities: this.audioOut ? ['AUDIO'] : ['TEXT'],
                     ...(this.audioOut && {
@@ -381,8 +409,71 @@ export class LiveTranslatorSession {
         }));
     }
 
+    // 모델 fallback 전용 — 마이크/오디오 컨텍스트는 유지하고 ws + setupAck 만
+    // 리셋해서 다음 모델로 다시 connect.
+    async tearDownAndRetry() {
+        try { this.ws?.close(1000, 'model fallback'); } catch { /* ignore */ }
+        this.ws = null;
+        this.setupAck = false;
+        // 마이크 처리는 ws.OPEN 이 false 가 되면 자동으로 청크 송신을 멈춤(processor 가드).
+        // 새 ws 열기.
+        try {
+            this.ws = new WebSocket(buildEndpoint(this.apiKey));
+            this.ws.binaryType = 'arraybuffer';
+            this.ws.onmessage = (ev) => this.handleServerMessage(ev);
+            this.ws.onclose = this._makeOnClose();
+            this.ws.addEventListener('open', () => {
+                this.log(`WebSocket OPEN (재시도 — ${this.currentModel})`);
+                const setup = {
+                    setup: {
+                        model: `models/${this.currentModel}`,
+                        generationConfig: {
+                            responseModalities: this.audioOut ? ['AUDIO'] : ['TEXT'],
+                            ...(this.audioOut && {
+                                speechConfig: {
+                                    voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Aoede' } },
+                                },
+                            }),
+                        },
+                        systemInstruction: { parts: [{ text: this.systemInstruction() }] },
+                    },
+                };
+                this.ws.send(JSON.stringify(setup));
+                this.log(`setup 재전송 — model=${this.currentModel}`);
+            }, { once: true });
+        } catch (e) {
+            this.log(`재시도 WebSocket 생성 실패: ${e.message}`, 'error');
+            this.onError(e);
+        }
+    }
+
+    _makeOnClose() {
+        // start() 의 onclose 와 동일한 콜백을 별도 함수로 재사용.
+        return (e) => {
+            const reason = e.reason || '(no reason)';
+            this.log(`WebSocket CLOSED code=${e.code} reason=${reason}`, e.code === 1000 ? 'info' : 'error');
+            const reasonLow = reason.toLowerCase();
+            const modelNotFound =
+                e.code === 1008 &&
+                (reasonLow.includes('not found') || reasonLow.includes('not supported')) &&
+                reasonLow.includes('model');
+            if (modelNotFound && this.modelIndex < LIVE_MODELS.length - 1 && !this.intentionalStop) {
+                const nextIdx = this.modelIndex + 1;
+                this.log(`모델 ${this.currentModel} 사용 불가 — ${LIVE_MODELS[nextIdx]} 로 재시도`);
+                this.modelIndex = nextIdx;
+                this.tearDownAndRetry();
+                return;
+            }
+            if (this.state !== 'idle' && e.code !== 1000) {
+                this.onError(new Error(`연결이 종료되었습니다. code=${e.code} ${reason}`));
+            }
+            if (this.state !== 'idle') this.setState('closed');
+        };
+    }
+
     async stop() {
         if (this.state === 'idle') return;
+        this.intentionalStop = true;
         this.log('세션 종료');
         this.setState('idle');
         try { this.processor?.disconnect(); } catch { /* ignore */ }
