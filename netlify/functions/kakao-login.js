@@ -43,6 +43,7 @@ const diagnose = () => ({
     diag: true,
     env: {
         KAKAO_REST_API_KEY: !!process.env.KAKAO_REST_API_KEY,
+        KAKAO_CLIENT_SECRET: !!process.env.KAKAO_CLIENT_SECRET, // 활성화한 경우만
         FIREBASE_PROJECT_ID: !!process.env.FIREBASE_PROJECT_ID,
         FIREBASE_CLIENT_EMAIL: !!process.env.FIREBASE_CLIENT_EMAIL,
         FIREBASE_PRIVATE_KEY: !!process.env.FIREBASE_PRIVATE_KEY,
@@ -81,22 +82,39 @@ export const handler = async (event) => {
         }
 
         const restKey = process.env.KAKAO_REST_API_KEY;
+        // Kakao Developers > 카카오 로그인 > 보안 > 클라이언트 시크릿 을
+        // 활성화한 경우 token 교환 시 반드시 client_secret 을 함께 보내야 함.
+        // 비활성화 상태면 env var 가 비어 있고, body 에서도 자동으로 제외됨.
+        const clientSecret = (process.env.KAKAO_CLIENT_SECRET || '').trim();
 
         // ── Step 1: code → access_token ───────────────────────────────────
+        const tokenParams = {
+            grant_type: 'authorization_code',
+            client_id: restKey,
+            redirect_uri: redirectUri,
+            code,
+        };
+        if (clientSecret) tokenParams.client_secret = clientSecret;
+
         const tokenRes = await fetch('https://kauth.kakao.com/oauth/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                grant_type: 'authorization_code',
-                client_id: restKey,
-                redirect_uri: redirectUri,
-                code,
-            }).toString(),
+            body: new URLSearchParams(tokenParams).toString(),
         });
         if (!tokenRes.ok) {
             const t = await tokenRes.text();
             console.error('Kakao token exchange failed:', tokenRes.status, t);
-            return json(502, { error: 'Kakao token exchange failed', detail: t });
+            // 흔한 원인은 client_secret 누락 또는 잘못된 값. 친절한 메시지로.
+            const lower = t.toLowerCase();
+            let hint = '';
+            if (lower.includes('client_secret') || lower.includes('client secret')) {
+                hint = '\n\n👉 Kakao 의 클라이언트 시크릿이 활성화되어 있다면 ' +
+                       'Netlify 환경변수 KAKAO_CLIENT_SECRET 을 설정하세요.';
+            } else if (lower.includes('redirect') || lower.includes('uri')) {
+                hint = '\n\n👉 Kakao Developers > 카카오 로그인 > Redirect URI 에 ' +
+                       redirectUri + ' 가 등록되어 있는지 확인하세요.';
+            }
+            return json(502, { error: 'Kakao token exchange failed', detail: t + hint });
         }
         const tokenData = await tokenRes.json();
         const accessToken = tokenData.access_token;
