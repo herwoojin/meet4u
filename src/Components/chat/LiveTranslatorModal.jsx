@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Mic, MicOff, Loader, Radio, Volume2, VolumeX, KeyRound, Terminal } from 'lucide-react';
 import { LiveTranslatorSession, validateGeminiKey } from '../../lib/liveApi';
-import { getGeminiKey, setGeminiKey, hasAdminGeminiKey } from '../../lib/grammar';
+import { useGeminiApiKey } from '../../hooks/useGeminiApiKey';
 
 // Real-time bidirectional voice translation modal powered by Gemini Live API.
 // User picks source/target language, taps the mic, speaks, and hears (or
@@ -41,8 +41,9 @@ const LiveTranslatorModal = ({ open, onClose, defaultSourceLang = 'ko', defaultT
     const sessionRef = useRef(null);
     const logsEndRef = useRef(null);
 
-    const resolvedKey = useMemo(() => getGeminiKey({ isAdmin }), [isAdmin, open]);
-    const adminAvailable = hasAdminGeminiKey() && isAdmin;
+    const gemini = useGeminiApiKey();
+    const resolvedKey = gemini.key;
+    const adminAvailable = gemini.hasAdminKey && isAdmin;
     const canStart = Boolean(resolvedKey) && state === 'idle';
 
     useEffect(() => {
@@ -50,7 +51,7 @@ const LiveTranslatorModal = ({ open, onClose, defaultSourceLang = 'ko', defaultT
         setErrorMsg('');
         setTranscript('');
         setLogs([]);
-        setKeyInput(getGeminiKey({ isAdmin: false }));
+        setKeyInput(gemini.key || '');
         return () => {
             // Cleanup when modal closes
             sessionRef.current?.stop();
@@ -126,9 +127,9 @@ const LiveTranslatorModal = ({ open, onClose, defaultSourceLang = 'ko', defaultT
         onClose?.();
     };
 
-    const saveKey = () => {
+    const saveKey = async () => {
         const trimmed = keyInput.trim();
-        setGeminiKey(trimmed);
+        await gemini.saveKey(trimmed);
         setShowKey(false);
     };
 

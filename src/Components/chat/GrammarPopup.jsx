@@ -3,15 +3,13 @@ import { X, BookOpen, Sparkles, Loader, KeyRound, Save, Eye, EyeOff, Trash2, Pri
 import {
     analyzeSentence,
     analyzeWithGemini,
-    getGeminiKey,
-    setGeminiKey,
-    hasAdminGeminiKey,
     getPhrasePronunciations,
     getPhraseTranslations,
     pairKoreanChunks,
     fetchFullPronunciation,
     splitPronunciationByChunks,
 } from '../../lib/grammar';
+import { useGeminiApiKey } from '../../hooks/useGeminiApiKey';
 
 const COLOR_CLASSES = {
     blue:    { bg: 'bg-blue-50',     text: 'text-blue-700',     border: 'border-blue-300',     pill: 'bg-blue-100 text-blue-700' },
@@ -690,7 +688,6 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
     const [showSettings, setShowSettings] = useState(false);
     const [keyInput, setKeyInput] = useState('');
     const [keyVisible, setKeyVisible] = useState(false);
-    const [keyVersion, setKeyVersion] = useState(0);
 
     const [fullPron, setFullPron] = useState(fullPronunciation || '');
     const [phrasePron, setPhrasePron] = useState({});
@@ -709,8 +706,9 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
         [koreanOriginal]
     );
 
-    const adminAvailable = hasAdminGeminiKey() && isAdmin;
-    const resolvedKey = useMemo(() => getGeminiKey({ isAdmin }), [isAdmin, keyVersion, open]);
+    const gemini = useGeminiApiKey();
+    const adminAvailable = gemini.hasAdminKey && isAdmin;
+    const resolvedKey = gemini.key;
     const canUseGemini = Boolean(resolvedKey);
 
     useEffect(() => {
@@ -718,8 +716,8 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
         setGeminiResult(null);
         setGeminiError('');
         setShowSettings(false);
-        setKeyInput(getGeminiKey({ isAdmin: false }));
-    }, [open, text, lang, isAdmin]);
+        setKeyInput(gemini.key || '');
+    }, [open, text, lang, isAdmin, gemini.key]);
 
     useEffect(() => {
         if (!open) return;
@@ -810,17 +808,15 @@ const GrammarPopup = ({ open, onClose, text, lang, fullPronunciation = '', korea
         }
     };
 
-    const saveKey = () => {
+    const saveKey = async () => {
         const trimmed = keyInput.trim();
-        setGeminiKey(trimmed);
-        setKeyVersion(v => v + 1);
+        await gemini.saveKey(trimmed);
         setShowSettings(false);
     };
 
-    const clearKey = () => {
-        setGeminiKey('');
+    const clearKey = async () => {
+        await gemini.clearKey();
         setKeyInput('');
-        setKeyVersion(v => v + 1);
     };
 
     if (!open) return null;

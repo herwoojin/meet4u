@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bell, BellRing, BellOff, Settings as SettingsIcon, Calendar, Check, Loader, Link as LinkIcon, Unlink, Type, Palette, Sparkles, FileText } from 'lucide-react';
+import { Bell, BellRing, BellOff, Settings as SettingsIcon, Calendar, Check, Loader, Link as LinkIcon, Unlink, Type, Palette, Sparkles, FileText, Key, Eye, EyeOff, Trash2, Cloud, Monitor } from 'lucide-react';
 import { requestFCMToken } from '../hooks/useFCM';
 import { useAuth } from '../context/AuthContext';
 import useGoogleCalendar from '../hooks/useGoogleCalendar';
+import { useGeminiApiKey } from '../hooks/useGeminiApiKey';
 
 const Settings = () => {
     const { t } = useTranslation();
@@ -17,6 +18,41 @@ const Settings = () => {
     const [appTitleInput, setAppTitleInput] = useState(userProfile?.appTitle || '');
     const [appTitleSavedFlash, setAppTitleSavedFlash] = useState(false);
     const [appTitleSaving, setAppTitleSaving] = useState(false);
+
+    // Gemini API key (Firestore backed, device-agnostic)
+    const gemini = useGeminiApiKey();
+    const [geminiInput, setGeminiInput] = useState('');
+    const [geminiVisible, setGeminiVisible] = useState(false);
+    const [geminiSavedFlash, setGeminiSavedFlash] = useState(false);
+    const [geminiError, setGeminiError] = useState('');
+    useEffect(() => { setGeminiInput(gemini.key || ''); }, [gemini.key]);
+
+    const handleSaveGemini = async () => {
+        const v = geminiInput.trim();
+        setGeminiError('');
+        if (v && !(v.startsWith('AIza') && v.length >= 30) && !(v.startsWith('AQ.') && v.length >= 20)) {
+            setGeminiError('AIza… 또는 AQ.… 형식의 유효한 Gemini API 키를 입력하세요 (길이 20자 이상).');
+            return;
+        }
+        try {
+            await gemini.saveKey(v);
+            setGeminiSavedFlash(true);
+            setTimeout(() => setGeminiSavedFlash(false), 1500);
+        } catch (e) {
+            console.error('Failed to save Gemini key:', e);
+            setGeminiError(e?.message || '저장 실패');
+        }
+    };
+
+    const handleClearGemini = async () => {
+        if (!window.confirm('저장된 Gemini API 키를 삭제하시겠어요? 모든 기기에서 지워집니다.')) return;
+        try {
+            await gemini.clearKey();
+            setGeminiInput('');
+        } catch (e) {
+            console.error('Failed to clear Gemini key:', e);
+        }
+    };
 
     // Theme (per-device, localStorage)
     const [theme, setTheme] = useState(() => {
@@ -138,6 +174,106 @@ const Settings = () => {
                     </div>
                     <p className="text-[11px] text-gray-500 mt-2">
                         {t('settings.appTitle.hint')}
+                    </p>
+                </div>
+            </div>
+
+            {/* Gemini API 키 — 계정 단위로 클라우드 저장 (모든 기기에서 자동 사용) */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-6">
+                <div className="p-6">
+                    <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+                        <Key className="text-amber-600" size={20} />
+                        Gemini API 키
+                    </h2>
+                    <p className="text-xs text-gray-500 mb-4">
+                        문법 분석 · 회의록 · 라이브 통역에서 사용됩니다. 여기서 저장하면 <b>Firestore 계정 프로필에 보관</b>되어
+                        다른 기기에서 구글 로그인 시 자동으로 사용됩니다.
+                    </p>
+
+                    <div className="mb-3 flex flex-wrap gap-2 items-center">
+                        {gemini.source === 'cloud' && (
+                            <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                                <Cloud size={11} /> 계정 저장됨 (모든 기기 동기화)
+                            </span>
+                        )}
+                        {gemini.source === 'local' && (
+                            <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold">
+                                <Monitor size={11} /> 이 기기에만 저장 (아직 클라우드 미마이그레이션)
+                            </span>
+                        )}
+                        {gemini.source === 'admin' && (
+                            <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
+                                <Sparkles size={11} /> 관리자 공유 키 사용 중
+                            </span>
+                        )}
+                        {gemini.source === 'none' && (
+                            <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-semibold">
+                                미설정
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="flex gap-2 mb-2">
+                        <div className="relative flex-1">
+                            <input
+                                type={geminiVisible ? 'text' : 'password'}
+                                value={geminiInput}
+                                onChange={(e) => setGeminiInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveGemini(); }}
+                                placeholder="AIzaSy... 또는 AQ...."
+                                className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                disabled={!user || gemini.saving}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setGeminiVisible(v => !v)}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 p-1"
+                                title={geminiVisible ? '숨기기' : '보기'}
+                            >
+                                {geminiVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleSaveGemini}
+                            disabled={!user || gemini.saving || (geminiInput.trim() === (gemini.key || ''))}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 text-white text-sm font-semibold rounded-lg hover:bg-amber-700 disabled:bg-gray-300 transition-colors"
+                        >
+                            {gemini.saving ? <Loader size={14} className="animate-spin" /> : (geminiSavedFlash ? <Check size={14} /> : null)}
+                            {geminiSavedFlash ? '저장됨' : '저장'}
+                        </button>
+                        {gemini.hasKey && (
+                            <button
+                                type="button"
+                                onClick={handleClearGemini}
+                                disabled={gemini.saving}
+                                className="inline-flex items-center gap-1 px-3 py-2 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-lg"
+                                title="저장된 키 삭제"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        )}
+                    </div>
+
+                    {geminiError && (
+                        <div className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded p-2 leading-snug">
+                            {geminiError}
+                        </div>
+                    )}
+
+                    <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
+                        📌 키 발급:{' '}
+                        <a
+                            href="https://aistudio.google.com/app/apikey"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-amber-700 underline font-semibold"
+                        >
+                            Google AI Studio → Create API key
+                        </a>{' '}
+                        (무료 tier 제공)<br />
+                        🔒 키는 본인 Firestore 프로필(users/{'{'}uid{'}'})에만 저장되며 다른 사용자는 볼 수 없습니다.<br />
+                        💡 다른 기기에서 같은 구글 계정으로 로그인하면 자동으로 이 키가 로드됩니다.
                     </p>
                 </div>
             </div>

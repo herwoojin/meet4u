@@ -3,7 +3,7 @@ import {
     X, FileText, Loader, Copy, Download, RotateCcw, Calendar, Sparkles,
     KeyRound, Save, Check, AlertCircle,
 } from 'lucide-react';
-import { getGeminiKey, setGeminiKey, hasAdminGeminiKey } from '../../lib/grammar';
+import { useGeminiApiKey } from '../../hooks/useGeminiApiKey';
 import {
     getDefaultPrompt, getSavedPrompt, savePrompt,
     fetchMessagesInRange, generateMinutes,
@@ -42,14 +42,11 @@ const MeetingMinutesModal = ({ open, onClose, roomId, roomName, myLang, isAdmin 
     const [showKey, setShowKey] = useState(false);
     const [keyInput, setKeyInput] = useState('');
     const [promptSaved, setPromptSaved] = useState(false);
-    const [keyVersion, setKeyVersion] = useState(0);
 
+    const gemini = useGeminiApiKey();
     const langName = LANG_NAMES[myLang] || myLang || '한국어';
-    const resolvedKey = useMemo(
-        () => getGeminiKey({ isAdmin }),
-        [isAdmin, open, keyVersion]
-    );
-    const adminAvailable = hasAdminGeminiKey() && isAdmin;
+    const resolvedKey = gemini.key;
+    const adminAvailable = gemini.hasAdminKey && isAdmin;
 
     useEffect(() => {
         if (!open) return;
@@ -61,8 +58,8 @@ const MeetingMinutesModal = ({ open, onClose, roomId, roomName, myLang, isAdmin 
         setPromptSaved(false);
         const saved = getSavedPrompt();
         setPrompt(saved || getDefaultPrompt(myLang));
-        setKeyInput(getGeminiKey({ isAdmin: false }));
-    }, [open, myLang]);
+        setKeyInput(gemini.key || '');
+    }, [open, myLang, gemini.key]);
 
     // Esc 로 닫기
     useEffect(() => {
@@ -162,9 +159,8 @@ const MeetingMinutesModal = ({ open, onClose, roomId, roomName, myLang, isAdmin 
         setTimeout(() => setPromptSaved(false), 1500);
     };
 
-    const saveMyKey = () => {
-        setGeminiKey(keyInput.trim());
-        setKeyVersion(v => v + 1);
+    const saveMyKey = async () => {
+        await gemini.saveKey(keyInput.trim());
         setShowKey(false);
     };
 
@@ -287,8 +283,11 @@ const MeetingMinutesModal = ({ open, onClose, roomId, roomName, myLang, isAdmin 
                                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-semibold">
                                         Gemini 키 준비됨 ({resolvedKey.slice(0, 6)}…)
                                     </span>
-                                    {adminAvailable && !localStorage.getItem('meet4u_gemini_api_key') && (
+                                    {gemini.source === 'admin' && (
                                         <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">관리자 공유키</span>
+                                    )}
+                                    {gemini.source === 'cloud' && (
+                                        <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">계정 저장</span>
                                     )}
                                 </>
                             ) : (
