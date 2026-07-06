@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import {
-    Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX, BookOpen, Radio,
+    Send, MessageSquare, Trash2, CheckCheck, Mic, Volume2, VolumeX, BookOpen, Radio, FileText,
     Plus, Users, LogOut, X, ChevronDown, Search, Loader, Image as ImageIcon,
     Copy, Check, Star, Edit2
 } from 'lucide-react';
@@ -18,6 +18,7 @@ import { compressImageToWebp } from '../../lib/imageUtils';
 import ImageLightbox from './ImageLightbox';
 import GrammarPopup from './GrammarPopup';
 import LiveTranslatorModal from './LiveTranslatorModal';
+import MeetingMinutesModal from './MeetingMinutesModal';
 import {
     romajiToHangul,
     pinyinToHangul,
@@ -391,6 +392,7 @@ const GlobalChat = () => {
     const { currentUser, userProfile, updateUserProfile, isAdmin } = useAuth();
     const [grammarTarget, setGrammarTarget] = useState(null); // { text, lang } or null
     const [liveOpen, setLiveOpen] = useState(false);
+    const [minutesOpen, setMinutesOpen] = useState(false);
     const myLang = userProfile?.preferredLanguage || 'ko';
     const myEmail = lower(currentUser?.email);
 
@@ -1302,6 +1304,17 @@ const GlobalChat = () => {
                     <Radio size={16} />
                 </button>
 
+                {/* Meeting Minutes — 이 방의 대화를 기간별로 회의록 마크다운으로 정리 */}
+                <button
+                    type="button"
+                    onClick={() => setMinutesOpen(true)}
+                    disabled={!currentUser || !selectedRoomId}
+                    className="shrink-0 p-1.5 rounded-lg border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors disabled:opacity-40"
+                    title="회의록 만들기 — 기간을 골라 마크다운 회의록 생성"
+                >
+                    <FileText size={16} />
+                </button>
+
                 {/* New room button */}
                 <button
                     type="button"
@@ -1759,6 +1772,15 @@ const GlobalChat = () => {
                 onClose={() => setLiveOpen(false)}
                 defaultSourceLang={myLang || 'ko'}
                 defaultTargetLang={myLang === 'en' ? 'ko' : 'en'}
+                isAdmin={isAdmin}
+            />
+
+            <MeetingMinutesModal
+                open={minutesOpen}
+                onClose={() => setMinutesOpen(false)}
+                roomId={selectedRoomId}
+                roomName={selectedRoom?.name || ''}
+                myLang={myLang}
                 isAdmin={isAdmin}
             />
         </div>
