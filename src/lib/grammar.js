@@ -930,8 +930,15 @@ export const analyzeSentence = (text, lang) => {
 // ===========================================================================
 
 const GEMINI_KEY_STORAGE = 'meet4u_gemini_api_key';
-const GEMINI_MODEL = 'gemini-1.5-flash';
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+// gemini-1.5-flash 는 v1beta 에서 deprecated. 아래 순서로 시도, 404 이면 다음 모델.
+const GEMINI_MODELS = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-flash-latest',
+    'gemini-1.5-flash-latest',
+];
+const geminiEndpointFor = (model) =>
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 // Resolve the Gemini key in priority order:
 //   1) 본인 localStorage 키 — 입력했으면 무조건 우선. 관리자도 동일 UI
@@ -993,23 +1000,38 @@ JSON 으로만 답변하세요. 마크다운/코드블록 금지.
 
 export const analyzeWithGemini = async (sentence, lang, apiKey) => {
     if (!sentence || !apiKey) return null;
-    const url = `${GEMINI_ENDPOINT}?key=${encodeURIComponent(apiKey)}`;
     const body = {
         contents: [{ parts: [{ text: buildGeminiPrompt(sentence, lang) }] }],
         generationConfig: { temperature: 0.2, responseMimeType: 'application/json' },
     };
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        throw new Error(`Gemini ${res.status}: ${errText.slice(0, 200)}`);
+
+    let lastErrText = '';
+    let lastStatus = 0;
+    let raw = '';
+    for (const model of GEMINI_MODELS) {
+        const url = `${geminiEndpointFor(model)}?key=${encodeURIComponent(apiKey)}`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (res.ok) {
+            const data = await res.json();
+            raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            break;
+        }
+        lastStatus = res.status;
+        lastErrText = await res.text().catch(() => '');
+        const isModelMissing =
+            res.status === 404 || /not found|NOT_FOUND/i.test(lastErrText);
+        if (!isModelMissing) {
+            throw new Error(`Gemini ${res.status}: ${lastErrText.slice(0, 200)}`);
+        }
     }
-    const data = await res.json();
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (!raw) return null;
+    if (!raw) {
+        if (lastStatus) throw new Error(`Gemini ${lastStatus}: ${lastErrText.slice(0, 200)}`);
+        return null;
+    }
     try { return JSON.parse(raw); }
     catch {
         const cleaned = raw.replace(/^```(?:json)?\s*|```\s*$/g, '').trim();

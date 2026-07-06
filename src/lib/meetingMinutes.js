@@ -184,8 +184,16 @@ const formatMessagesForPrompt = (messages) => {
     }).join('\n');
 };
 
-const GEMINI_MODEL = 'gemini-1.5-flash';
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+// 모델 fallback 리스트. 앞에서부터 시도, 404(NOT_FOUND) 뜨면 다음 모델로.
+// gemini-1.5-flash 는 v1beta 에서 deprecated 되어 제외.
+const GEMINI_MODELS = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-flash-latest',
+    'gemini-1.5-flash-latest',
+];
+const endpointFor = (model) =>
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 export const generateMinutes = async ({ messages, prompt, targetLanguageName, apiKey }) => {
     if (!apiKey) throw new Error('Gemini API 키가 필요합니다. 우측 상단 "내 키 등록" 으로 등록해 주세요.');
@@ -201,36 +209,45 @@ export const generateMinutes = async ({ messages, prompt, targetLanguageName, ap
         `${conversation}\n` +
         `--- 대화 끝 ---`;
 
-    const url = `${GEMINI_ENDPOINT}?key=${encodeURIComponent(apiKey.trim())}`;
     const body = {
         contents: [{ parts: [{ text: fullPrompt }] }],
         generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
     };
 
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-    });
+    let lastErrText = '';
+    let lastStatus = 0;
+    for (const model of GEMINI_MODELS) {
+        const url = `${endpointFor(model)}?key=${encodeURIComponent(apiKey.trim())}`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
 
-    if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        // Gemini 에러 응답을 파싱 시도해서 친절한 메시지로 변환.
-        let hint = '';
-        try {
-            const j = JSON.parse(errText);
-            const msg = j?.error?.message || '';
-            if (msg.toLowerCase().includes('api key')) {
-                hint = '\n👉 키가 잘못됐거나 만료됐을 수 있습니다. Google AI Studio 에서 재발급해 주세요.';
-            }
-        } catch { /* ignore */ }
-        throw new Error(`Gemini ${res.status}: ${errText.slice(0, 300)}${hint}`);
+        if (res.ok) {
+            const data = await res.json();
+            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            if (!text) throw new Error('Gemini 응답이 비어 있습니다.');
+            return text;
+        }
+
+        lastStatus = res.status;
+        lastErrText = await res.text().catch(() => '');
+        // 404(모델 없음) 이면 다음 모델로 계속. 그 외 에러는 즉시 중단.
+        const isModelMissing =
+            res.status === 404 || /not found|NOT_FOUND/i.test(lastErrText);
+        if (!isModelMissing) break;
     }
 
-    const data = await res.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (!text) throw new Error('Gemini 응답이 비어 있습니다.');
-    return text;
+    let hint = '';
+    try {
+        const j = JSON.parse(lastErrText);
+        const msg = j?.error?.message || '';
+        if (msg.toLowerCase().includes('api key')) {
+            hint = '\n👉 키가 잘못됐거나 만료됐을 수 있습니다. Google AI Studio 에서 재발급해 주세요.';
+        }
+    } catch { /* ignore */ }
+    throw new Error(`Gemini ${lastStatus}: ${lastErrText.slice(0, 300)}${hint}`);
 };
 
 // ---------------------------------------------------------------------------
