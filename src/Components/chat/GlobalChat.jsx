@@ -749,15 +749,100 @@ const GlobalChat = () => {
         return !GOOGLE_TTS_UNSUPPORTED.has(lang) && !GOOGLE_TTS_UNSUPPORTED.has(base);
     };
 
-    // Helper: play TTS via Google Translate proxy (works on ALL browsers)
+    // Google Translate TTS 는 요청당 ~200자 제한이 있어서 긴 문장은
+    // 문장/절 단위로 잘라 순차 재생해야 끝까지 들린다.
+    const chunkTextForTTS = (text, maxLen = 190) => {
+        const out = [];
+        // 문장 경계로 우선 분리 (영/한/중/일 종결부호 모두).
+        const sentences = String(text).split(/(?<=[.!?。！？…])\s+/);
+        for (const raw of sentences) {
+            let s = raw.trim();
+            if (!s) continue;
+            if (s.length <= maxLen) { out.push(s); continue; }
+            // 문장이 너무 길면 콤마·공백 기준으로 재분할.
+            while (s.length > maxLen) {
+                let cut = -1;
+                const win = s.slice(0, maxLen + 1);
+                cut = Math.max(
+                    win.lastIndexOf(', '),
+                    win.lastIndexOf('; '),
+                    win.lastIndexOf(': '),
+                    win.lastIndexOf('、'),
+                    win.lastIndexOf('，'),
+                );
+                if (cut < 40) cut = win.lastIndexOf(' ');
+                if (cut < 40) cut = maxLen;
+                out.push(s.slice(0, cut + 1).trim());
+                s = s.slice(cut + 1).trim();
+            }
+            if (s) out.push(s);
+        }
+        return out.filter(Boolean);
+    };
+
+    // Helper: play TTS via Google Translate proxy (works on ALL browsers).
+    // 긴 텍스트는 문장 단위로 나눠 순차 재생하도록 컨트롤러를 리턴한다.
+    // 반환 객체는 HTMLAudioElement 와 유사 인터페이스(.play/.pause/onended/onerror)
+    // 를 노출해 기존 호출부와 호환된다.
     const playGoogleTTS = (text, lang) => {
         if (!text) return null;
         const locale = lang || 'ko';
-        // Truncate for Google TTS limit
-        const trimmed = text.length > 200 ? text.slice(0, 200) : text;
-        const url = `/.netlify/functions/text-to-speech?text=${encodeURIComponent(trimmed)}&lang=${encodeURIComponent(locale)}`;
-        const audio = new Audio(url);
-        return audio;
+        const chunks = chunkTextForTTS(text, 190);
+        if (chunks.length === 0) return null;
+
+        let idx = 0;
+        let currentAudio = null;
+        let stopped = false;
+        let playedOne = false;
+        const handlers = { onended: null, onerror: null };
+
+        const buildUrl = (chunk) =>
+            `/.netlify/functions/text-to-speech?text=${encodeURIComponent(chunk)}&lang=${encodeURIComponent(locale)}`;
+
+        const playNext = () => {
+            if (stopped) return Promise.resolve();
+            if (idx >= chunks.length) {
+                try { handlers.onended?.(); } catch (_) { /* ignore */ }
+                return Promise.resolve();
+            }
+            const audio = new Audio(buildUrl(chunks[idx++]));
+            currentAudio = audio;
+            audio.onended = () => {
+                playedOne = true;
+                currentAudio = null;
+                playNext();
+            };
+            audio.onerror = () => {
+                currentAudio = null;
+                if (playedOne) {
+                    // 앞 청크는 이미 재생됐다 — 조용히 종료.
+                    try { handlers.onended?.(); } catch (_) { /* ignore */ }
+                } else {
+                    try { handlers.onerror?.(); } catch (_) { /* ignore */ }
+                }
+            };
+            return audio.play().catch((err) => {
+                currentAudio = null;
+                if (playedOne) {
+                    try { handlers.onended?.(); } catch (_) { /* ignore */ }
+                } else {
+                    throw err;
+                }
+            });
+        };
+
+        return {
+            get onended() { return handlers.onended; },
+            set onended(fn) { handlers.onended = fn; },
+            get onerror() { return handlers.onerror; },
+            set onerror(fn) { handlers.onerror = fn; },
+            play() { return playNext(); },
+            pause() {
+                stopped = true;
+                try { currentAudio?.pause(); } catch (_) { /* ignore */ }
+                currentAudio = null;
+            },
+        };
     };
 
     // Native browser speech synthesis (fallback for unsupported langs)
