@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>PromiseU · 오프라인</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+      background: #1a1a2e;
+      color: #fff;
+      font-family: 'Paperlogy', system-ui, -apple-system, BlinkMacSystemFont,
+                   'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      text-align: center;
+    }
+    .card {
+      max-width: 420px;
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 40px 28px;
+    }
+    .icon {
+      font-size: 56px;
+      margin-bottom: 18px;
+      display: block;
+    }
+    h1 {
+      font-size: 22px;
+      margin-bottom: 10px;
+      letter-spacing: -0.02em;
+    }
+    p {
+      font-size: 14px;
+      color: rgba(255,255,255,0.7);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    button {
+      appearance: none;
+      border: 0;
+      background: #4f46e5;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px 22px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background .15s ease;
+    }
+    button:hover { background: #4338ca; }
+    .hint {
+      margin-top: 18px;
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="icon" aria-hidden="true">📡</span>
+    <h1>인터넷 연결이 끊겼어요</h1>
+    <p>
+      네트워크 상태를 확인한 뒤 다시 시도해 주세요.<br>
+      최근에 열었던 페이지는 캐시로 볼 수 있어요.
+    </p>
+    <button type="button" onclick="location.reload()">다시 시도</button>
+    <div class="hint">PromiseU · Meet4U</div>
+  </div>
+</body>
+</html>

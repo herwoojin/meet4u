@@ -4,11 +4,21 @@
 /index.html
   Cache-Control: no-cache
 
+# Service Worker 는 항상 최신을 받아야 앱 갱신이 정상 반영된다.
+/sw.js
+  Cache-Control: no-cache, no-store
+  Service-Worker-Allowed: /
+
 /firebase-messaging-sw.js
   Cache-Control: no-cache, no-store
 
 /firebase-messaging-sw-custom.js
   Cache-Control: no-cache, no-store
+
+# Manifest 도 짧게. PWABuilder / Play Store 재검증 시 신선한 값을 읽어야 한다.
+/manifest.json
+  Cache-Control: no-cache
+  Content-Type: application/manifest+json
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
