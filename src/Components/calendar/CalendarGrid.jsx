@@ -153,8 +153,12 @@ const CalendarGrid = () => {
                         {viewMode === 'list' ? '캘린더' : '모아보기'}
                     </button>
                     <button
-                        onClick={() => navigate('/schedule')}
-                        className="ml-4 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2"
+                        onClick={() => navigate(currentProject ? '/schedule' : '/projects')}
+                        title={currentProject ? undefined : '먼저 프로젝트를 만들거나 초대받아야 미팅을 생성할 수 있습니다.'}
+                        className={`ml-4 px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-2 transition-colors ${currentProject
+                            ? 'bg-gray-900 text-white hover:bg-gray-800'
+                            : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                        }`}
                     >
                         {t('calendar.createMeetingBtn')}
                     </button>

@@ -58,7 +58,11 @@ const UserSearchDropdown = ({ value, onChange, users }) => {
                     </div>
                     <div className="overflow-y-auto max-h-48">
                         {filtered.length === 0 ? (
-                            <div className="p-3 text-sm text-gray-400 text-center">{t('meeting.noSearchResults')}</div>
+                            <div className="p-3 text-sm text-gray-400 text-center">
+                                {users.length === 0
+                                    ? '프로젝트에 초대된 멤버가 없습니다. 프로젝트 관리에서 먼저 초대해 주세요.'
+                                    : t('meeting.noSearchResults')}
+                            </div>
                         ) : (
                             filtered.map(u => (
                                 <button
@@ -129,14 +133,16 @@ const MeetingForm = () => {
     }, []);
 
     // 예약자 드롭다운은 "현재 선택된 프로젝트의 멤버" 로만 좁힌다.
-    // 프로젝트가 없거나 memberEmails 가 비어 있으면 전체를 보여준다(안전 fallback).
+    // 프로젝트가 없거나 memberEmails 가 비어 있으면 아예 빈 리스트를 반환한다.
+    // (이전에는 안전 fallback 이라며 allUsers 로 확장했지만, 그 결과 프로젝트에
+    // 초대되지 않은 사람의 이름까지 검색되는 정보 유출이 발생했다.)
     const projectMemberEmails = React.useMemo(() => {
         const list = currentProject?.memberEmails || [];
         return new Set(list.map(e => String(e || '').toLowerCase().trim()).filter(Boolean));
     }, [currentProject]);
 
     const projectMembers = React.useMemo(() => {
-        if (projectMemberEmails.size === 0) return allUsers;
+        if (projectMemberEmails.size === 0) return [];
         return allUsers.filter(u => {
             const em = String(u.email || '').toLowerCase().trim();
             return em && projectMemberEmails.has(em);
@@ -247,15 +253,39 @@ const MeetingForm = () => {
         }
     };
 
+    // 프로젝트에 소속돼 있지 않으면 미팅 생성 자체를 막는다. 미팅은 반드시
+    // 어떤 프로젝트의 하위에 속해야 하고, 예약자 목록도 그 프로젝트 멤버로만
+    // 노출되기 때문에, 프로젝트가 없는 사용자에게는 폼 대신 안내를 보여준다.
+    if (!currentProject) {
+        return (
+            <div className="max-w-2xl mx-auto">
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">{isEditing ? t('meeting.editTitle') : t('meeting.newTitle')}</h2>
+                <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm text-center">
+                    <div className="text-5xl mb-3">📁</div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">먼저 프로젝트가 필요해요</h3>
+                    <p className="text-sm text-gray-500 mb-5 leading-relaxed">
+                        미팅은 반드시 프로젝트 하위에 등록됩니다.<br />
+                        새 프로젝트를 만들거나, 기존 프로젝트에 초대 받은 뒤 다시 시도해 주세요.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/projects')}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        <Plus size={16} /> 프로젝트 관리로 가기
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-2xl mx-auto">
             <h2 className="text-3xl font-bold text-gray-900 mb-2">{isEditing ? t('meeting.editTitle') : t('meeting.newTitle')}</h2>
-            {currentProject && (
-                <div className="mb-6 flex items-center gap-2 text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-                    <span className="text-lg">{currentProject.icon || '📁'}</span>
-                    <span>이 미팅은 <b className="text-blue-800">{currentProject.name}</b> 프로젝트에 등록됩니다.</span>
-                </div>
-            )}
+            <div className="mb-6 flex items-center gap-2 text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                <span className="text-lg">{currentProject.icon || '📁'}</span>
+                <span>이 미팅은 <b className="text-blue-800">{currentProject.name}</b> 프로젝트에 등록됩니다.</span>
+            </div>
             <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl border border-gray-200 space-y-6 shadow-sm">
 
                 {/* Title */}
