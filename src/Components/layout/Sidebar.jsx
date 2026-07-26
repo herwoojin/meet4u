@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import LanguageSwitcher from './LanguageSwitcher';
-import { useMenuPermissions, canAccessMenu } from '../../lib/menuPermissions';
+import { useMenuPermissions, canAccessMenu, getUserGroup, GROUP_LABEL_KEY } from '../../lib/menuPermissions';
 import { useProjects } from '../../context/ProjectContext';
 import { Calendar, Home, LogOut, PlusCircle, Settings, X, Shield, BarChart3, Globe, PanelLeftClose, PanelLeftOpen, Folder, FolderPlus, Check } from 'lucide-react';
 
@@ -45,6 +45,17 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
 
     const visibleMain = allItems.filter(item => canAccessMenu(item.key, userProfile, permissions, isAdmin));
     const visibleFooter = footerItems.filter(item => canAccessMenu(item.key, userProfile, permissions, isAdmin));
+
+    // 회원 등급 뱃지 — 일반회원/정회원/특별회원/관리자
+    const userGroup = isAdmin ? 'admin' : getUserGroup(userProfile);
+    const groupLabel = t(GROUP_LABEL_KEY[userGroup] || 'admin.groupGeneral');
+    const GROUP_BADGE_STYLE = {
+        general: 'bg-gray-100 text-gray-600 border-gray-200',
+        full:    'bg-blue-100 text-blue-700 border-blue-200',
+        special: 'bg-purple-100 text-purple-700 border-purple-200',
+        admin:   'bg-amber-100 text-amber-800 border-amber-300',
+    };
+    const badgeCls = GROUP_BADGE_STYLE[userGroup] || GROUP_BADGE_STYLE.general;
 
     return (
         <aside className={`
@@ -152,7 +163,15 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
                         <Link to="/profile" className="flex items-center gap-3 w-full" onClick={closeMobileMenu}>
                             <img src={currentUser?.photoURL || "https://ui-avatars.com/api/?name=User"} alt="User" className="w-8 h-8 rounded-full" />
                             <div className="flex-1 overflow-hidden">
-                                <p className="text-sm font-medium truncate text-blue-900">{currentUser?.displayName || t('nav.user')}</p>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                    <p className="text-sm font-medium truncate text-blue-900">{currentUser?.displayName || t('nav.user')}</p>
+                                    <span
+                                        title={groupLabel}
+                                        className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded-full font-bold border ${badgeCls}`}
+                                    >
+                                        {groupLabel}
+                                    </span>
+                                </div>
                                 <p className="text-xs text-blue-500/70 truncate">{currentUser?.email}</p>
                             </div>
                         </Link>

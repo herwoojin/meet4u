@@ -59,9 +59,10 @@ export const ProjectProvider = ({ children }) => {
     }, [isAdmin, myEmail]);
 
     // If the saved current project is not in the user's list, fall back to the
-    // first accessible one (or null).
+    // first accessible one (or null). 신규 가입자는 projects.length === 0
+    // 인 경우에도 반드시 null 로 떨어져야 다른 프로젝트 일정이 새어 나가지 않는다.
     useEffect(() => {
-        if (loading || projects.length === 0) return;
+        if (loading) return;
         const found = projects.find(p => p.id === currentProjectId);
         if (!found) setCurrentProjectId(projects[0]?.id || null);
     }, [projects, currentProjectId, loading, setCurrentProjectId]);

@@ -28,7 +28,13 @@ const CalendarGrid = () => {
     const { t, i18n } = useTranslation();
     const dateLocale = DATE_FNS_LOCALES[i18n.language?.split('-')[0]] || ko;
     const { currentUser, isAdmin } = useAuth();
-    const { currentProjectId, currentProject } = useProjects();
+    const { projects, currentProjectId, currentProject } = useProjects();
+    // 내가 멤버인 프로젝트만 통과시키는 보안 게이트 — currentProjectId 가
+    // stale 이거나 프로젝트 초대 전 상태여도 다른 팀 일정이 노출되지 않는다.
+    const myProjectIds = useMemo(
+        () => new Set(projects.map(p => p.id)),
+        [projects]
+    );
     const navigate = useNavigate();
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -95,10 +101,14 @@ const CalendarGrid = () => {
 
     // Scope meetings to the active project. Legacy meetings without a
     // projectId are treated as belonging to the default project.
-    const scopedMeetings = useMemo(
-        () => meetings.filter(m => (m.projectId || DEFAULT_PROJECT_ID) === currentProjectId),
-        [meetings, currentProjectId]
-    );
+    // 1차 게이트: 내가 멤버인 프로젝트만. 2차 필터: 현재 선택 프로젝트만.
+    const scopedMeetings = useMemo(() => {
+        if (!currentProjectId) return [];
+        return meetings.filter(m => {
+            const pid = m.projectId || DEFAULT_PROJECT_ID;
+            return myProjectIds.has(pid) && pid === currentProjectId;
+        });
+    }, [meetings, currentProjectId, myProjectIds]);
 
     const getMeetingsForDate = (date) => {
         return scopedMeetings

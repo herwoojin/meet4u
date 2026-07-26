@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isSameDay } from 'date-fns';
 import { ko, enUS, zhCN } from 'date-fns/locale';
@@ -17,7 +17,14 @@ const WeeklyCalendar = () => {
     const { t, i18n } = useTranslation();
     const dateLocale = DATE_FNS_LOCALES[i18n.language?.split('-')[0]] || ko;
     const { currentUser, isAdmin } = useAuth();
-    const { currentProjectId, currentProject } = useProjects();
+    const { projects, currentProjectId, currentProject } = useProjects();
+    // 내가 실제로 멤버인 프로젝트 id 집합. 이 집합에 속하지 않는 프로젝트의
+    // 미팅은 절대 캘린더에 표시하지 않는다 — currentProjectId 가 stale 하거나
+    // 잘못 저장된 경우에도 다른 팀 일정이 노출되지 않도록 하는 방어선.
+    const myProjectIds = useMemo(
+        () => new Set(projects.map(p => p.id)),
+        [projects]
+    );
     const navigate = useNavigate();
     const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 })); // Monday start
     const [meetings, setMeetings] = useState([]);
@@ -43,7 +50,11 @@ const WeeklyCalendar = () => {
     }, [currentUser]);
 
     const getMeetingsForDate = (date) => {
+        if (!currentProjectId) return [];
         return meetings
+            // 1) 내가 멤버인 프로젝트만 통과 (보안 게이트)
+            .filter(meeting => myProjectIds.has(meeting.projectId || DEFAULT_PROJECT_ID))
+            // 2) 현재 선택된 프로젝트만
             .filter(meeting => (meeting.projectId || DEFAULT_PROJECT_ID) === currentProjectId)
             .filter(meeting => !meeting.hidden || isAdmin)
             .filter(meeting => meeting.date === format(date, 'yyyy-MM-dd'));
