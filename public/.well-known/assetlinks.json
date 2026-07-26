@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "app.netlify.hanguk.twa",
+    "sha256_cert_fingerprints": ["CD:4B:62:5B:C2:FE:94:3A:82:3E:75:1D:54:A7:0A:16:06:2B:81:34:41:96:6B:36:B8:35:89:42:F9:4E:64:0E"]
+  }
+}]

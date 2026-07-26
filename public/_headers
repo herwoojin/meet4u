@@ -20,5 +20,12 @@
   Cache-Control: no-cache
   Content-Type: application/manifest+json
 
+# Android TWA Digital Asset Links — APK 가 hanguk.netlify.app 을 자기 웹앱으로
+# 신뢰하고 주소창을 숨긴 채 실행하려면 이 파일을 반드시 이 경로에서 JSON 으로
+# 응답해야 한다. Netlify 는 .well-known 도 그대로 서빙한다.
+/.well-known/assetlinks.json
+  Content-Type: application/json
+  Cache-Control: no-cache
+
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
