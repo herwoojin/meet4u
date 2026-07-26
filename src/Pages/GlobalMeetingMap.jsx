@@ -6,7 +6,8 @@ import { db } from '../lib/firebase';
 import 'leaflet/dist/leaflet.css';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
-import { Globe, MapPin, Trash2, Loader, Plus, Search, X, Crosshair, Radio, Share2, Users, ChevronDown, ChevronUp, Map } from 'lucide-react';
+import { useProjects } from '../context/ProjectContext';
+import { Globe, MapPin, Trash2, Loader, Plus, Search, X, Crosshair, Radio, Share2, Users, ChevronDown, ChevronUp, Map, Check, Folder } from 'lucide-react';
 import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -183,6 +184,12 @@ const ClickToPin = ({ onPick }) => {
 const GlobalMeetingMap = () => {
     const { t } = useTranslation();
     const { currentUser, isAdmin } = useAuth();
+    const { projects } = useProjects();
+    // 내가 멤버인 프로젝트 id 집합 — 위치 공유 대상/구독 필터의 기준.
+    const myProjectIds = useMemo(
+        () => new Set(projects.map(p => p.id)),
+        [projects]
+    );
 
     const [pins, setPins] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -211,6 +218,11 @@ const GlobalMeetingMap = () => {
     const [sharedUsers, setSharedUsers] = useState([]);
     const [showSharedList, setShowSharedList] = useState(true);
     const watchIdRef = useRef(null);
+    // 위치 공유 대상 프로젝트 id 집합 (Set<string>). 공유 시작 시 확정.
+    const [shareAudienceIds, setShareAudienceIds] = useState([]);
+    // 프로젝트 피커 모달 (내 위치 공유 버튼을 누르면 열림)
+    const [sharePickerOpen, setSharePickerOpen] = useState(false);
+    const [pickerSelection, setPickerSelection] = useState(new Set());
 
     // Keyword search
     const [searchOpen, setSearchOpen] = useState(false);
@@ -246,17 +258,28 @@ const GlobalMeetingMap = () => {
         return () => unsubscribe();
     }, []);
 
-    // Filter out stale entries (no update in 10+ minutes)
+    // Filter shared users:
+    //   (1) stale entries (no update in 10+ minutes) 제거
+    //   (2) 프로젝트 오디언스 게이트 — 상대가 공유 대상으로 지정한 프로젝트
+    //       중 하나라도 내가 멤버여야 지도에 보인다. audienceProjectIds 가
+    //       없는 옛 레코드는 하위호환을 위해 우선은 자신에게만 보이도록 제한.
+    //   내 위치는 audience 무관하게 항상 나에게는 보인다.
     const freshSharedUsers = useMemo(() => {
         const TEN_MIN = 10 * 60 * 1000;
         const now = Date.now();
         return sharedUsers.filter(u => {
             if (typeof u.lat !== 'number' || typeof u.lng !== 'number') return false;
             const t = u.updatedAt?.toMillis?.();
-            if (!t) return true;
-            return now - t < TEN_MIN;
+            if (t && now - t >= TEN_MIN) return false;
+
+            const isMe = u.uid === currentUser?.uid;
+            if (isMe) return true;
+
+            const audience = Array.isArray(u.audienceProjectIds) ? u.audienceProjectIds : [];
+            if (audience.length === 0) return false; // 오디언스 미지정 = 남에게 안 보임
+            return audience.some(pid => myProjectIds.has(pid));
         });
-    }, [sharedUsers]);
+    }, [sharedUsers, currentUser?.uid, myProjectIds]);
 
     // Subscribe to all live shared locations
     useEffect(() => {
@@ -405,7 +428,8 @@ const GlobalMeetingMap = () => {
         }
     };
 
-    const writeMyLocation = async (pos) => {
+    // audience 는 클로저로 넘기지 않고 최신 상태를 항상 저장하도록 인자로 받는다.
+    const writeMyLocation = async (pos, audienceIds) => {
         if (!currentUser?.uid) return;
         try {
             await setDoc(doc(db, 'liveLocations', currentUser.uid), {
@@ -415,6 +439,7 @@ const GlobalMeetingMap = () => {
                 lat: pos.coords.latitude,
                 lng: pos.coords.longitude,
                 accuracy: pos.coords.accuracy ?? null,
+                audienceProjectIds: Array.isArray(audienceIds) ? audienceIds : [],
                 updatedAt: serverTimestamp(),
             });
         } catch (err) {
@@ -422,13 +447,17 @@ const GlobalMeetingMap = () => {
         }
     };
 
-    const startSharing = async () => {
+    const startSharing = async (audienceIds) => {
         if (!currentUser) {
             alert(t('global.loginRequired'));
             return;
         }
         if (!('geolocation' in navigator)) {
             alert(t('global.locationNotSupported'));
+            return;
+        }
+        if (!Array.isArray(audienceIds) || audienceIds.length === 0) {
+            alert(t('global.selectShareAudience'));
             return;
         }
         setSharingLoading(true);
@@ -439,19 +468,20 @@ const GlobalMeetingMap = () => {
                     enableHighAccuracy: true, timeout: 15000, maximumAge: 30000,
                 });
             });
-            await writeMyLocation(initialPos);
+            await writeMyLocation(initialPos, audienceIds);
             setFlyToTarget({
                 lat: initialPos.coords.latitude,
                 lng: initialPos.coords.longitude,
                 key: Date.now(),
             });
 
-            // Continuous tracking
+            // Continuous tracking — 최신 audience 를 계속 함께 쓴다.
             watchIdRef.current = navigator.geolocation.watchPosition(
-                (pos) => writeMyLocation(pos),
+                (pos) => writeMyLocation(pos, audienceIds),
                 (err) => console.error('watchPosition error', err),
                 { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
             );
+            setShareAudienceIds(audienceIds);
             setIsSharing(true);
         } catch (err) {
             console.error('startSharing failed', err);
@@ -461,12 +491,48 @@ const GlobalMeetingMap = () => {
         }
     };
 
+    const openSharePicker = () => {
+        if (!currentUser) {
+            alert(t('global.loginRequired'));
+            return;
+        }
+        if (projects.length === 0) {
+            alert(t('global.needProjectToShare'));
+            return;
+        }
+        // 기본 선택: 현재까지 공유 중이던 대상 그대로, 없으면 전체 선택.
+        const initial = shareAudienceIds.length > 0
+            ? new Set(shareAudienceIds.filter(id => myProjectIds.has(id)))
+            : new Set(projects.map(p => p.id));
+        setPickerSelection(initial);
+        setSharePickerOpen(true);
+    };
+
+    const togglePickerProject = (id) => {
+        setPickerSelection(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    const confirmSharePicker = async () => {
+        const ids = Array.from(pickerSelection);
+        if (ids.length === 0) {
+            alert(t('global.selectShareAudience'));
+            return;
+        }
+        setSharePickerOpen(false);
+        await startSharing(ids);
+    };
+
     const stopSharing = async () => {
         if (watchIdRef.current != null && 'geolocation' in navigator) {
             navigator.geolocation.clearWatch(watchIdRef.current);
             watchIdRef.current = null;
         }
         setIsSharing(false);
+        setShareAudienceIds([]);
         if (currentUser?.uid) {
             try {
                 await deleteDoc(doc(db, 'liveLocations', currentUser.uid));
@@ -889,7 +955,7 @@ const GlobalMeetingMap = () => {
                             {/* Share / Stop sharing button */}
                             <button
                                 type="button"
-                                onClick={isSharing ? stopSharing : startSharing}
+                                onClick={isSharing ? stopSharing : openSharePicker}
                                 disabled={sharingLoading || !currentUser}
                                 className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-md border text-xs font-medium transition-colors disabled:opacity-60 ${isSharing
                                     ? 'bg-red-500 text-white border-red-600 hover:bg-red-600'
@@ -997,6 +1063,90 @@ const GlobalMeetingMap = () => {
                                 </li>
                             ))}
                         </ul>
+                    </div>
+                </div>
+            )}
+
+            {/* 위치 공유 대상 프로젝트 선택 모달 */}
+            {sharePickerOpen && (
+                <div
+                    className="fixed inset-0 z-[2000] bg-black/40 flex items-center justify-center p-4"
+                    onClick={() => setSharePickerOpen(false)}
+                >
+                    <div
+                        className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <Share2 size={16} className="text-blue-600" />
+                                {t('global.pickAudienceTitle')}
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setSharePickerOpen(false)}
+                                className="p-1 text-slate-400 hover:text-slate-600"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <p className="px-5 pt-3 text-xs text-slate-500 leading-relaxed">
+                            {t('global.pickAudienceHint')}
+                        </p>
+                        <ul className="p-3 space-y-1 max-h-[50vh] overflow-y-auto">
+                            {projects.map(p => {
+                                const checked = pickerSelection.has(p.id);
+                                const memberCount = (p.memberEmails || []).length;
+                                return (
+                                    <li key={p.id}>
+                                        <button
+                                            type="button"
+                                            onClick={() => togglePickerProject(p.id)}
+                                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors text-left ${checked
+                                                ? 'bg-blue-50 border-blue-300'
+                                                : 'bg-white border-slate-200 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <span className={`shrink-0 w-5 h-5 rounded-md border flex items-center justify-center ${checked
+                                                ? 'bg-blue-600 border-blue-600 text-white'
+                                                : 'bg-white border-slate-300'
+                                            }`}>
+                                                {checked && <Check size={13} strokeWidth={3} />}
+                                            </span>
+                                            <span className="text-lg shrink-0">{p.icon || '📁'}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-semibold text-slate-800 truncate">{p.name}</div>
+                                                <div className="text-[11px] text-slate-500">
+                                                    {t('projects.membersCount', { count: memberCount })}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                        <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                            <span className="text-xs text-slate-500">
+                                {t('global.selectedCount', { count: pickerSelection.size })}
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setSharePickerOpen(false)}
+                                    className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                                >
+                                    {t('common.cancel')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={confirmSharePicker}
+                                    disabled={pickerSelection.size === 0}
+                                    className="px-4 py-1.5 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                                >
+                                    <Radio size={14} /> {t('global.startSharingBtn')}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
