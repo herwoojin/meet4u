@@ -128,6 +128,21 @@ const MeetingForm = () => {
         fetchUsers();
     }, []);
 
+    // 예약자 드롭다운은 "현재 선택된 프로젝트의 멤버" 로만 좁힌다.
+    // 프로젝트가 없거나 memberEmails 가 비어 있으면 전체를 보여준다(안전 fallback).
+    const projectMemberEmails = React.useMemo(() => {
+        const list = currentProject?.memberEmails || [];
+        return new Set(list.map(e => String(e || '').toLowerCase().trim()).filter(Boolean));
+    }, [currentProject]);
+
+    const projectMembers = React.useMemo(() => {
+        if (projectMemberEmails.size === 0) return allUsers;
+        return allUsers.filter(u => {
+            const em = String(u.email || '').toLowerCase().trim();
+            return em && projectMemberEmails.has(em);
+        });
+    }, [allUsers, projectMemberEmails]);
+
     // Check for edit mode on mount
     useEffect(() => {
         if (location.state?.meetingToEdit) {
@@ -351,7 +366,7 @@ const MeetingForm = () => {
                                             <UserSearchDropdown
                                                 value={entry.bookedBy}
                                                 onChange={(v) => updateCostEntry(idx, 'bookedBy', v)}
-                                                users={allUsers}
+                                                users={projectMembers}
                                             />
                                         </div>
                                     </div>
