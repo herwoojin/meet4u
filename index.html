@@ -79,15 +79,29 @@
   <script>
     // PWA Service Worker 등록.
     // /sw.js 하나에 PWA 오프라인 캐싱 + Firebase Cloud Messaging 을 통합했다.
-    // 예전에 등록된 다른 SW(파이어베이스 messaging SW 등) 는 스코프 충돌
-    // 없이 자연 스러운 갱신을 유도하기 위해 그대로 두고, 활성 컨트롤러만 /sw.js
-    // 로 유지한다. Netlify 는 HTTPS 이므로 등록이 실패할 이유가 없다.
+    // 예전 버전 앱에서 registered 되어 있던 다른 SW (firebase-messaging-sw.js
+    // 등) 가 함께 살아 있으면 캐시가 뒤죽박죽되고 알림도 중복되므로, 등록
+    // 직후에 /sw.js 이외의 registration 은 전부 unregister 해서 활성 SW 를
+    // 하나로 정리한다.
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
         navigator.serviceWorker
           .register('/sw.js', { scope: '/' })
           .then(function (reg) {
             console.log('[PWA] SW registered, scope:', reg.scope);
+            return navigator.serviceWorker.getRegistrations();
+          })
+          .then(function (regs) {
+            if (!regs) return;
+            regs.forEach(function (r) {
+              try {
+                var url = (r.active && r.active.scriptURL) || '';
+                if (url && !url.endsWith('/sw.js')) {
+                  console.log('[PWA] Removing stale SW:', url);
+                  r.unregister();
+                }
+              } catch (_) { /* ignore */ }
+            });
           })
           .catch(function (err) {
             console.warn('[PWA] SW registration failed:', err);
