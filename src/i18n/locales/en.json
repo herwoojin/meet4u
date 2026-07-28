@@ -4,9 +4,9 @@
     "footer": "Wooooo~ JINI (v2.0 - PWA Fix)"
   },
   "nav": {
-    "weeklyCalendar": "Weekly Calendar",
-    "monthlyCalendar": "Monthly Calendar",
-    "createMeeting": "Create Meeting",
+    "weeklyCalendar": "Weekly Meetups",
+    "monthlyCalendar": "Monthly Meetups",
+    "createMeeting": "New Meetup",
     "globalMeeting": "I'm Here",
     "myDashboard": "My Dashboard",
     "settings": "Settings",

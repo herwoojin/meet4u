@@ -4,9 +4,9 @@
     "footer": "Wooooo~ JINI (v2.0 - PWA Fix)"
   },
   "nav": {
-    "weeklyCalendar": "周日历",
-    "monthlyCalendar": "月日历",
-    "createMeeting": "创建会议",
+    "weeklyCalendar": "每周聚会",
+    "monthlyCalendar": "每月聚会",
+    "createMeeting": "新建聚会",
     "globalMeeting": "我在这里",
     "myDashboard": "我的仪表板",
     "settings": "设置",

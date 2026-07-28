@@ -59,8 +59,7 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
 
     return (
         <aside className={`
-            fixed inset-y-0 left-0 z-[1100] ${isCollapsed ? 'md:w-20' : 'w-64'} bg-gradient-to-b from-blue-50 via-indigo-50 to-sky-100 border-r border-blue-100 transform transition-all duration-300 ease-in-out
-            ${isCollapsed ? '' : 'w-64'}
+            fixed inset-y-0 left-0 z-[1100] ${isCollapsed ? 'w-20' : 'w-64'} bg-gradient-to-b from-blue-50 via-indigo-50 to-sky-100 border-r border-blue-100 transform transition-all duration-300 ease-in-out
             ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
             md:relative md:translate-x-0 md:flex md:flex-col md:h-screen md:sticky md:top-0 md:z-auto
         `}>
@@ -71,14 +70,19 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
                         <span className="truncate max-w-[160px]">{displayAppTitle}</span>
                     </Link>
                 )}
+                {/* 접기/펼치기 토글 — 모바일 · 데스크톱 모두 표시. 아이콘만 보이는
+                    상태에서 이 버튼(또는 우측 힌트 화살표) 한 번 더 누르면 매뉴
+                    제목이 보인다. */}
                 <button
                     onClick={toggleCollapsed}
-                    className="hidden md:flex text-blue-500 hover:text-blue-700 p-1 rounded-md hover:bg-white/60 transition-colors"
+                    className="flex text-blue-500 hover:text-blue-700 p-1 rounded-md hover:bg-white/60 transition-colors"
                     title={isCollapsed ? t('nav.expand') : t('nav.collapse')}
+                    aria-label={isCollapsed ? t('nav.expand') : t('nav.collapse')}
                 >
                     {isCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
                 </button>
-                <button onClick={toggleMobileMenu} className="md:hidden text-blue-400 hover:text-blue-700">
+                {/* X는 모바일에서만 사이드바 자체를 닫는다. */}
+                <button onClick={toggleMobileMenu} className="md:hidden text-blue-400 hover:text-blue-700" aria-label={t('nav.close') || 'close'}>
                     <X size={24} />
                 </button>
             </div>
