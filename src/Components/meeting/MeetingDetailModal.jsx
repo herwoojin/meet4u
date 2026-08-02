@@ -93,6 +93,8 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
             }
 
             alert(t('meeting.responseSaved'));
+            // 응답 저장 후엔 상세 팝업도 함께 닫아 목록으로 자연스럽게 복귀.
+            onClose?.();
         } catch (e) {
             console.error("Response update failed", e);
             alert(t('meeting.responseSaveFailed'));
