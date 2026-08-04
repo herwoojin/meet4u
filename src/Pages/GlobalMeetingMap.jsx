@@ -145,12 +145,15 @@ const myLocationIcon = L.divIcon({
     iconAnchor: [10, 10],
 });
 
-// Recenter helper — flies to target when it changes
+// Recenter helper — flies to target when it changes.
+// target.zoom 이 지정되면 그 값을 최소치로 사용 (핀 검색 결과 클릭 시 클러스터
+// 를 풀기 위해 17 정도로 상향).
 const MapFlyTo = ({ target }) => {
     const map = useMap();
     useEffect(() => {
         if (target) {
-            map.flyTo([target.lat, target.lng], Math.max(map.getZoom(), 14), { duration: 1.2 });
+            const desired = target.zoom || 14;
+            map.flyTo([target.lat, target.lng], Math.max(map.getZoom(), desired), { duration: 1.2 });
         }
     }, [target, map]);
     return null;
@@ -224,12 +227,12 @@ const GlobalMeetingMap = () => {
     const [sharePickerOpen, setSharePickerOpen] = useState(false);
     const [pickerSelection, setPickerSelection] = useState(new Set());
 
-    // Keyword search
+    // 핀 검색 (외부 지도 API 아님) — 등록된 핀 title/address 를 실시간 필터
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState([]);
-    const [searching, setSearching] = useState(false);
     const pendingCardRef = useRef(null);
+    // pinId → Leaflet Marker instance. 검색 결과 클릭 시 openPopup() 호출용.
+    const markerRefs = useRef(new Map());
 
     // Map toggle
     const [showMap, setShowMap] = useState(() => {
@@ -333,14 +336,8 @@ const GlobalMeetingMap = () => {
         return data?.display_name || '';
     };
 
-    const searchNominatim = async (q) => {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=8&q=${encodeURIComponent(q)}`;
-        const res = await fetch(url, {
-            headers: { 'Accept': 'application/json', 'Accept-Language': 'ko,en;q=0.8,zh;q=0.6' }
-        });
-        if (!res.ok) throw new Error('search failed');
-        return await res.json();
-    };
+    // searchNominatim 은 예전 "지도 검색" 이 외부 Nominatim 을 호출하던
+    // 시절의 함수. 지금은 "핀 검색" 이 pins 로컬 필터만 사용하므로 제거.
 
     // -------- Handlers --------
     const startPendingPin = async (lat, lng, initialAddress = '') => {
@@ -583,36 +580,35 @@ const GlobalMeetingMap = () => {
         }
     };
 
-    const handleSearchSubmit = async (e) => {
-        e.preventDefault();
-        if (!searchQuery.trim()) return;
-        setSearching(true);
-        setSearchResults([]);
-        try {
-            const results = await searchNominatim(searchQuery.trim());
-            setSearchResults(Array.isArray(results) ? results : []);
-        } catch (err) {
-            console.error('search failed', err);
-            setSearchResults([]);
-        } finally {
-            setSearching(false);
-        }
-    };
+    // 핀 검색 결과 — 검색어를 title/address/resolvedAddress/createdByName 에
+    // 부분 매칭. 대소문자 무시, 앞뒤 공백 무시, 최대 20개.
+    const searchResults = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return [];
+        return pins.filter(p => {
+            const hay = [p.title, p.address, p.resolvedAddress, p.createdByName, p.createdBy]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+            return hay.includes(q);
+        }).slice(0, 20);
+    }, [pins, searchQuery]);
 
-    const handleSelectSearchResult = (r) => {
-        const lat = parseFloat(r.lat);
-        const lng = parseFloat(r.lon);
-        if (Number.isNaN(lat) || Number.isNaN(lng)) return;
-        // 관리자만 검색 결과에서 곧바로 핀을 추가할 수 있다. 일반 사용자에겐
-        // 지도만 그 위치로 이동시키고 pending pin 은 만들지 않는다.
-        if (isAdmin) {
-            startPendingPin(lat, lng, r.display_name || '');
-        } else {
-            setFlyToTarget({ lat, lng, key: Date.now() });
-        }
+    // 결과 클릭 → 지도 확대 이동 + 해당 핀 마커의 팝업 자동 오픈.
+    const handlePickPin = (pin) => {
+        if (!pin || typeof pin.lat !== 'number' || typeof pin.lng !== 'number') return;
+        // 클러스터가 풀리도록 zoom 을 17 로 요청.
+        setFlyToTarget({ lat: pin.lat, lng: pin.lng, zoom: 17, key: Date.now() });
         setSearchOpen(false);
         setSearchQuery('');
-        setSearchResults([]);
+        // FlyTo 애니메이션(1.2s) 이후 팝업 열기. 클러스터가 이 시점엔
+        // 풀려 있어야 마커 ref 가 접근 가능.
+        setTimeout(() => {
+            const marker = markerRefs.current.get(pin.id);
+            if (marker && typeof marker.openPopup === 'function') {
+                marker.openPopup();
+            }
+        }, 1300);
     };
 
     return (
@@ -674,7 +670,9 @@ const GlobalMeetingMap = () => {
                 </div>
             )}
 
-            {/* Search toolbar */}
+            {/* 핀 검색 도구 — 외부 지도 API 가 아니라 이미 등록된 핀만 필터.
+                검색어 입력 즉시 title/address 부분매칭 결과가 뜨고, 클릭하면
+                지도가 그 위치로 확대 이동 + 해당 핀의 팝업이 자동으로 열린다. */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
                 <div className="flex items-center justify-between gap-2">
                     <button
@@ -683,55 +681,52 @@ const GlobalMeetingMap = () => {
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition-colors ${searchOpen ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
                     >
                         <Search size={14} />
-                        {t('global.searchBtn')}
+                        핀 검색
                     </button>
                     <span className="text-xs text-slate-400 hidden sm:inline">
-                        {t('global.pendingHint')}
+                        등록된 핀 중 이름·주소로 찾기
                     </span>
                 </div>
 
                 {searchOpen && (
                     <div className="mt-3">
-                        <form onSubmit={handleSearchSubmit} className="flex gap-2">
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder={t('global.searchPlaceholder')}
-                                autoFocus
-                                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <button
-                                type="submit"
-                                disabled={searching || !searchQuery.trim()}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg shadow-sm hover:bg-blue-700 disabled:bg-slate-300"
-                            >
-                                {searching ? (
-                                    <><Loader size={14} className="animate-spin" />{t('global.searching')}</>
-                                ) : (
-                                    <><Search size={14} />{t('global.searchAction')}</>
-                                )}
-                            </button>
-                        </form>
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="핀 이름이나 주소로 검색 (예: 충장)"
+                            autoFocus
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
 
-                        {!searching && searchResults.length === 0 && searchQuery && (
+                        {searchQuery.trim() && searchResults.length === 0 && (
                             <div className="mt-2 text-xs text-slate-400 text-center py-3">
-                                {t('global.noSearchResults')}
+                                검색어와 일치하는 등록 핀이 없어요.
                             </div>
                         )}
 
                         {searchResults.length > 0 && (
                             <ul className="mt-2 max-h-56 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-100">
-                                {searchResults.map((r, idx) => (
-                                    <li key={`${r.place_id || idx}`}>
+                                {searchResults.map((pin) => (
+                                    <li key={pin.id}>
                                         <button
                                             type="button"
-                                            onClick={() => handleSelectSearchResult(r)}
+                                            onClick={() => handlePickPin(pin)}
                                             className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm flex items-start gap-2"
                                         >
                                             <MapPin size={14} className="text-blue-500 mt-0.5 shrink-0" />
-                                            <span className="flex-1 text-slate-700 truncate" title={r.display_name}>
-                                                {r.display_name}
+                                            <span className="flex-1 min-w-0">
+                                                {pin.title && (
+                                                    <div className="font-semibold text-slate-800 truncate" title={pin.title}>
+                                                        {pin.title}
+                                                    </div>
+                                                )}
+                                                <div className={`truncate ${pin.title ? 'text-[11px] text-slate-500' : 'text-slate-700'}`} title={pin.address}>
+                                                    {pin.address}
+                                                </div>
+                                                <div className="text-[10px] text-slate-400 truncate">
+                                                    등록자: {pin.createdByName || pin.createdBy}
+                                                </div>
                                             </span>
                                         </button>
                                     </li>
@@ -868,7 +863,15 @@ const GlobalMeetingMap = () => {
                                 iconCreateFunction={createClusterIcon}
                             >
                                 {pins.map((pin) => (
-                                    <Marker key={pin.id} position={[pin.lat, pin.lng]} icon={savedPinIcon}>
+                                    <Marker
+                                        key={pin.id}
+                                        position={[pin.lat, pin.lng]}
+                                        icon={savedPinIcon}
+                                        ref={(el) => {
+                                            if (el) markerRefs.current.set(pin.id, el);
+                                            else markerRefs.current.delete(pin.id);
+                                        }}
+                                    >
                                         <Popup>
                                             <div className="p-1 min-w-[180px]">
                                                 {pin.title && <h3 className="font-bold text-slate-800 mb-1">{pin.title}</h3>}
