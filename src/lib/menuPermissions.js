@@ -115,3 +115,27 @@ export const canAccessMenu = (menuKey, userProfile, permissions, isAdminMode = f
     if (!config) return true;
     return config[group] !== false;
 };
+
+// 특정 메뉴에 대해 "가장 낮은 접근 가능 등급" 을 리턴.
+// 사이드바에서 각 메뉴 옆에 붙는 뱃지(정/특/관) 를 결정하는 데 사용.
+//   - general 이 열려 있으면 모두 접근 가능 → null (뱃지 없음)
+//   - full 만 열려 있으면 정회원 이상 → 'full'
+//   - special 부터면 특별회원 이상 → 'special'
+//   - admin 뿐이면 관리자만 → 'admin'
+export const minRequiredGroup = (menuKey, permissions) => {
+    const config = permissions?.[menuKey];
+    if (!config) return null;
+    if (config.general !== false) return null;
+    if (config.full    !== false) return 'full';
+    if (config.special !== false) return 'special';
+    if (config.admin   !== false) return 'admin';
+    return 'admin';
+};
+
+// 한 글자 뱃지 라벨 — 사이드바에 압축 표시할 때.
+export const GROUP_BADGE_SHORT = {
+    general: null,     // 뱃지 없음
+    full:    '정',
+    special: '특',
+    admin:   '관',
+};

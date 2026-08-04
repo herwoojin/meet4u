@@ -3,22 +3,68 @@ import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../context/AuthContext';
 import LanguageSwitcher from './LanguageSwitcher';
-import { useMenuPermissions, canAccessMenu, getUserGroup, GROUP_LABEL_KEY } from '../../lib/menuPermissions';
+import { useMenuPermissions, canAccessMenu, getUserGroup, GROUP_LABEL_KEY, minRequiredGroup, GROUP_BADGE_SHORT } from '../../lib/menuPermissions';
 import { useProjects } from '../../context/ProjectContext';
 import { Calendar, Home, LogOut, PlusCircle, Settings, X, Shield, BarChart3, Globe, PanelLeftClose, PanelLeftOpen, Folder, FolderPlus, Check, Trophy, MessageSquare } from 'lucide-react';
 
-const SidebarItem = ({ to, icon: Icon, label, onClick, collapsed }) => {
+// SidebarItem
+//  - disabled=true 이면 <Link> 대신 <div> 로 렌더, 클릭 불가, 회색 톤.
+//  - tierBadge (정/특/관) 이 있으면 라벨 오른쪽에 작은 원형 뱃지 표시.
+//  - tierColor 는 배지 색상을 결정 (full=파랑 / special=보라 / admin=앰버 / disabled=회색).
+const TIER_BADGE_STYLE = {
+    full:    { active: 'bg-blue-100   text-blue-700   border-blue-200',   disabled: 'bg-gray-100 text-gray-400 border-gray-200' },
+    special: { active: 'bg-purple-100 text-purple-700 border-purple-200', disabled: 'bg-gray-100 text-gray-400 border-gray-200' },
+    admin:   { active: 'bg-amber-100  text-amber-800  border-amber-300',  disabled: 'bg-gray-100 text-gray-400 border-gray-200' },
+};
+
+const SidebarItem = ({ to, icon: Icon, label, onClick, collapsed, disabled = false, tierBadge = null, tierKey = null }) => {
     const location = useLocation();
-    const isActive = location.pathname === to;
+    const isActive = !disabled && location.pathname === to;
+
+    const baseCls = `flex items-center ${collapsed ? 'justify-center' : 'space-x-3'} p-3 rounded-lg transition-all duration-200 relative`;
+    const stateCls = disabled
+        ? 'text-blue-900/25 cursor-not-allowed select-none'
+        : isActive
+            ? 'bg-white/90 text-blue-700 shadow-sm font-semibold'
+            : 'text-blue-900/60 hover:bg-white/50 hover:text-blue-800';
+
+    const tierStyle = tierKey ? TIER_BADGE_STYLE[tierKey] : null;
+    const badgeCls = tierStyle ? (disabled ? tierStyle.disabled : tierStyle.active) : '';
+
+    const badgeEl = tierBadge && (
+        collapsed
+            ? <span className={`absolute -top-0.5 -right-0.5 text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border ${badgeCls}`}>{tierBadge}</span>
+            : <span className={`ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${badgeCls}`}>{tierBadge}</span>
+    );
+
+    const content = (
+        <>
+            <Icon size={20} />
+            {!collapsed && <span className="font-medium">{label}</span>}
+            {badgeEl}
+        </>
+    );
+
+    if (disabled) {
+        return (
+            <div
+                title={collapsed ? `${label} · 권한 없음` : '권한 없음'}
+                aria-disabled="true"
+                className={`${baseCls} ${stateCls}`}
+            >
+                {content}
+            </div>
+        );
+    }
+
     return (
         <Link
             to={to}
             onClick={onClick}
             title={collapsed ? label : undefined}
-            className={`flex items-center ${collapsed ? 'justify-center' : 'space-x-3'} p-3 rounded-lg transition-all duration-200 ${isActive ? 'bg-white/90 text-blue-700 shadow-sm font-semibold' : 'text-blue-900/60 hover:bg-white/50 hover:text-blue-800'}`}
+            className={`${baseCls} ${stateCls}`}
         >
-            <Icon size={20} />
-            {!collapsed && <span className="font-medium">{label}</span>}
+            {content}
         </Link>
     );
 };
@@ -45,8 +91,20 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
         { key: 'admin', to: '/admin', icon: Shield, label: t('nav.admin') },
     ];
 
-    const visibleMain = allItems.filter(item => canAccessMenu(item.key, userProfile, permissions, isAdmin));
-    const visibleFooter = footerItems.filter(item => canAccessMenu(item.key, userProfile, permissions, isAdmin));
+    // 요구사항: 모든 매뉴 글자는 그대로 노출하되, 권한 없는 매뉴는 회색 톤 +
+    // 비활성화(클릭 불가) 로만 처리. 각 매뉴에는 최소 접근 등급 뱃지(정/특/관)
+    // 를 붙여 왜 비활성화됐는지 시각적으로 보여준다.
+    const decorate = (item) => {
+        const tierKey = minRequiredGroup(item.key, permissions); // 'full' | 'special' | 'admin' | null
+        return {
+            ...item,
+            disabled: !canAccessMenu(item.key, userProfile, permissions, isAdmin),
+            tierKey,
+            tierBadge: GROUP_BADGE_SHORT[tierKey] || null,
+        };
+    };
+    const visibleMain = allItems.map(decorate);
+    const visibleFooter = footerItems.map(decorate);
 
     // 회원 등급 뱃지 — 일반회원/정회원/특별회원/관리자
     const userGroup = isAdmin ? 'admin' : getUserGroup(userProfile);
@@ -148,12 +206,32 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
 
             <nav className={`flex-1 ${isCollapsed ? 'p-2' : 'p-4'} space-y-2 overflow-y-auto`}>
                 {visibleMain.map(item => (
-                    <SidebarItem key={item.key} to={item.to} icon={item.icon} label={item.label} onClick={closeMobileMenu} collapsed={isCollapsed} />
+                    <SidebarItem
+                        key={item.key}
+                        to={item.to}
+                        icon={item.icon}
+                        label={item.label}
+                        onClick={closeMobileMenu}
+                        collapsed={isCollapsed}
+                        disabled={item.disabled}
+                        tierBadge={item.tierBadge}
+                        tierKey={item.tierKey}
+                    />
                 ))}
                 {visibleFooter.length > 0 && (
                     <div className="pt-4 mt-4 border-t border-blue-100/60">
                         {visibleFooter.map(item => (
-                            <SidebarItem key={item.key} to={item.to} icon={item.icon} label={item.label} onClick={closeMobileMenu} collapsed={isCollapsed} />
+                            <SidebarItem
+                                key={item.key}
+                                to={item.to}
+                                icon={item.icon}
+                                label={item.label}
+                                onClick={closeMobileMenu}
+                                collapsed={isCollapsed}
+                                disabled={item.disabled}
+                                tierBadge={item.tierBadge}
+                                tierKey={item.tierKey}
+                            />
                         ))}
                     </div>
                 )}
