@@ -56,7 +56,7 @@ export const LEVELS  = ['2.0', '2.5', '3.0', '3.5'];
 export const TYPES   = ['여단', '남단', '혼복', '남복', '여복'];
 export const REGIONS = ['고양', '파주', '김포'];
 export const BANKS   = [
-    '카카오뱅크', '국민은행', '신한은행', '우리은행', '하나은행',
+    '카카오뱅크', '카톡입금', '국민은행', '신한은행', '우리은행', '하나은행',
     '농협', '기업은행', '새마을금고', '토스뱅크',
 ];
 
@@ -109,7 +109,9 @@ export const createMeetup = async ({ user, ...data }) => {
         start: data.start || '06:00',
         end: data.end || '08:00',
         place: data.place || PLACES[0],
-        region: data.region || REGIONS[0],
+        // region 은 폼에서 제거된 필드. 넘어오면 저장, 없으면 빈 문자열.
+        // 기존 문서는 그대로 값을 유지하므로 상세 화면 하위호환은 유지된다.
+        region: data.region || '',
         level: data.level || '3.0',
         type: data.type || '혼복',
         cap: Number(data.cap) || 3,

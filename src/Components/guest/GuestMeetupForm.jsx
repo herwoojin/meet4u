@@ -8,7 +8,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    PLACES, LEVELS, TYPES, REGIONS, BANKS,
+    PLACES, LEVELS, TYPES, BANKS,
     createMeetup, updateMeetupMeta,
 } from '../../lib/guestMeetups';
 
@@ -38,7 +38,6 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
     const [start,  setStart]  = useState(editing?.start  || defaults.start || '06:00');
     const [end,    setEnd]    = useState(editing?.end    || defaults.end   || '08:00');
     const [place,  setPlace]  = useState(editing?.place  || defaults.place || PLACES[0]);
-    const [region, setRegion] = useState(editing?.region || defaults.region|| REGIONS[0]);
     const [level,  setLevel]  = useState(editing?.level  || defaults.level || '3.0');
     const [type,   setType]   = useState(editing?.type   || defaults.type  || '혼복');
     const [cap,    setCap]    = useState(String(editing?.cap ?? defaults.cap ?? 3));
@@ -47,11 +46,11 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
     const [etc,    setEtc]    = useState(String(editing?.cost?.etc   ?? defaults.cost?.etc   ?? 0));
     const [bankNm, setBankNm] = useState(editing?.bank?.bank   || defaults.bank?.bank   || '카카오뱅크');
     const [bankAcc,setBankAcc]= useState(editing?.bank?.acc    || defaults.bank?.acc    || '');
+    // 초기엔 빈 값 — placeholder "예: 홍길동" 이 보이도록. 편집이거나
+    // 이전에 저장한 값이 있으면 자동 채움. (기존엔 user.displayName 이
+    // 무조건 pre-fill 되어 placeholder 가 노출되지 않았음)
     const [holder, setHolder] = useState(
-        editing?.bank?.holder
-        || defaults.bank?.holder
-        || user?.displayName
-        || (user?.email ? user.email.split('@')[0] : ''),
+        editing?.bank?.holder || defaults.bank?.holder || '',
     );
     const [note,   setNote]   = useState(editing?.note || '');
     const [saving, setSaving] = useState(false);
@@ -60,7 +59,7 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
     useEffect(() => {
         if (!editing) return;
         setDate(editing.date); setStart(editing.start); setEnd(editing.end);
-        setPlace(editing.place); setRegion(editing.region || REGIONS[0]);
+        setPlace(editing.place);
         setLevel(editing.level); setType(editing.type);
         setCap(String(editing.cap));
         setCourt(String(editing.cost?.court || 0));
@@ -79,7 +78,7 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
         }
         setSaving(true);
         const payload = {
-            date, start, end, place, region, level, type,
+            date, start, end, place, level, type,
             cap: Math.max(1, Number(cap) || 1),
             cost: {
                 court: Math.max(0, Number(court) || 0),
@@ -98,7 +97,7 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
                 onToast('모임 생성 완료');
             }
             writeDefaults({
-                start, end, place, region, level, type, cap: payload.cap,
+                start, end, place, level, type, cap: payload.cap,
                 cost: payload.cost, bank: payload.bank,
             });
             onDone();
@@ -152,11 +151,6 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
                         </datalist>
                     </F>
                     <G2>
-                        <F T={T} label="지역">
-                            <select value={region} onChange={(e) => setRegion(e.target.value)} style={inputStyle(T)}>
-                                {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                            </select>
-                        </F>
                         <F T={T} label="실력(NTRP)">
                             <select value={level} onChange={(e) => setLevel(e.target.value)} style={inputStyle(T)}>
                                 {LEVELS.map(v => <option key={v} value={v}>{v}</option>)}
@@ -186,7 +180,7 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
                     </F>
                     <G2>
                         <F T={T} label="계좌번호"><input type="text" value={bankAcc} onChange={(e) => setBankAcc(e.target.value)} placeholder="예: 3333-01-1234567" style={inputStyle(T)} /></F>
-                        <F T={T} label="예금주"><input type="text" value={holder} onChange={(e) => setHolder(e.target.value)} style={inputStyle(T)} /></F>
+                        <F T={T} label="예금주"><input type="text" value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="예: 홍길동" style={inputStyle(T)} /></F>
                     </G2>
                 </Box>
 

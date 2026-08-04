@@ -98,7 +98,9 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                     <Row><span style={{ color: T.sub, fontSize: 12 }}>시간</span><b>{m.start} ~ {m.end}</b></Row>
                     <Row><span style={{ color: T.sub, fontSize: 12 }}>NTRP</span><b>{m.level}</b></Row>
                     <Row><span style={{ color: T.sub, fontSize: 12 }}>경기</span><b>{m.type}</b></Row>
-                    <Row><span style={{ color: T.sub, fontSize: 12 }}>지역</span><b>{m.region || '-'}</b></Row>
+                    {m.region && (
+                        <Row><span style={{ color: T.sub, fontSize: 12 }}>지역</span><b>{m.region}</b></Row>
+                    )}
                     <Row>
                         <span style={{ color: T.sub, fontSize: 12 }}>모집</span>
                         <b>{m.roster?.length || 0} / {capTotal(m)}명 {cl && '(마감)'}</b>
