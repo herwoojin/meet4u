@@ -129,6 +129,9 @@ export const createMeetup = async ({ user, ...data }) => {
         },
         closed: false,
         note: data.note || '',
+        // 모임이 자동 마감될 때 참가자 전원(발신자 제외) 에게 푸시로
+        // 전송할 안내 문구. 호스트가 폼에서 미리 지정.
+        closingMessage: data.closingMessage || '',
         createdBy: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -186,7 +189,14 @@ export const joinMeetup = async (id, user) => {
         ];
         const closed = newRoster.length >= (m.cap ?? 0) + 1;
         tx.update(ref, { roster: newRoster, closed, updatedAt: serverTimestamp() });
-        return { status: 'joined', closed };
+        // finalRoster / closingMessage 를 함께 리턴 — 호출측이 마감 알림
+        // 대상(전원)을 정확히 알 수 있도록.
+        return {
+            status: 'joined',
+            closed,
+            finalRoster: newRoster,
+            closingMessage: m.closingMessage || '',
+        };
     });
 };
 

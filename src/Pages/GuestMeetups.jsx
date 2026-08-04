@@ -344,16 +344,25 @@ const GuestMeetups = () => {
                 const r = await joinMeetup(m.id, me);
                 if (r.status === 'joined') {
                     showToast('참가 완료!');
-                    // 내 참가로 인해 모임이 방금 마감됐다면 호스트에게 푸시
-                    if (r.closed && m.createdBy && m.createdBy !== me.uid) {
-                        sendPush({
-                            type: 'guest-full',
-                            title: '🎉 모임 마감!',
-                            body: `${meetupLabel(m)} 모임이 방금 마감됐어요.`,
-                            url: '/guest-meetups',
-                            recipientUids: [m.createdBy],
-                            senderUid: me.uid,
-                        });
+                    // 내 참가로 인해 모임이 방금 마감됐다면 참가자 전원(발신자
+                    // 제외) 에게 마감 알림 발송. body 는 호스트가 폼에서 지정한
+                    // closingMessage — 없으면 기본 안내 문구.
+                    if (r.closed) {
+                        const allUids = (r.finalRoster || [])
+                            .map(x => x.uid)
+                            .filter(uid => uid && uid !== me.uid);
+                        if (allUids.length > 0) {
+                            const bodyText = (r.closingMessage && r.closingMessage.trim())
+                                || `${meetupLabel(m)} 모임 인원이 확정되었습니다.`;
+                            sendPush({
+                                type: 'guest-full',
+                                title: '🎉 모임 마감!',
+                                body: bodyText,
+                                url: '/guest-meetups',
+                                recipientUids: allUids,
+                                senderUid: me.uid,
+                            });
+                        }
                     }
                 }
                 else if (r.status === 'waiting') showToast(`대기 ${r.position}번으로 등록됐어요.`);

@@ -53,6 +53,8 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
         editing?.bank?.holder || defaults.bank?.holder || '',
     );
     const [note,   setNote]   = useState(editing?.note || '');
+    // 마감 시 참가자 전원에게 푸시로 전송할 안내 문구
+    const [closingMessage, setClosingMessage] = useState(editing?.closingMessage || '');
     const [saving, setSaving] = useState(false);
 
     // 편집 대상이 바뀌면 폼도 갱신 (편집 → 새로 만들기 전환 시)
@@ -69,6 +71,7 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
         setBankAcc(editing.bank?.acc || '');
         setHolder(editing.bank?.holder || '');
         setNote(editing.note || '');
+        setClosingMessage(editing.closingMessage || '');
     }, [editing]);
 
     const save = async () => {
@@ -87,6 +90,7 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
             },
             bank: { bank: bankNm, acc: bankAcc, holder },
             note,
+            closingMessage,
         };
         try {
             if (isEdit) {
@@ -182,6 +186,18 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
                         <F T={T} label="계좌번호"><input type="text" value={bankAcc} onChange={(e) => setBankAcc(e.target.value)} placeholder="예: 3333-01-1234567" style={inputStyle(T)} /></F>
                         <F T={T} label="예금주"><input type="text" value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="예: 홍길동" style={inputStyle(T)} /></F>
                     </G2>
+                </Box>
+
+                <Box T={T} title="🎉 마감메세지 (선택)">
+                    <F T={T} label="모임이 마감되는 순간 참가자 전원에게 푸시로 전송됩니다.">
+                        <textarea
+                            rows={3}
+                            value={closingMessage}
+                            onChange={(e) => setClosingMessage(e.target.value)}
+                            placeholder={'예: 모임인원이 확정되었습니다. "코트는 2번입니다."'}
+                            style={{ ...inputStyle(T), resize: 'vertical' }}
+                        />
+                    </F>
                 </Box>
 
                 <Box T={T}>
