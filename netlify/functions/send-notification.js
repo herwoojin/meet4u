@@ -30,42 +30,62 @@ export const handler = async (event) => {
     }
 
     try {
-        const { type, title, body, recipientEmails, senderEmail } = JSON.parse(event.body);
+        const {
+            type, title, body, url,           // url 은 알림 클릭 시 이동할 경로
+            recipientEmails, recipientUids,   // 둘 중 하나 (게스트 모집은 uid 로 저장)
+            senderEmail, senderUid,           // 자기 자신은 알림 제외
+        } = JSON.parse(event.body);
 
-        if (!type || !title || !body || !recipientEmails?.length) {
+        if (!type || !title || !body) {
             return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing required fields' }) };
         }
+        if (!recipientEmails?.length && !recipientUids?.length) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: 'recipientEmails or recipientUids required' }) };
+        }
 
-        // Look up FCM tokens for all recipients (exclude sender)
-        const tokens = [];
+        // 최종 수신자 users 문서 리스트 수집
+        const userDocs = new Map(); // uid → { fcmTokens }
 
-        const emails = recipientEmails
-            .filter(e => e && e !== senderEmail)
-            .map(e => e.toLowerCase());
+        // (a) uid 로 직접 조회
+        if (recipientUids?.length) {
+            const uids = Array.from(new Set(
+                recipientUids.filter(u => u && u !== senderUid)
+            ));
+            for (let i = 0; i < uids.length; i += 10) {
+                const chunk = uids.slice(i, i + 10);
+                const snap = await db.collection('users')
+                    .where(admin.firestore.FieldPath.documentId(), 'in', chunk)
+                    .get();
+                snap.forEach(doc => userDocs.set(doc.id, doc.data()));
+            }
+        }
 
-        if (emails.length === 0) {
+        // (b) email 로 조회 (기존 경로 유지)
+        if (recipientEmails?.length) {
+            const emails = recipientEmails
+                .filter(e => e && e !== senderEmail)
+                .map(e => e.toLowerCase());
+            for (let i = 0; i < emails.length; i += 10) {
+                const chunk = emails.slice(i, i + 10);
+                const snap = await db.collection('users')
+                    .where('email', 'in', chunk)
+                    .get();
+                snap.forEach(doc => userDocs.set(doc.id, doc.data()));
+            }
+        }
+
+        if (userDocs.size === 0) {
             return { statusCode: 200, headers, body: JSON.stringify({ success: true, sent: 0 }) };
         }
 
-        // Firestore 'in' query limit is 10, chunk if needed
-        const chunks = [];
-        for (let i = 0; i < emails.length; i += 10) {
-            chunks.push(emails.slice(i, i + 10));
-        }
-
-        for (const chunk of chunks) {
-            const snapshot = await db.collection('users')
-                .where('email', 'in', chunk)
-                .get();
-
-            snapshot.forEach(doc => {
-                const userData = doc.data();
-                if (userData.fcmTokens && Array.isArray(userData.fcmTokens)) {
-                    userData.fcmTokens.forEach(token => {
-                        if (token) tokens.push({ token, userId: doc.id });
-                    });
-                }
-            });
+        // 사용자당 여러 기기 = 여러 fcmTokens
+        const tokens = [];
+        for (const [uid, data] of userDocs.entries()) {
+            if (Array.isArray(data.fcmTokens)) {
+                data.fcmTokens.forEach(t => {
+                    if (t) tokens.push({ token: t, userId: uid });
+                });
+            }
         }
 
         if (tokens.length === 0) {
@@ -75,7 +95,13 @@ export const handler = async (event) => {
         // Build FCM message for each token and send in batch
         const messages = tokens.map(({ token }) => ({
             token,
-            data: { type, title, body },
+            // data 필드는 string 만 허용. url 은 옵션.
+            data: {
+                type: String(type),
+                title: String(title),
+                body: String(body),
+                ...(url ? { url: String(url) } : {}),
+            },
             android: { priority: 'high' },
             apns: {
                 headers: { 'apns-priority': '10' },

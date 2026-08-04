@@ -61,6 +61,27 @@ const showToast = (msg, durationMs = 2200) => {
     }, Math.max(500, durationMs));
 };
 
+// 서버로 푸시 알림 요청. 상대가 FCM 토큰을 등록해뒀다면 앱이 닫혀
+// 있어도 잠금화면에 알림이 뜬다. 응답을 기다리지 않고 fire-and-forget.
+const sendPush = ({ type, title, body, url, recipientUids, senderUid }) => {
+    try {
+        fetch('/.netlify/functions/send-notification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, title, body, url, recipientUids, senderUid }),
+        }).catch(err => console.warn('[guest] push failed', err));
+    } catch (e) {
+        console.warn('[guest] push threw', e);
+    }
+};
+
+const meetupLabel = (m) => {
+    if (!m?.date) return '';
+    const p = m.date.split('-');
+    const md = `${Number(p[1])}/${Number(p[2])}`;
+    return `${md} ${m.start || ''} ${m.place || ''}`.trim();
+};
+
 // 카카오톡 인앱 브라우저용 클립보드 폴백 포함
 const copyToClipboard = async (text) => {
     try {
@@ -321,7 +342,20 @@ const GuestMeetups = () => {
         try {
             if (action === 'join') {
                 const r = await joinMeetup(m.id, me);
-                if (r.status === 'joined') showToast('참가 완료!');
+                if (r.status === 'joined') {
+                    showToast('참가 완료!');
+                    // 내 참가로 인해 모임이 방금 마감됐다면 호스트에게 푸시
+                    if (r.closed && m.createdBy && m.createdBy !== me.uid) {
+                        sendPush({
+                            type: 'guest-full',
+                            title: '🎉 모임 마감!',
+                            body: `${meetupLabel(m)} 모임이 방금 마감됐어요.`,
+                            url: '/guest-meetups',
+                            recipientUids: [m.createdBy],
+                            senderUid: me.uid,
+                        });
+                    }
+                }
                 else if (r.status === 'waiting') showToast(`대기 ${r.position}번으로 등록됐어요.`);
                 else if (r.status === 'already-in') showToast('이미 참가중이에요.');
                 else if (r.status === 'already-waiting') showToast('이미 대기중이에요.');
@@ -329,6 +363,17 @@ const GuestMeetups = () => {
                 const r = await leaveMeetup(m.id, me);
                 if (r.promoted) {
                     showToast(`🎉 취소 완료 · 대기 1번 ${r.promoted.name} 님이 자동 참가했어요`, 5000);
+                    // 승격된 사람에게 푸시 — 앱을 열지 않아도 잠금화면에 뜬다
+                    if (r.promoted.uid && r.promoted.uid !== me.uid) {
+                        sendPush({
+                            type: 'guest-promoted',
+                            title: '🎉 대기 → 참가 확정!',
+                            body: `${meetupLabel(m)} 모임에 자동 참가됐어요.`,
+                            url: '/guest-meetups',
+                            recipientUids: [r.promoted.uid],
+                            senderUid: me.uid,
+                        });
+                    }
                 } else {
                     showToast('참가 취소했어요.');
                 }
