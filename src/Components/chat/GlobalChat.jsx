@@ -14,6 +14,8 @@ import {
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
+import { useProjects } from '../../context/ProjectContext';
+import { useNavigate } from 'react-router-dom';
 import { compressImageToWebp } from '../../lib/imageUtils';
 import ImageLightbox from './ImageLightbox';
 import GrammarPopup from './GrammarPopup';
@@ -77,12 +79,17 @@ const lower = (s) => (s || '').toLowerCase();
 const CreateRoomModal = ({ onClose, onCreated }) => {
     const { t } = useTranslation();
     const { currentUser } = useAuth();
+    const { projects } = useProjects();
+    const navigate = useNavigate();
     const [name, setName] = useState('');
     const [allUsers, setAllUsers] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selected, setSelected] = useState([]); // [{email, displayName}]
     const [saving, setSaving] = useState(false);
-    const [showList, setShowList] = useState(false);
+    const [showList, setShowList] = useState(true);
+    // 프로젝트를 여러 개 참여하고 있다면 프로젝트 필터를 노출해서 특정 프로젝트
+    // 멤버만 뽑을 수 있게 한다. 'all' 이면 내 모든 프로젝트의 합집합.
+    const [projectFilter, setProjectFilter] = useState('all');
 
     useEffect(() => {
         getDocs(collection(db, 'users'))
@@ -90,21 +97,56 @@ const CreateRoomModal = ({ onClose, onCreated }) => {
             .catch(err => console.error('load users failed', err));
     }, []);
 
+    // 내가 참여 중인 프로젝트에서만 후보 뽑기.
+    //   - 각 유저의 email 이 어떤 프로젝트의 memberEmails 에 들어 있는지 계산
+    //   - projectFilter 에 따라 특정 프로젝트로 좁히거나 전체 합집합 사용
+    //   - 매칭된 프로젝트 이름 리스트를 태그로 붙여 노출
+    const candidates = useMemo(() => {
+        if (projects.length === 0) return [];
+        const filterSet = projectFilter === 'all'
+            ? new Set(projects.map(p => p.id))
+            : new Set([projectFilter]);
+        const relevantProjects = projects.filter(p => filterSet.has(p.id));
+
+        // 후보 email → { user, projectNames[] } 매핑
+        const map = new Map();
+        relevantProjects.forEach(p => {
+            (p.memberEmails || []).forEach(em => {
+                const emL = lower(em);
+                if (!emL || emL === lower(currentUser?.email)) return;
+                const existing = map.get(emL) || { email: emL, projectNames: [] };
+                if (!existing.projectNames.includes(p.name)) existing.projectNames.push(p.name);
+                map.set(emL, existing);
+            });
+        });
+
+        // users 컬렉션에서 displayName/photoURL 보강
+        const byEmail = new Map(allUsers.map(u => [lower(u.email || ''), u]));
+        return Array.from(map.values()).map(c => {
+            const u = byEmail.get(c.email);
+            return {
+                email: c.email,
+                displayName: u?.displayName || c.email.split('@')[0],
+                photoURL: u?.photoURL || '',
+                hiddenFromSearch: u?.hiddenFromSearch || false,
+                projectNames: c.projectNames,
+            };
+        });
+    }, [projects, projectFilter, allUsers, currentUser]);
+
     const filtered = useMemo(() => {
         const term = searchTerm.trim().toLowerCase();
         const selectedEmails = new Set(selected.map(s => lower(s.email)));
-        return allUsers
-            .filter(u => u.email && lower(u.email) !== lower(currentUser?.email))
+        return candidates
             .filter(u => !u.hiddenFromSearch)
-            .filter(u => !selectedEmails.has(lower(u.email)))
+            .filter(u => !selectedEmails.has(u.email))
             .filter(u => {
                 if (!term) return true;
-                const name = lower(u.displayName || '');
-                const email = lower(u.email || '');
-                return name.includes(term) || email.includes(term);
+                return u.displayName.toLowerCase().includes(term)
+                    || u.email.includes(term);
             })
             .slice(0, 50);
-    }, [allUsers, searchTerm, selected, currentUser]);
+    }, [candidates, searchTerm, selected]);
 
     const toggleSelect = (user) => {
         setSelected(prev => [...prev, { email: user.email, displayName: user.displayName || user.email.split('@')[0] }]);
@@ -159,6 +201,39 @@ const CreateRoomModal = ({ onClose, onCreated }) => {
         }
     };
 
+    // 참여 중인 프로젝트가 하나도 없으면 대화방을 만들 대상 자체가 없다.
+    // → 프로젝트 관리 페이지로 유도.
+    if (projects.length === 0) {
+        return (
+            <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 text-center" onClick={e => e.stopPropagation()}>
+                    <div className="text-4xl mb-2">📁</div>
+                    <h3 className="font-bold text-gray-900 mb-2">먼저 프로젝트가 필요해요</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed mb-5">
+                        대화방은 <b>내가 참여 중인 프로젝트의 멤버</b> 로만 만들 수 있어요.<br />
+                        프로젝트를 하나 만들거나 초대받은 뒤 다시 시도해 주세요.
+                    </p>
+                    <div className="flex justify-center gap-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                        >
+                            {t('common.cancel')}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { onClose(); navigate('/projects'); }}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg shadow-sm hover:bg-blue-700"
+                        >
+                            <Plus size={14} /> 프로젝트 관리로 가기
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -170,6 +245,37 @@ const CreateRoomModal = ({ onClose, onCreated }) => {
                 </div>
 
                 <form onSubmit={handleCreate} className="p-4 flex-1 overflow-y-auto space-y-4">
+                    {/* 프로젝트 필터 — 여러 개 참여 중일 때만 노출 */}
+                    {projects.length > 1 && (
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">초대할 프로젝트 범위</label>
+                            <div className="flex flex-wrap gap-1.5">
+                                <button
+                                    type="button"
+                                    onClick={() => setProjectFilter('all')}
+                                    className={`text-xs px-2.5 py-1 rounded-full border font-semibold ${
+                                        projectFilter === 'all'
+                                            ? 'bg-blue-600 text-white border-blue-600'
+                                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                    }`}
+                                >전체 ({projects.length}개 프로젝트)</button>
+                                {projects.map(p => (
+                                    <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => setProjectFilter(p.id)}
+                                        className={`text-xs px-2.5 py-1 rounded-full border font-semibold inline-flex items-center gap-1 ${
+                                            projectFilter === p.id
+                                                ? 'bg-blue-600 text-white border-blue-600'
+                                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <span>{p.icon || '📁'}</span>{p.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">{t('chat.rooms.roomName')}</label>
                         <input
@@ -195,28 +301,39 @@ const CreateRoomModal = ({ onClose, onCreated }) => {
                                 className="flex-1 py-2 text-sm bg-transparent focus:outline-none"
                             />
                         </div>
-                        {showList && (searchTerm || filtered.length > 0) && (
-                            <div className="mt-1 max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-sm">
-                                {filtered.length === 0 ? (
-                                    <div className="p-3 text-xs text-gray-400 text-center">{t('chat.rooms.noResults')}</div>
-                                ) : (
-                                    filtered.map(u => (
-                                        <button
-                                            type="button"
-                                            key={u.email}
-                                            onClick={() => toggleSelect(u)}
-                                            className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm flex items-center justify-between"
-                                        >
-                                            <span className="truncate min-w-0 flex-1">
-                                                <span className="font-medium text-gray-800">{u.displayName || u.email.split('@')[0]}</span>
-                                                <span className="ml-2 text-xs text-gray-400 truncate">{u.email}</span>
-                                            </span>
-                                            <Plus size={14} className="text-blue-500 shrink-0" />
-                                        </button>
-                                    ))
-                                )}
-                            </div>
-                        )}
+                        <div className="mt-1 max-h-80 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-sm">
+                            {filtered.length === 0 ? (
+                                <div className="p-3 text-xs text-gray-400 text-center">
+                                    {candidates.length === 0
+                                        ? '이 프로젝트에는 나 말고 다른 멤버가 없어요.'
+                                        : t('chat.rooms.noResults')}
+                                </div>
+                            ) : (
+                                filtered.map(u => (
+                                    <button
+                                        type="button"
+                                        key={u.email}
+                                        onClick={() => toggleSelect(u)}
+                                        className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm flex items-center gap-2"
+                                    >
+                                        <span className="truncate min-w-0 flex-1">
+                                            <span className="font-medium text-gray-800">{u.displayName}</span>
+                                            <span className="ml-2 text-xs text-gray-400 truncate">{u.email}</span>
+                                            {u.projectNames?.length > 0 && (
+                                                <span className="ml-2 inline-flex flex-wrap gap-0.5">
+                                                    {u.projectNames.slice(0, 3).map(pn => (
+                                                        <span key={pn} className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">
+                                                            {pn}
+                                                        </span>
+                                                    ))}
+                                                </span>
+                                            )}
+                                        </span>
+                                        <Plus size={14} className="text-blue-500 shrink-0" />
+                                    </button>
+                                ))
+                            )}
+                        </div>
                     </div>
 
                     {selected.length > 0 && (

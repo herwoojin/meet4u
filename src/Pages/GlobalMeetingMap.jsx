@@ -12,7 +12,7 @@ import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-import GlobalChat from '../Components/chat/GlobalChat';
+// GlobalChat 은 /chat-check (챗.첵) 페이지로 분리됨. 여기선 지도/위치 공유만.
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -1151,8 +1151,6 @@ const GlobalMeetingMap = () => {
                 </div>
             )}
 
-            {/* Global chat */}
-            <GlobalChat />
         </div>
     );
 };
