@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useMenuPermissions, canAccessMenu, getUserGroup, GROUP_LABEL_KEY } from '../../lib/menuPermissions';
 import { useProjects } from '../../context/ProjectContext';
-import { Calendar, Home, LogOut, PlusCircle, Settings, X, Shield, BarChart3, Globe, PanelLeftClose, PanelLeftOpen, Folder, FolderPlus, Check } from 'lucide-react';
+import { Calendar, Home, LogOut, PlusCircle, Settings, X, Shield, BarChart3, Globe, PanelLeftClose, PanelLeftOpen, Folder, FolderPlus, Check, Trophy } from 'lucide-react';
 
 const SidebarItem = ({ to, icon: Icon, label, onClick, collapsed }) => {
     const location = useLocation();
@@ -34,6 +34,7 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
         { key: 'weeklyCalendar', to: '/weekly', icon: Home, label: t('nav.weeklyCalendar') },
         { key: 'monthlyCalendar', to: '/calendar', icon: Calendar, label: t('nav.monthlyCalendar') },
         { key: 'createMeeting', to: '/schedule', icon: PlusCircle, label: t('nav.createMeeting') },
+        { key: 'guestMeetups', to: '/guest-meetups', icon: Trophy, label: t('nav.guestMeetups') },
         { key: 'globalMeeting', to: '/global-meeting', icon: Globe, label: t('nav.globalMeeting') },
         { key: 'myDashboard', to: '/my-dashboard', icon: BarChart3, label: t('nav.myDashboard') },
     ];

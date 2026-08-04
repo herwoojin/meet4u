@@ -17,6 +17,7 @@ export const MENU_KEYS = [
     'monthlyCalendar',
     'createMeeting',
     'globalMeeting',
+    'guestMeetups',
     'myDashboard',
     'settings',
     'admin',

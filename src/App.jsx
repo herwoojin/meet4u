@@ -16,6 +16,7 @@ import Settings from './Pages/Settings';
 import MyDashboard from './Pages/MyDashboard';
 import GlobalMeetingMap from './Pages/GlobalMeetingMap';
 import ProjectsPage from './Pages/Projects';
+import GuestMeetups from './Pages/GuestMeetups';
 import HomeRedirect from './Components/HomeRedirect';
 import KakaoCallback from './Components/auth/KakaoCallback';
 import { useFCM } from './hooks/useFCM';
@@ -61,6 +62,7 @@ const App = () => {
                                     <Route path="/settings" element={<Settings />} />
                                     <Route path="/global-meeting" element={<GlobalMeetingMap />} />
                                     <Route path="/projects" element={<ProjectsPage />} />
+                                    <Route path="/guest-meetups" element={<GuestMeetups />} />
                                 </Routes>
                             </MainLayout>
                         </PrivateRoute>

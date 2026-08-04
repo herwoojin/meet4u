@@ -185,6 +185,30 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ---------- Guest meetups (테니스 게스트 모집) ----------
+    // 새 도메인 컬렉션. 기존 meetings 는 그대로 두고 별개 컬렉션에서 관리.
+    //  - read: 로그인 사용자
+    //  - create: 로그인 사용자, createdBy == auth.uid 강제
+    //  - update: 호스트(createdBy) 또는 참가/취소/대기/입금 등 부분 갱신
+    //    (roster/wait/closed/updatedAt 만 바뀌는 요청은 참가자·게스트도 허용)
+    //  - delete: 호스트만
+    match /guestMeetups/{id} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == myUid();
+
+      allow update: if isSignedIn() && (
+        resource.data.createdBy == myUid()
+        ||
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['roster', 'wait', 'closed', 'updatedAt'])
+      );
+
+      allow delete: if isSignedIn()
+        && (resource.data.createdBy == myUid() || isAdmin());
+    }
+
     // ---------- App config (menu permissions, etc.) ----------
     // Any signed-in user can read (sidebar subscribes for menu visibility).
     // Only admins can change.
