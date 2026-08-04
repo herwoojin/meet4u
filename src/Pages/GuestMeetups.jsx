@@ -398,11 +398,23 @@ const GuestMeetups = () => {
                     margin: '0 -14px 0',
                     paddingLeft: 14, paddingRight: 14,
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                         <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.3px' }}>🎾 게스트 모집</div>
-                        <div style={{ display: 'flex', gap: 6 }}>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             <GhostBtn onClick={handleShareLink}>🔗 링크복사</GhostBtn>
                             <GhostBtn onClick={handleShare}>📋 톡에 공유</GhostBtn>
+                            {/* 헤더로 승격된 모임 만들기 CTA — 어두운 톤으로 강조 */}
+                            <button
+                                type="button"
+                                onClick={() => { setEditing(null); setFormOpen(true); }}
+                                style={{
+                                    background: T.dark, color: '#fff',
+                                    border: 0, borderRadius: 999,
+                                    padding: '6px 14px', fontSize: 12.5, fontWeight: 800,
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 6px rgba(23,26,51,.25)',
+                                }}
+                            >＋ 모임 만들기</button>
                         </div>
                     </div>
 
@@ -477,12 +489,12 @@ const GuestMeetups = () => {
                 </header>
 
                 {/* List */}
-                <main style={{ paddingBottom: 120, paddingTop: 4 }}>
+                <main style={{ paddingBottom: 40, paddingTop: 4 }}>
                     {loading && <div style={{ textAlign: 'center', color: T.sub, padding: '50px 0' }}>불러오는 중…</div>}
                     {!loading && grouped.length === 0 && (
                         <div style={{ textAlign: 'center', color: T.sub, fontSize: 13.5, padding: '50px 0' }}>
                             조건에 맞는 모임이 없어요.<br />
-                            우측 하단 <b>＋ 모임 만들기</b> 로 첫 모임을 만들어 보세요!
+                            우측 상단 <b>＋ 모임 만들기</b> 로 첫 모임을 만들어 보세요!
                         </div>
                     )}
                     {grouped.map(([date, items]) => (
@@ -503,20 +515,6 @@ const GuestMeetups = () => {
                     ))}
                 </main>
             </div>
-
-            {/* FAB */}
-            <button
-                onClick={() => { setEditing(null); setFormOpen(true); }}
-                style={{
-                    position: 'fixed', left: '50%', transform: 'translateX(-50%)',
-                    bottom: 18, zIndex: 25,
-                    background: T.dark, color: '#fff',
-                    borderRadius: 999, padding: '13px 26px',
-                    border: 0, cursor: 'pointer',
-                    fontWeight: 800, fontSize: 14.5,
-                    boxShadow: '0 6px 20px rgba(0,0,0,.22)',
-                }}
-            >＋ 모임 만들기</button>
 
             {/* Detail modal */}
             {detailMeetup && (
