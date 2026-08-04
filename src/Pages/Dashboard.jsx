@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import WeeklyCalendar from '../Components/calendar/WeeklyCalendar';
+import CelestialLoom from '../Components/effects/CelestialLoom';
 
 const Dashboard = () => {
     const { t } = useTranslation();
@@ -41,6 +42,10 @@ const Dashboard = () => {
                     <WeeklyCalendar />
                 </div>
             </div>
+
+            {/* Celestial Loom — 주간 모임 페이지에서만 노출되는 우주 배경.
+                다른 페이지의 텍스트 가독성 문제로 여기 한 곳에만 국한한다. */}
+            <CelestialLoom />
         </div>
     );
 };
