@@ -8,7 +8,7 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import {
-    COLLECTION, PLACES, LEVELS, TYPES,
+    COLLECTION, PLACE_PREFIXES, LEVELS, TYPES, placePrefix,
     capTotal, isClosed, findRosterIndex, findWaitIndex, perHead,
     joinMeetup, leaveMeetup, waitMeetup, cancelWait,
 } from '../lib/guestMeetups';
@@ -279,7 +279,9 @@ const GuestMeetups = () => {
             if (scope === 'open' && isClosed(m)) return false;
             if (scope === 'mine' && (!me?.uid || findRosterIndex(m, me.uid) < 0)) return false;
             if (scope === 'wait' && (!me?.uid || findWaitIndex(m, me.uid) < 0)) return false;
-            if (places.length && !places.includes(m.place)) return false;
+            // 장소 필터: chip 은 "충장" 같은 prefix 만 노출되므로, 미팅의
+            // 실제 place("충장 1번") 를 prefix 로 잘라 매칭한다.
+            if (places.length && !places.includes(placePrefix(m.place))) return false;
             if (levels.length && !levels.includes(m.level)) return false;
             if (types.length && !types.includes(m.type)) return false;
             return true;
@@ -429,7 +431,7 @@ const GuestMeetups = () => {
 
                     {/* Filters */}
                     <FilterRow label="장소">
-                        {PLACES.map(p => (
+                        {PLACE_PREFIXES.map(p => (
                             <Chip key={p} label={p} active={places.includes(p)}
                                 onClick={() => toggleChip(places, setPlaces, p)} />
                         ))}

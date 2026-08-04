@@ -32,6 +32,26 @@ import {
 export const COLLECTION = 'guestMeetups';
 
 export const PLACES  = ['충장 1번', '충장 2번', '삼송 2번', '원흥 3번', '파주 운정A', '김포 아라1번'];
+
+// 장소명에서 코트 번호를 잘라내고 "구 이름" 만 남기는 헬퍼.
+//   충장 1번   → 충장
+//   충장 2번   → 충장
+//   삼송 2번   → 삼송
+//   원흥 3번   → 원흥
+//   파주 운정A → 파주 운정   (숫자 없으면 뒤 알파벳만 잘라냄)
+//   김포 아라1번 → 김포 아라
+// 규칙: (1) 뒤쪽 공백+숫자로 시작하는 구간을 통째로 삭제,
+//       (2) 그래도 뒤에 알파벳 접미(A/B) 가 있다면 마저 삭제, (3) trim.
+export const placePrefix = (place) =>
+    String(place || '')
+        .replace(/\s*\d+.*$/, '')
+        .replace(/[A-Za-z]+$/, '')
+        .trim();
+
+// 프리셋 PLACES 를 기준으로 중복 제거한 코트 그룹명 목록 (필터 chip 용).
+export const PLACE_PREFIXES = Array.from(
+    new Set(PLACES.map(placePrefix).filter(Boolean))
+);
 export const LEVELS  = ['2.0', '2.5', '3.0', '3.5'];
 export const TYPES   = ['여단', '남단', '혼복', '남복', '여복'];
 export const REGIONS = ['고양', '파주', '김포'];
@@ -53,9 +73,12 @@ export const totalCost = (m) => {
     return (c.court || 0) + (c.ball || 0) + (c.etc || 0);
 };
 
-// 1인당 = 총액 / 참가자수, 100원 단위 올림 (스펙 완료 기준: 40000+12000, 4명 → 13000)
+// 1인당 = 총액 / 목표 인원(호스트 1 + 게스트 cap), 100원 단위 올림.
+// 스펙 완료 기준: 40000+12000, cap=3(총 4명) → 13000 원.
+// 참가자수(roster.length) 가 아니라 capTotal 을 쓰기 때문에, 아직 아무도
+// 참가하지 않아도 "모집이 다 찼을 때" 1인당 예상 금액이 그대로 보인다.
 export const perHead = (m) => {
-    const n = Math.max(1, m?.roster?.length ?? 1);
+    const n = Math.max(1, capTotal(m));
     return Math.ceil(totalCost(m) / n / 100) * 100;
 };
 
