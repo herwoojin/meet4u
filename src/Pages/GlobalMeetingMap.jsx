@@ -365,11 +365,14 @@ const GlobalMeetingMap = () => {
             alert(t('global.loginRequired'));
             return;
         }
+        // 핀 추가는 관리자만 — 일반 사용자의 지도 클릭은 아무 액션도 하지 않는다.
+        if (!isAdmin) return;
         startPendingPin(latlng.lat, latlng.lng);
     };
 
     const handleConfirmPendingPin = async () => {
         if (!pendingPin || !currentUser) return;
+        if (!isAdmin) { alert('핀 추가는 관리자만 할 수 있어요.'); return; }
         setAdding(true);
         try {
             await addDoc(collection(db, 'globalPins'), {
@@ -396,6 +399,12 @@ const GlobalMeetingMap = () => {
         e.preventDefault();
         if (!currentUser) {
             alert(t('global.loginRequired'));
+            return;
+        }
+        // 관리자만 핀 추가 가능. UI 는 이미 폼을 숨겼지만, 혹시 DOM
+        // 조작으로 우회하는 경우를 대비한 클라이언트 방어선.
+        if (!isAdmin) {
+            alert('핀 추가는 관리자만 할 수 있어요.');
             return;
         }
         if (!address.trim()) return;
@@ -594,7 +603,13 @@ const GlobalMeetingMap = () => {
         const lat = parseFloat(r.lat);
         const lng = parseFloat(r.lon);
         if (Number.isNaN(lat) || Number.isNaN(lng)) return;
-        startPendingPin(lat, lng, r.display_name || '');
+        // 관리자만 검색 결과에서 곧바로 핀을 추가할 수 있다. 일반 사용자에겐
+        // 지도만 그 위치로 이동시키고 pending pin 은 만들지 않는다.
+        if (isAdmin) {
+            startPendingPin(lat, lng, r.display_name || '');
+        } else {
+            setFlyToTarget({ lat, lng, key: Date.now() });
+        }
         setSearchOpen(false);
         setSearchQuery('');
         setSearchResults([]);
@@ -610,46 +625,54 @@ const GlobalMeetingMap = () => {
                 <p className="text-slate-500 text-sm mt-1">{t('global.subtitle')}</p>
             </div>
 
-            {/* Address input form */}
-            <form
-                onSubmit={handleAddPin}
-                className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col md:flex-row gap-2"
-            >
-                <div className="flex-1 flex items-center gap-2 border border-slate-200 rounded-lg px-3 focus-within:ring-2 focus-within:ring-blue-500">
-                    <MapPin size={16} className="text-slate-400 shrink-0" />
+            {/* Address input form — 핀 추가는 관리자 전용. 일반 사용자에겐 폼을
+                노출하지 않고, 대신 지도 위 기존 핀을 조회만 가능하다는 안내를 표시. */}
+            {isAdmin ? (
+                <form
+                    onSubmit={handleAddPin}
+                    className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col md:flex-row gap-2"
+                >
+                    <div className="flex-1 flex items-center gap-2 border border-slate-200 rounded-lg px-3 focus-within:ring-2 focus-within:ring-blue-500">
+                        <MapPin size={16} className="text-slate-400 shrink-0" />
+                        <input
+                            type="text"
+                            value={address}
+                            onChange={(e) => setAddress(e.target.value)}
+                            placeholder={t('global.addressPlaceholder')}
+                            className="flex-1 py-2 text-sm bg-transparent focus:outline-none"
+                        />
+                    </div>
                     <input
                         type="text"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        placeholder={t('global.addressPlaceholder')}
-                        className="flex-1 py-2 text-sm bg-transparent focus:outline-none"
+                        value={pinTitle}
+                        onChange={(e) => setPinTitle(e.target.value)}
+                        placeholder={t('global.pinTitlePlaceholder')}
+                        className="md:w-56 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                    <button
+                        type="submit"
+                        disabled={adding || !address.trim() || !currentUser}
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 transition disabled:bg-slate-300"
+                    >
+                        {adding ? (
+                            <>
+                                <Loader size={16} className="animate-spin" />
+                                {t('global.adding')}
+                            </>
+                        ) : (
+                            <>
+                                <Plus size={16} />
+                                {t('global.addPinBtn')}
+                            </>
+                        )}
+                    </button>
+                </form>
+            ) : (
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-4 py-3 text-xs text-slate-500 flex items-center gap-2">
+                    <MapPin size={14} className="text-slate-400 shrink-0" />
+                    핀 추가는 관리자만 할 수 있어요. 지도에서 기존 핀은 자유롭게 조회할 수 있습니다.
                 </div>
-                <input
-                    type="text"
-                    value={pinTitle}
-                    onChange={(e) => setPinTitle(e.target.value)}
-                    placeholder={t('global.pinTitlePlaceholder')}
-                    className="md:w-56 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                    type="submit"
-                    disabled={adding || !address.trim() || !currentUser}
-                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 transition disabled:bg-slate-300"
-                >
-                    {adding ? (
-                        <>
-                            <Loader size={16} className="animate-spin" />
-                            {t('global.adding')}
-                        </>
-                    ) : (
-                        <>
-                            <Plus size={16} />
-                            {t('global.addPinBtn')}
-                        </>
-                    )}
-                </button>
-            </form>
+            )}
 
             {/* Search toolbar */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3">
