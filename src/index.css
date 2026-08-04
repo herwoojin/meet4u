@@ -317,3 +317,132 @@ html.theme-paper select {
   border-color: rgba(80, 55, 25, 0.25) !important;
 }
 html.theme-paper ::placeholder { color: rgba(60, 40, 20, 0.4) !important; }
+/* ============================================================
+   CELESTIAL LOOM — 페이지 하단 우주 베틀 배경 (2026-08-11 추가)
+   ------------------------------------------------------------
+   구성: 세로 warp 그리드 + 좌→우로 이동하는 shuttle(빛의 점) +
+   shuttle 뒤에 나타나는 가로 weft-thread(빛의 실).
+   전체 페이지 가장 하단 배경으로 fixed 되어 있으며 pointer-events
+   가 none 이라 UI 상호작용은 방해하지 않는다.
+   ============================================================ */
+.celestial-loom {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 44vh;
+    /* z=5: 정적 콘텐츠(bg-white main) 위, 헤더(z-30)·사이드바(z-1100)·FAB/모달
+       (z-25+) 아래. pointer-events:none 라 클릭은 그대로 통과한다. */
+    z-index: 5;
+    pointer-events: none;
+    overflow: hidden;
+    background: radial-gradient(
+            ellipse at 50% 120%,
+            rgba(26, 27, 58, 0.85) 0%,
+            rgba(11, 13, 32, 0.75) 45%,
+            rgba(5, 6, 26, 0.35) 100%
+        );
+    /* 상단은 완만하게 페이드 아웃 → 페이지 콘텐츠와 자연스럽게 이어짐 */
+    -webkit-mask-image: linear-gradient(to top, #000 0%, #000 45%, rgba(0,0,0,0.5) 75%, transparent 100%);
+            mask-image: linear-gradient(to top, #000 0%, #000 45%, rgba(0,0,0,0.5) 75%, transparent 100%);
+}
+
+/* 세로 warp — 반복 선형 그라디언트로 그리드 만들고 opacity pulse */
+.celestial-loom .warp-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+        repeating-linear-gradient(
+            90deg,
+            rgba(160, 196, 255, 0.09) 0,
+            rgba(160, 196, 255, 0.09) 1px,
+            transparent 1px,
+            transparent 42px
+        );
+    animation: grid-pulse 5.5s ease-in-out infinite;
+}
+
+/* 셔틀 한 번의 이동 사이클을 감싸는 컨테이너 — 등장/퇴장 opacity 제어 */
+.celestial-loom .shuttle-run {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    animation-name: run-lifecycle;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    will-change: opacity;
+}
+
+/* 실제 셔틀(빛의 점) — 좌→우 이동, 은은한 발광 */
+.celestial-loom .shuttle {
+    position: absolute;
+    top: var(--position, 50%);
+    left: -5%;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color, #fff);
+    box-shadow:
+        0 0 6px var(--color, #fff),
+        0 0 14px var(--color, #fff),
+        0 0 28px rgba(255, 255, 255, 0.35);
+    animation-name: shuttle-travel;
+    animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+    animation-iteration-count: infinite;
+    filter: saturate(1.2);
+}
+
+/* 셔틀이 지나간 자리에 그려지는 가로 실 — scaleX 로 좌→우 확장 */
+.celestial-loom .weft-thread {
+    position: absolute;
+    top: var(--position, 50%);
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        var(--color, #fff) 15%,
+        var(--color, #fff) 85%,
+        transparent 100%
+    );
+    transform-origin: left center;
+    transform: scaleX(0);
+    opacity: 0.65;
+    animation-name: weft-appear;
+    animation-timing-function: ease-out;
+    animation-iteration-count: infinite;
+    box-shadow: 0 0 6px var(--color, #fff);
+}
+
+/* 원본 스니펫 키프레임 */
+@keyframes grid-pulse {
+    0%, 100% { opacity: 0.5; }
+    50%      { opacity: 1;   }
+}
+
+@keyframes run-lifecycle {
+    0%       { opacity: 0; }
+    10%, 80% { opacity: 1; }
+    100%     { opacity: 0; }
+}
+
+@keyframes shuttle-travel {
+    from { left: -5%;  }
+    to   { left: 105%; }
+}
+
+@keyframes weft-appear {
+    0%   { transform: scaleX(0); }
+    10%  { transform: scaleX(1); }
+    100% { transform: scaleX(1); }
+}
+
+/* 접근성: 모션 감소 선호 사용자에겐 애니메이션 비활성화 */
+@media (prefers-reduced-motion: reduce) {
+    .celestial-loom,
+    .celestial-loom * {
+        animation: none !important;
+    }
+    .celestial-loom { opacity: 0.35; }
+}

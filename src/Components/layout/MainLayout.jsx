@@ -8,6 +8,7 @@ import ChatModal from '../chat/ChatModal';
 import Sidebar from './Sidebar';
 import LanguageSwitcher from './LanguageSwitcher';
 import ServerCapacityIndicator from './ServerCapacityIndicator';
+import CelestialLoom from '../effects/CelestialLoom';
 import { useRouteTracker } from '../../hooks/useRouteTracker';
 import { Menu, Calendar, Bell, BellRing, BellOff } from 'lucide-react';
 
@@ -112,8 +113,9 @@ const MainLayout = ({ children }) => {
                     {children}
                 </main>
 
-                {/* Restored Footer */}
-                <footer className="text-center p-4 text-xs text-slate-500 bg-slate-50 border-t border-slate-100">
+                {/* Restored Footer — 이제 우주 베틀 배경 위에 얹혀 있어
+                    배경이 자연스럽게 보이도록 반투명 처리한다. */}
+                <footer className="relative z-10 text-center p-4 text-xs text-slate-500 bg-slate-50/85 backdrop-blur-sm border-t border-slate-100">
                     {t('app.footer')}
                 </footer>
             </div>
@@ -131,6 +133,11 @@ const MainLayout = ({ children }) => {
 
             {/* Backend capacity traffic-light — always visible bottom-right */}
             <ServerCapacityIndicator />
+
+            {/* Celestial Loom — 전체 페이지 백그라운드 가장 하단 (viewport 하단
+                40vh 대에 fixed). pointer-events: none 이라 UI 조작을 방해하지
+                않고, 상단은 마스크로 페이드 아웃되어 콘텐츠와 자연스럽게 연결된다. */}
+            <CelestialLoom />
         </div>
     );
 };
