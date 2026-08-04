@@ -39,9 +39,9 @@ const groupHeader = (dateStr) => {
     return `${Number(p[1])}월 ${Number(p[2])}일 (${dayName(dateStr)})`;
 };
 
-const showToast = (msg) => {
-    // 간단한 top-of-viewport 토스트. GlobalMeetingMap 등 다른 페이지에도 있지만
-    // 여기선 dependency 를 늘리지 않기 위해 인라인 처리.
+const showToast = (msg, durationMs = 2200) => {
+    // 간단한 top-of-viewport 토스트. duration 을 파라미터로 받아, 대기 자동
+    // 승격 같은 중요한 안내는 더 길게 노출할 수 있게 한다.
     const el = document.createElement('div');
     el.textContent = msg;
     Object.assign(el.style, {
@@ -58,7 +58,7 @@ const showToast = (msg) => {
     setTimeout(() => {
         el.style.opacity = '0';
         setTimeout(() => el.remove(), 300);
-    }, 2200);
+    }, Math.max(500, durationMs));
 };
 
 // 카카오톡 인앱 브라우저용 클립보드 폴백 포함
@@ -327,8 +327,11 @@ const GuestMeetups = () => {
                 else if (r.status === 'already-waiting') showToast('이미 대기중이에요.');
             } else if (action === 'leave') {
                 const r = await leaveMeetup(m.id, me);
-                if (r.promoted) showToast(`취소 완료 · 대기 1번 ${r.promoted.name} 자동 참가`);
-                else showToast('참가 취소했어요.');
+                if (r.promoted) {
+                    showToast(`🎉 취소 완료 · 대기 1번 ${r.promoted.name} 님이 자동 참가했어요`, 5000);
+                } else {
+                    showToast('참가 취소했어요.');
+                }
             } else if (action === 'wait') {
                 const r = await waitMeetup(m.id, me);
                 if (r.status === 'waiting') showToast(`대기 ${r.position}번 등록`);

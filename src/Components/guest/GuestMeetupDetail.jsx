@@ -139,6 +139,16 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                                     <span style={{ fontWeight: 700 }}>{r.name}</span>
                                     {r.host && <Tag T={T}>호스트</Tag>}
                                     {isMine && <Tag T={T} me>나</Tag>}
+                                    {r.promotedFromWait && (
+                                        <span
+                                            title="대기 → 참가로 자동 승격"
+                                            style={{
+                                                fontSize: 10.5, borderRadius: 5, padding: '2px 5px',
+                                                marginLeft: 5, fontWeight: 800,
+                                                background: '#d9eede', color: T.green,
+                                            }}
+                                        >🎉 대기승격</span>
+                                    )}
                                 </div>
                                 <label style={{
                                     display: 'flex', alignItems: 'center', gap: 6,

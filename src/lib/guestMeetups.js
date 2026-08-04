@@ -206,14 +206,24 @@ export const leaveMeetup = async (id, user) => {
         let wait = m.wait || [];
         let promoted = null;
 
-        // 자리 났고 대기자 있으면 1번 승격
+        // 자리 났고 대기자 있으면 1번 승격.
+        // promotedFromWait / promotedAt 을 함께 저장해서 상세 화면에서
+        // "🎉 대기에서 자동 참가" 뱃지로 명확히 알 수 있도록 한다.
         const cap = m.cap ?? 0;
         if (roster.length < cap + 1 && wait.length > 0) {
             const [head, ...rest] = wait;
             promoted = head;
             roster = [
                 ...roster,
-                { uid: head.uid, name: head.name, host: false, paid: false, joinedAt: Date.now() },
+                {
+                    uid: head.uid,
+                    name: head.name,
+                    host: false,
+                    paid: false,
+                    joinedAt: Date.now(),
+                    promotedFromWait: true,
+                    promotedAt: Date.now(),
+                },
             ];
             wait = rest;
         }
