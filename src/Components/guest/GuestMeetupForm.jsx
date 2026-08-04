@@ -44,14 +44,13 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
     const [court,  setCourt]  = useState(String(editing?.cost?.court ?? defaults.cost?.court ?? 40000));
     const [ball,   setBall]   = useState(String(editing?.cost?.ball  ?? defaults.cost?.ball  ?? 12000));
     const [etc,    setEtc]    = useState(String(editing?.cost?.etc   ?? defaults.cost?.etc   ?? 0));
-    const [bankNm, setBankNm] = useState(editing?.bank?.bank   || defaults.bank?.bank   || '카카오뱅크');
-    const [bankAcc,setBankAcc]= useState(editing?.bank?.acc    || defaults.bank?.acc    || '');
-    // 초기엔 빈 값 — placeholder "예: 홍길동" 이 보이도록. 편집이거나
-    // 이전에 저장한 값이 있으면 자동 채움. (기존엔 user.displayName 이
-    // 무조건 pre-fill 되어 placeholder 가 노출되지 않았음)
-    const [holder, setHolder] = useState(
-        editing?.bank?.holder || defaults.bank?.holder || '',
-    );
+    // 은행 종류는 편의상 defaults 유지(대부분 같은 은행을 반복 사용).
+    const [bankNm, setBankNm] = useState(editing?.bank?.bank || defaults.bank?.bank || '카카오뱅크');
+    // 계좌번호 · 예금주는 매번 확인해서 새로 입력하도록 defaults 를 쓰지 않는다.
+    // 이렇게 해야 새 모임 생성 시 placeholder("예: 3333-01-1234567", "예: 홍길동")
+    // 가 노출되고, 이전에 만든 모임의 실명·계좌가 자동으로 미리 채워지지 않는다.
+    const [bankAcc, setBankAcc] = useState(editing?.bank?.acc || '');
+    const [holder,  setHolder]  = useState(editing?.bank?.holder || '');
     const [note,   setNote]   = useState(editing?.note || '');
     // 마감 시 참가자 전원에게 푸시로 전송할 안내 문구
     const [closingMessage, setClosingMessage] = useState(editing?.closingMessage || '');
@@ -100,9 +99,12 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
                 await createMeetup({ user, ...payload });
                 onToast('모임 생성 완료');
             }
+            // 다음 생성 시 자동 채워질 값 — 계좌번호/예금주는 매번 확인해
+            // 새로 적도록 일부러 저장하지 않는다(은행 종류만 유지).
             writeDefaults({
                 start, end, place, level, type, cap: payload.cap,
-                cost: payload.cost, bank: payload.bank,
+                cost: payload.cost,
+                bank: { bank: bankNm },
             });
             onDone();
         } catch (e) {
