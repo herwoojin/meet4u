@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { db } from '../lib/firebase';
 import { collection, getDocs, doc, updateDoc, query, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { Shield, ShieldOff, Users, Eye, EyeOff, Calendar, Lock, LogOut, BarChart2, DollarSign, ChevronLeft, ChevronRight, UserMinus, KeyRound } from 'lucide-react';
+import { Shield, ShieldOff, Users, Eye, EyeOff, Calendar, Lock, LogOut, BarChart2, DollarSign, ChevronLeft, ChevronRight, UserMinus, KeyRound, Edit2, Trash2, Folder } from 'lucide-react';
 import MeetingDetailModal from '../Components/meeting/MeetingDetailModal';
 import AttendanceStats from '../Components/admin/AttendanceStats';
 import { useNavigate } from 'react-router-dom';
@@ -390,6 +390,8 @@ const AdminPage = () => {
     const navigate = useNavigate();
     const [users, setUsers] = useState([]);
     const [meetings, setMeetings] = useState([]);
+    // 각 미팅의 projectId → project 정보(name/icon/color) 매핑에 필요.
+    const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('users');
     const [selectedMeeting, setSelectedMeeting] = useState(null);
@@ -431,6 +433,23 @@ const AdminPage = () => {
         });
         return () => unsubscribe();
     }, [isAdmin]);
+
+    // Fetch all projects — 각 미팅의 소속 프로젝트 뱃지 표시용
+    useEffect(() => {
+        if (!isAdmin) return;
+        const unsub = onSnapshot(collection(db, 'projects'), (snap) => {
+            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setProjects(list.filter(p => !p.deleted));
+        }, (err) => console.error('projects fetch failed', err));
+        return () => unsub();
+    }, [isAdmin]);
+
+    // projectId → project 매핑
+    const projectMap = useMemo(() => {
+        const m = new Map();
+        projects.forEach(p => m.set(p.id, p));
+        return m;
+    }, [projects]);
 
     const handleAdminLogin = async (e) => {
         e.preventDefault();
@@ -492,6 +511,17 @@ const AdminPage = () => {
     const handleEditMeeting = (meeting) => {
         setSelectedMeeting(null);
         navigate('/schedule', { state: { meetingToEdit: meeting } });
+    };
+
+    const handleDeleteMeeting = async (meeting) => {
+        const label = `${meeting.title || '(제목 없음)'} · ${meeting.date || ''}`;
+        if (!window.confirm(`정말 이 약속을 삭제하시겠습니까?\n\n${label}\n\n삭제 후에는 복구할 수 없습니다.`)) return;
+        try {
+            await deleteDoc(doc(db, 'meetings', meeting.id));
+        } catch (err) {
+            console.error('Error deleting meeting:', err);
+            alert('삭제에 실패했습니다: ' + (err.message || err));
+        }
     };
 
     // Not admin → show login form
@@ -690,7 +720,9 @@ const AdminPage = () => {
                     ) : (
                         meetings
                             .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-                            .map(meeting => (
+                            .map(meeting => {
+                                const project = projectMap.get(meeting.projectId);
+                                return (
                                 <div
                                     key={meeting.id}
                                     className={`bg-white p-4 rounded-lg border shadow-sm transition-all hover:shadow-md cursor-pointer ${meeting.hidden
@@ -701,12 +733,35 @@ const AdminPage = () => {
                                         }`}
                                     onClick={() => setSelectedMeeting(meeting)}
                                 >
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
+                                            <div className="flex items-center gap-2 mb-1 flex-wrap">
                                                 <h4 className={`font-bold text-sm truncate ${meeting.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
                                                     {meeting.title}
                                                 </h4>
+                                                {/* 프로젝트 뱃지 */}
+                                                {project ? (
+                                                    <span
+                                                        className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-semibold shrink-0"
+                                                        style={{
+                                                            background: project.color ? `${project.color}18` : '#eef2ff',
+                                                            borderColor: project.color ? `${project.color}55` : '#c7d2fe',
+                                                            color: project.color || '#4338ca',
+                                                        }}
+                                                        title={`프로젝트: ${project.name}`}
+                                                    >
+                                                        <span>{project.icon || '📁'}</span>
+                                                        <span className="truncate max-w-[140px]">{project.name}</span>
+                                                    </span>
+                                                ) : meeting.projectId ? (
+                                                    <span className="text-[11px] px-2 py-0.5 rounded-full border border-gray-200 bg-gray-50 text-gray-400 font-semibold shrink-0" title={meeting.projectId}>
+                                                        <Folder size={10} className="inline mr-0.5" />프로젝트 없음
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[11px] px-2 py-0.5 rounded-full border border-gray-200 bg-gray-50 text-gray-400 font-semibold shrink-0">
+                                                        미분류
+                                                    </span>
+                                                )}
                                                 {meeting.hidden && (
                                                     <span className="bg-yellow-100 text-yellow-700 text-xs px-1.5 py-0.5 rounded-full border border-yellow-200 font-bold shrink-0">
                                                         {t('admin.hiddenBadge')}
@@ -722,22 +777,41 @@ const AdminPage = () => {
                                                 {meeting.date} • {meeting.startTime} - {meeting.endTime}
                                             </p>
                                         </div>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                toggleMeetingHidden(meeting.id, meeting.hidden);
-                                            }}
-                                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border shadow-sm ml-3 shrink-0 ${meeting.hidden
-                                                ? 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
-                                                : 'bg-white text-yellow-700 border-yellow-300 hover:bg-yellow-50'
-                                                }`}
-                                        >
-                                            {meeting.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
-                                            {meeting.hidden ? t('admin.showBtn') : t('admin.hideBtn')}
-                                        </button>
+
+                                        {/* 액션 버튼 그룹 — 숨기기 · 수정 · 삭제 */}
+                                        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                            <button
+                                                onClick={() => toggleMeetingHidden(meeting.id, meeting.hidden)}
+                                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors border shadow-sm ${meeting.hidden
+                                                    ? 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
+                                                    : 'bg-white text-yellow-700 border-yellow-300 hover:bg-yellow-50'
+                                                    }`}
+                                                title={meeting.hidden ? t('admin.showBtn') : t('admin.hideBtn')}
+                                            >
+                                                {meeting.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                                                <span className="hidden sm:inline">{meeting.hidden ? t('admin.showBtn') : t('admin.hideBtn')}</span>
+                                            </button>
+                                            <button
+                                                onClick={() => handleEditMeeting(meeting)}
+                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white text-indigo-700 border border-indigo-200 hover:bg-indigo-50 shadow-sm"
+                                                title="수정"
+                                            >
+                                                <Edit2 size={14} />
+                                                <span className="hidden sm:inline">수정</span>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteMeeting(meeting)}
+                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white text-red-600 border border-red-200 hover:bg-red-50 shadow-sm"
+                                                title="삭제"
+                                            >
+                                                <Trash2 size={14} />
+                                                <span className="hidden sm:inline">삭제</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                            ))
+                                );
+                            })
                     )}
                 </div>
             )}
