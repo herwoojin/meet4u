@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 import { auth, googleProvider, db } from '../lib/firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -72,8 +72,17 @@ export const AuthProvider = ({ children }) => {
         setUserProfile(prev => ({ ...(prev || {}), ...patch }));
     };
 
+    // profile subscription 해제 함수를 ref 로 보관해 auth 상태 변경마다 정리.
+    const profileUnsubRef = useRef(null);
+
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            // 이전 profile subscription 정리 (로그아웃 · 계정 전환 대비)
+            if (profileUnsubRef.current) {
+                profileUnsubRef.current();
+                profileUnsubRef.current = null;
+            }
+
             setCurrentUser(user);
             if (!user) {
                 setUserProfile(null);
@@ -81,55 +90,68 @@ export const AuthProvider = ({ children }) => {
                 return;
             }
 
-            if (user) {
-                try {
-                    // Check if user document exists before writing
-                    const userDocRef = doc(db, "users", user.uid);
-                    const userSnapshot = await getDoc(userDocRef);
+            const userDocRef = doc(db, "users", user.uid);
+            // 카카오 로그인 사용자는 user.email 이 null 일 수 있어
+            // 안전한 fallback 으로 sanitize 한다.
+            const safeEmail = user.email || `${user.uid}@kakao.local`;
+            const safeEmailSanitized = safeEmail.replace(/\./g, '_');
 
-                    // 카카오 로그인 사용자는 user.email 이 null 일 수 있어
-                    // 안전한 fallback 으로 sanitize 한다.
-                    const safeEmail = user.email || `${user.uid}@kakao.local`;
-                    const safeEmailSanitized = safeEmail.replace(/\./g, '_');
-
-                    if (!userSnapshot.exists()) {
-                        // Create new user profile if it doesn't exist
-                        const newProfile = {
-                            email: safeEmail,
-                            displayName: user.displayName,
-                            photoURL: user.photoURL,
-                            role: 'user',
-                            preferredLanguage: 'ko',
-                            createdAt: new Date().toISOString(),
-                            lastSeen: new Date().toISOString(),
-                            emailSanitized: safeEmailSanitized,
-                        };
-                        await setDoc(userDocRef, newProfile);
-                        setUserProfile(newProfile);
-                        setIsAdmin(false);
-                    } else {
-                        const userData = userSnapshot.data();
-                        if (userData.role === 'admin') {
-                            setIsAdmin(true);
-                        }
-                        setUserProfile(userData);
-
-                        // Note: sessionStorage admin status is preserved via useState init
-                        // Only update lastSeen and photoURL (if changed) to avoid overwriting custom displayName
-                        await setDoc(userDocRef, {
-                            lastSeen: new Date().toISOString(),
-                            emailSanitized: safeEmailSanitized,
-                            photoURL: user.photoURL,
-                        }, { merge: true });
-                    }
-                } catch (error) {
-                    console.error("Error syncing user profile:", error);
+            // 1) 문서 존재 확인 · 없으면 생성, 있으면 lastSeen 만 갱신. 이 단계가
+            //    permission-denied 로 실패해도 아래 onSnapshot 이 자동으로 재시도.
+            try {
+                const snap = await getDoc(userDocRef);
+                if (!snap.exists()) {
+                    await setDoc(userDocRef, {
+                        email: safeEmail,
+                        displayName: user.displayName,
+                        photoURL: user.photoURL,
+                        role: 'user',
+                        preferredLanguage: 'ko',
+                        createdAt: new Date().toISOString(),
+                        lastSeen: new Date().toISOString(),
+                        emailSanitized: safeEmailSanitized,
+                    });
+                } else {
+                    setDoc(userDocRef, {
+                        lastSeen: new Date().toISOString(),
+                        emailSanitized: safeEmailSanitized,
+                        photoURL: user.photoURL,
+                    }, { merge: true }).catch(() => { /* 무시 */ });
                 }
+            } catch (e) {
+                // 로그인 직후 auth 토큰이 Firestore 로 완전히 전파되기 전
+                // 짧은 순간 permission-denied 가 날 수 있다. 이 경우에도 아래
+                // onSnapshot 이 재시도되어 정상 프로필을 받아온다.
+                console.warn('[Auth] initial profile check failed (will retry via snapshot):', e?.code || e);
             }
-            setLoading(false);
+
+            // 2) 실시간 구독 — 프로필/role 변경이 즉시 반영되고, 초기 fetch 가
+            //    permission-denied 로 실패한 경우에도 재시도되어 안정적으로 로드된다.
+            //    "관리자로 지정한 사용자가 첫 로그인 시 메뉴가 회색으로 보이는" 이슈
+            //    의 근본 원인이 여기 있었음.
+            profileUnsubRef.current = onSnapshot(userDocRef, (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    setUserProfile(data);
+                    if (data.role === 'admin') {
+                        setIsAdmin(true);
+                    }
+                    // sessionStorage 로 얻은 isAdmin=true 는 유지, false 로 덮지 않음.
+                }
+                setLoading(false);
+            }, (err) => {
+                console.warn('[Auth] profile snapshot error:', err?.code || err);
+                setLoading(false);
+            });
         });
 
-        return unsubscribe;
+        return () => {
+            unsubscribe();
+            if (profileUnsubRef.current) {
+                profileUnsubRef.current();
+                profileUnsubRef.current = null;
+            }
+        };
     }, []);
 
     const value = {
