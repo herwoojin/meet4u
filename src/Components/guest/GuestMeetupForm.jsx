@@ -40,7 +40,9 @@ const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palett
     const [date,   setDate]   = useState(editing?.date   || seed?.date   || isoToday());
     const [start,  setStart]  = useState(editing?.start  || seed?.start  || defaults.start || '06:00');
     const [end,    setEnd]    = useState(editing?.end    || seed?.end    || defaults.end   || '08:00');
-    const [place,  setPlace]  = useState(editing?.place  || seed?.place  || defaults.place || '');
+    // 장소는 매번 새로 적도록 defaults 를 쓰지 않는다. 편집이나 seed 값이 있으면 그것만 pre-fill.
+    // 새 생성 시엔 빈 값으로 시작해 placeholder "예: 삼성동 실내코트 1번" 이 회색으로 노출.
+    const [place,  setPlace]  = useState(editing?.place  || seed?.place  || '');
     const [level,  setLevel]  = useState(editing?.level  || seed?.level  || defaults.level || '3.0');
     const [type,   setType]   = useState(editing?.type   || seed?.type   || defaults.type  || '혼복');
     const [cap,    setCap]    = useState(String(editing?.cap ?? defaults.cap ?? 3));
@@ -98,10 +100,10 @@ const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palett
                 await createMeetup({ user, ...payload, meetingId: seed?.meetingId || null });
                 onToast('모임 생성 완료');
             }
-            // 다음 생성 시 자동 채워질 값 — 계좌번호/예금주는 매번 확인해
-            // 새로 적도록 일부러 저장하지 않는다(은행 종류만 유지).
+            // 다음 생성 시 자동 채워질 값 — 장소/계좌번호/예금주는 매번
+            // 확인해 새로 적도록 일부러 저장하지 않는다(은행 종류만 유지).
             writeDefaults({
-                start, end, place, level, type, cap: payload.cap,
+                start, end, level, type, cap: payload.cap,
                 perHeadAmount: payload.perHeadAmount,
                 bank: { bank: bankNm },
             });
@@ -141,7 +143,7 @@ const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palett
                         <F T={T} label="날짜">
                             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle(T)} />
                         </F>
-                        <F T={T} label="인원(호스트 제외)">
+                        <F T={T} label="모집인원">
                             <input type="number" min="1" value={cap} onChange={(e) => setCap(e.target.value)} style={inputStyle(T)} />
                         </F>
                     </G2>
@@ -172,7 +174,7 @@ const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palett
                     </G2>
                 </Box>
 
-                <Box T={T} title="1인당 비용 (원)">
+                <Box T={T} title="1인당 비용 (선택)">
                     <F T={T} label="게스트 1명이 낼 금액">
                         <input
                             type="number" min="0" step="500"
@@ -184,7 +186,7 @@ const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palett
                     </F>
                 </Box>
 
-                <Box T={T} title="입금 계좌">
+                <Box T={T} title="입금 계좌 (선택)">
                     <F T={T} label="은행">
                         <select value={bankNm} onChange={(e) => setBankNm(e.target.value)} style={inputStyle(T)}>
                             {BANKS.map(b => <option key={b} value={b}>{b}</option>)}

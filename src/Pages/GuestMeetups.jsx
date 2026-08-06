@@ -116,6 +116,10 @@ const MeetupCard = ({ m, me, onClick, onAction }) => {
     const used = m.roster?.length || 0;
     const total = capTotal(m);
     const left = Math.max(0, total - used);
+    // 카드에 표시되는 '게스트 N명 / 모집인원 M명'
+    // host 는 카운트에서 제외한다: guests = roster - 1 (호스트 존재 시)
+    const capOnly = Math.max(1, m.cap ?? 0);
+    const guestCount = Math.max(0, used - (m.roster?.[0]?.host ? 1 : 0));
     const myRosterIdx = me?.uid ? findRosterIndex(m, me.uid) : -1;
     const myWaitIdx = me?.uid ? findWaitIndex(m, me.uid) : -1;
     const mine = myRosterIdx >= 0;
@@ -162,14 +166,14 @@ const MeetupCard = ({ m, me, onClick, onAction }) => {
             }}>
                 <div style={{
                     height: '100%',
-                    width: `${Math.min(100, Math.round(used / total * 100))}%`,
+                    width: `${Math.min(100, Math.round(guestCount / capOnly * 100))}%`,
                     background: cl ? T.red : T.green,
                     borderRadius: 99,
                 }} />
             </div>
 
             <div style={{ fontSize: 12.5, color: T.sub }}>
-                {used}/{total}명 · {m.roster?.map(r => r.name + (r.host ? '(호)' : '')).join(', ')}
+                {guestCount}/{capOnly}명 · {m.roster?.map(r => r.name + (r.host ? '(호)' : '')).join(', ')}
                 {(m.wait?.length || 0) > 0 && (
                     <span style={{
                         fontSize: 10.5, background: '#eee6d3', color: T.sub,

@@ -146,7 +146,11 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                     )}
                     <Row>
                         <span style={{ color: T.sub, fontSize: 12 }}>모집</span>
-                        <b>{m.roster?.length || 0} / {capTotal(m)}명 {cl && '(마감)'}</b>
+                        <b>
+                            {Math.max(0, (m.roster?.length || 0) - (m.roster?.[0]?.host ? 1 : 0))}
+                            {' / '}{Math.max(1, m.cap ?? 0)}명
+                            {cl && ' (마감)'}
+                        </b>
                     </Row>
                     {m.note && <div style={{ marginTop: 8, fontSize: 12.5, color: T.sub, lineHeight: 1.6 }}>📝 {m.note}</div>}
                 </Box>
