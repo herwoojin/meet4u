@@ -198,8 +198,14 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && request.resource.data.createdBy == myUid();
 
+      // update 허용 조건:
+      //   1) 호스트(createdBy) 는 무제한 수정
+      //   2) 관리자는 무제한 수정 (장소 rename 일괄 처리 등)
+      //   3) 그 외 로그인 사용자는 roster/wait/closed/updatedAt 필드만
+      //      바꾸는 요청(참가/취소/대기/승격/입금 케이스) 에 한해 허용
       allow update: if isSignedIn() && (
         resource.data.createdBy == myUid()
+        || isAdmin()
         ||
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['roster', 'wait', 'closed', 'updatedAt'])
