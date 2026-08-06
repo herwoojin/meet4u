@@ -542,7 +542,7 @@ const GuestMeetups = () => {
                         background: '#eae1cc', borderRadius: 12, padding: 4,
                     }}>
                         {[
-                            ['open', '모집중'], ['all', '전체'],
+                            ['all', '전체보기'], ['open', '모집중'],
                             ['mine', '내 참가'], ['wait', '내 대기'],
                         ].map(([key, label]) => (
                             <button key={key}
