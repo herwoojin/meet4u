@@ -159,6 +159,29 @@ const MapFlyTo = ({ target }) => {
     return null;
 };
 
+// 핀 검색 결과 클릭 시, flyTo 애니메이션이 끝난 후 지도의 모든 마커 레이어를
+// 훑어 해당 좌표의 마커를 찾아 openPopup() 을 호출한다.
+// <Marker ref={...}> 를 <MarkerClusterGroup> 내부에서 쓰면 react-leaflet-cluster
+// 4.x + react-leaflet 5.x 조합에서 "VM is not a constructor" 에러가 발생하므로,
+// 이 helper 는 그 우회로.
+const OpenPinPopup = ({ target }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (!target) return;
+        const t = setTimeout(() => {
+            map.eachLayer((layer) => {
+                if (typeof layer.getLatLng !== 'function' || typeof layer.openPopup !== 'function') return;
+                const ll = layer.getLatLng();
+                if (Math.abs(ll.lat - target.lat) < 1e-5 && Math.abs(ll.lng - target.lng) < 1e-5) {
+                    layer.openPopup();
+                }
+            });
+        }, 1300);
+        return () => clearTimeout(t);
+    }, [target, map]);
+    return null;
+};
+
 const MapResizeFix = () => {
     const map = useMap();
     useEffect(() => {
@@ -231,8 +254,8 @@ const GlobalMeetingMap = () => {
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const pendingCardRef = useRef(null);
-    // pinId → Leaflet Marker instance. 검색 결과 클릭 시 openPopup() 호출용.
-    const markerRefs = useRef(new Map());
+    // 검색 결과에서 선택된 핀 좌표. <OpenPinPopup> 이 감시해 flyTo 후 자동으로 팝업 open.
+    const [pinToOpen, setPinToOpen] = useState(null);
 
     // Map toggle
     const [showMap, setShowMap] = useState(() => {
@@ -595,20 +618,13 @@ const GlobalMeetingMap = () => {
     }, [pins, searchQuery]);
 
     // 결과 클릭 → 지도 확대 이동 + 해당 핀 마커의 팝업 자동 오픈.
+    // 팝업 오픈은 OpenPinPopup helper 가 담당 (map.eachLayer 로 좌표 매칭).
     const handlePickPin = (pin) => {
         if (!pin || typeof pin.lat !== 'number' || typeof pin.lng !== 'number') return;
-        // 클러스터가 풀리도록 zoom 을 17 로 요청.
         setFlyToTarget({ lat: pin.lat, lng: pin.lng, zoom: 17, key: Date.now() });
+        setPinToOpen({ lat: pin.lat, lng: pin.lng, key: Date.now() });
         setSearchOpen(false);
         setSearchQuery('');
-        // FlyTo 애니메이션(1.2s) 이후 팝업 열기. 클러스터가 이 시점엔
-        // 풀려 있어야 마커 ref 가 접근 가능.
-        setTimeout(() => {
-            const marker = markerRefs.current.get(pin.id);
-            if (marker && typeof marker.openPopup === 'function') {
-                marker.openPopup();
-            }
-        }, 1300);
     };
 
     return (
@@ -831,6 +847,7 @@ const GlobalMeetingMap = () => {
                             <MapResizeFix />
                             <ClickToPin onPick={handleMapClick} />
                             {flyToTarget && <MapFlyTo target={flyToTarget} />}
+                            {pinToOpen && <OpenPinPopup target={pinToOpen} />}
 
                             {/* Pending (unsaved) pin */}
                             {pendingPin && (
@@ -867,10 +884,6 @@ const GlobalMeetingMap = () => {
                                         key={pin.id}
                                         position={[pin.lat, pin.lng]}
                                         icon={savedPinIcon}
-                                        ref={(el) => {
-                                            if (el) markerRefs.current.set(pin.id, el);
-                                            else markerRefs.current.delete(pin.id);
-                                        }}
                                     >
                                         <Popup>
                                             <div className="p-1 min-w-[180px]">
