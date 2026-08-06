@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useMenuPermissions, canAccessMenu, getUserGroup, GROUP_LABEL_KEY, minRequiredGroup, GROUP_BADGE_SHORT } from '../../lib/menuPermissions';
 import { useProjects } from '../../context/ProjectContext';
-import { Calendar, Home, LogOut, PlusCircle, Settings, X, Shield, BarChart3, Globe, PanelLeftClose, PanelLeftOpen, Folder, FolderPlus, Check, Trophy, MessageSquare } from 'lucide-react';
+import { Calendar, Home, LogOut, PlusCircle, Settings, X, Shield, BarChart3, Globe, PanelLeftClose, PanelLeftOpen, Folder, FolderPlus, Check, Trophy, MessageSquare, Mail } from 'lucide-react';
 
 // SidebarItem
 //  - disabled=true 이면 <Link> 대신 <div> 로 렌더, 클릭 불가, 회색 톤.
@@ -261,14 +261,25 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
                         </Link>
                     </div>
                 )}
-                <button
-                    onClick={logout}
-                    title={isCollapsed ? t('nav.logout') : undefined}
-                    className={`w-full flex items-center justify-center ${isCollapsed ? '' : 'space-x-2'} p-2 rounded-lg bg-white/60 hover:bg-white/90 transition-all duration-200 text-sm text-blue-700 border border-blue-100`}
-                >
-                    <LogOut size={16} />
-                    {!isCollapsed && <span>{t('nav.logout')}</span>}
-                </button>
+                <div className={`flex items-center ${isCollapsed ? 'flex-col' : 'flex-row'} gap-2`}>
+                    <button
+                        onClick={logout}
+                        title={isCollapsed ? t('nav.logout') : undefined}
+                        className={`flex-1 flex items-center justify-center ${isCollapsed ? '' : 'space-x-2'} p-2 rounded-lg bg-white/60 hover:bg-white/90 transition-all duration-200 text-sm text-blue-700 border border-blue-100`}
+                    >
+                        <LogOut size={16} />
+                        {!isCollapsed && <span>{t('nav.logout')}</span>}
+                    </button>
+                    {/* 주인장에게 이메일 보내기 — 작은 원형 버튼. 클릭 시 기본 메일 클라이언트가 열린다. */}
+                    <a
+                        href={`mailto:iam@k-ai.top?subject=${encodeURIComponent('[PromiseU] 문의')}`}
+                        title="주인장에게 이메일 보내기"
+                        aria-label="주인장에게 이메일 보내기"
+                        className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full bg-white/70 hover:bg-white text-blue-600 border border-blue-100 transition-colors"
+                    >
+                        <Mail size={16} />
+                    </a>
+                </div>
             </div>
         </aside>
     );
