@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { X, Clock, Users, Trash2, Edit, Check, XCircle, AlignLeft, EyeOff, Eye, DollarSign, ShieldCheck, UserPlus } from 'lucide-react';
 import { db } from '../../lib/firebase';
-import { deleteDoc, doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { deleteDoc, doc, updateDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { format, isValid } from 'date-fns';
 import { ko, enUS, zhCN } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
@@ -32,6 +32,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
 
     // 게스트 초대: 이 미팅의 일정 정보를 seed 로 담아 /guest-meetups 로 이동.
     // GuestMeetups 페이지가 seed 를 읽어 GuestMeetupForm 을 자동 오픈한다.
+    // meetingId 도 함께 넘겨야 나중에 마감 상태를 이 미팅과 연결해 볼 수 있다.
     const handleInviteGuest = () => {
         navigate('/guest-meetups', {
             state: {
@@ -42,11 +43,33 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     place: meeting.location || meeting.title || '',
                     level: '2.5',
                     type: '남복',
+                    meetingId: meeting.id,
                 },
             },
         });
         onClose?.();
     };
+
+    // 이 미팅에서 파생돼 내가 만든 게스트 초대들을 실시간 구독.
+    // 마감된 초대가 있으면 게스트 초대 버튼을 반전 스타일 + "초대 N명 완료" 로 표시.
+    const [linkedGuestMeetups, setLinkedGuestMeetups] = React.useState([]);
+    React.useEffect(() => {
+        if (!meeting?.id || !currentUser?.uid) return;
+        const q = query(
+            collection(db, 'guestMeetups'),
+            where('meetingId', '==', meeting.id),
+            where('createdBy', '==', currentUser.uid),
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            setLinkedGuestMeetups(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }, (err) => {
+            console.warn('[MeetingDetailModal] guest meetups subscribe error', err?.code || err);
+        });
+        return () => unsub();
+    }, [meeting?.id, currentUser?.uid]);
+
+    const closedGuestMeetup = linkedGuestMeetups.find(m => m.closed);
+    const guestCount = closedGuestMeetup?.roster?.length || 0;
 
     if (!meeting) return null;
 
@@ -469,14 +492,26 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                 >
                                     <XCircle size={16} /> {t('meeting.decline')}
                                 </button>
-                                {/* 게스트 초대 — 이 미팅의 일정을 seed 로 담아 게스트 모집 폼을 열어준다. */}
-                                <button
-                                    onClick={handleInviteGuest}
-                                    className="py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50 hover:border-indigo-400"
-                                    title="이 일정으로 게스트 모집 만들기"
-                                >
-                                    <UserPlus size={16} /> 게스트 초대
-                                </button>
+                                {/* 게스트 초대 — 마감된 초대가 있으면 반전 스타일로 완료 상태 노출. */}
+                                {closedGuestMeetup ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleInviteGuest}
+                                        className="py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border bg-indigo-600 text-white border-indigo-600 shadow-md hover:bg-indigo-700"
+                                        title="이 일정으로 만든 게스트 초대가 마감되었습니다. 다시 클릭 시 추가 초대 폼이 열립니다."
+                                    >
+                                        <Check size={16} /> 초대 {guestCount}명 완료
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleInviteGuest}
+                                        className="py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50 hover:border-indigo-400"
+                                        title="이 일정으로 게스트 모집 만들기"
+                                    >
+                                        <UserPlus size={16} /> 게스트 초대
+                                    </button>
+                                )}
                             </div>
                             <button
                                 onClick={saveResponse}

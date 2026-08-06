@@ -97,6 +97,7 @@ export const findWaitIndex = (m, uid) =>
 // ────────────────────────────────────────────────────────────────
 
 // 호스트 = 로그인 사용자. 첫 roster 원소로 자동 추가.
+// data.meetingId 가 있으면 그 미팅에서 파생된 초대라는 링크로 저장.
 export const createMeetup = async ({ user, ...data }) => {
     if (!user?.uid) throw new Error('로그인이 필요합니다.');
     const hostEntry = {
@@ -134,6 +135,10 @@ export const createMeetup = async ({ user, ...data }) => {
         },
         closed: false,
         note: data.note || '',
+        // 이 문서를 만들 때 참조한 원본 미팅 id (게스트 초대 브릿지 흐름).
+        // 없으면 null. MeetingDetailModal 이 이 필드로 자기 미팅에서 파생된
+        // 게스트 초대의 마감 여부를 실시간 구독한다.
+        meetingId: data.meetingId || null,
         // 모임이 자동 마감될 때 참가자 전원(발신자 제외) 에게 푸시로
         // 전송할 안내 문구. 호스트가 폼에서 미리 지정.
         closingMessage: data.closingMessage || '',

@@ -94,7 +94,8 @@ const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palett
                 await updateMeetupMeta(editing.id, payload);
                 onToast('수정 완료');
             } else {
-                await createMeetup({ user, ...payload });
+                // seed.meetingId 가 있으면 그 미팅에서 파생된 초대라는 링크로 저장.
+                await createMeetup({ user, ...payload, meetingId: seed?.meetingId || null });
                 onToast('모임 생성 완료');
             }
             // 다음 생성 시 자동 채워질 값 — 계좌번호/예금주는 매번 확인해
