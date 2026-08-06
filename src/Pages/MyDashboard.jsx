@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { BarChart3, Trophy, Calendar, TrendingUp, Users, Target, DollarSign, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
+import { BarChart3, Trophy, Calendar, TrendingUp, Users, Target, DollarSign, CreditCard, ChevronLeft, ChevronRight, UserPlus } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
@@ -39,12 +39,18 @@ const MyDashboard = () => {
         monthAttend: 0,
         yearAttend: 0,
         totalAttend: 0,
+        // 게스트 참석 통계 — 남의 게스트 모집에 참여한 횟수(내가 호스트인 것 제외).
+        guestMonth: 0,
+        guestYear: 0,
+        guestTotal: 0,
         totalGames: 0,
         wins: 0,
         draws: 0,
         losses: 0,
         winPartners: {},
         lossOpponents: {},
+        // 프로젝트별 통계 (id → { name, icon, color, attend, games, wins, draws, losses })
+        projectStats: {},
     });
     const [userCreatedAt, setUserCreatedAt] = useState(null);
     const [allMeetings, setAllMeetings] = useState([]);
@@ -99,6 +105,36 @@ const MyDashboard = () => {
         const winPartners = {};
         const lossOpponents = {};
 
+        // 프로젝트 마스터 fetch — 이름/아이콘/색 매핑용
+        const projectMap = {};
+        try {
+            const projSnap = await getDocs(collection(db, 'projects'));
+            projSnap.docs.forEach(d => {
+                const p = d.data();
+                if (!p.deleted) projectMap[d.id] = p;
+            });
+        } catch (e) {
+            console.warn('[MyDashboard] projects fetch failed:', e?.code || e);
+        }
+        // 프로젝트별 통계 컨테이너 — projectId → 통계
+        const projectStats = {};
+        const bumpProject = (pid, patch) => {
+            if (!pid) return;
+            if (!projectStats[pid]) {
+                const p = projectMap[pid] || {};
+                projectStats[pid] = {
+                    id: pid,
+                    name: p.name || pid,
+                    icon: p.icon || '📁',
+                    color: p.color || '#3b82f6',
+                    attend: 0, games: 0, wins: 0, draws: 0, losses: 0,
+                };
+            }
+            Object.entries(patch).forEach(([k, v]) => {
+                projectStats[pid][k] += v;
+            });
+        };
+
         // Helper: get display name from email key
         const getNameFromEmail = (emailKey) => {
             if (!emailKey) return emailKey;
@@ -114,6 +150,7 @@ const MyDashboard = () => {
 
             if (isAttend) {
                 totalAttend++;
+                bumpProject(meeting.projectId, { attend: 1 });
 
                 const meetingDate = meeting.date;
                 if (meetingDate >= monthStart) monthAttend++;
@@ -148,38 +185,69 @@ const MyDashboard = () => {
                 if (!inTeam1 && !inTeam2) return;
 
                 totalGames++;
+                bumpProject(meeting.projectId, { games: 1 });
 
                 if (inTeam1) {
                     const partner = team1.find(n => n !== myName) || '';
                     if (s1 > s2) {
                         wins++;
                         winPartners[partner] = (winPartners[partner] || 0) + 1;
+                        bumpProject(meeting.projectId, { wins: 1 });
                     } else if (s1 === s2) {
                         draws++;
+                        bumpProject(meeting.projectId, { draws: 1 });
                     } else {
                         losses++;
                         team2.forEach(opp => {
                             lossOpponents[opp] = (lossOpponents[opp] || 0) + 1;
                         });
+                        bumpProject(meeting.projectId, { losses: 1 });
                     }
                 } else if (inTeam2) {
                     const partner = team2.find(n => n !== myName) || '';
                     if (s2 > s1) {
                         wins++;
                         winPartners[partner] = (winPartners[partner] || 0) + 1;
+                        bumpProject(meeting.projectId, { wins: 1 });
                     } else if (s2 === s1) {
                         draws++;
+                        bumpProject(meeting.projectId, { draws: 1 });
                     } else {
                         losses++;
                         team1.forEach(opp => {
                             lossOpponents[opp] = (lossOpponents[opp] || 0) + 1;
                         });
+                        bumpProject(meeting.projectId, { losses: 1 });
                     }
                 }
             });
         });
 
-        setStats({ monthAttend, yearAttend, totalAttend, totalGames, wins, draws, losses, winPartners, lossOpponents });
+        // 게스트 참석 카운팅 — guestMeetups 컬렉션에서 내가 게스트(host=false)
+        // 로 로스터에 포함된 문서 수. 월/년/전체 3구간.
+        let guestMonth = 0, guestYear = 0, guestTotal = 0;
+        try {
+            const guestSnap = await getDocs(collection(db, 'guestMeetups'));
+            guestSnap.docs.forEach(d => {
+                const g = d.data();
+                const my = (g.roster || []).find(r => r?.uid === currentUser.uid);
+                if (!my || my.host) return; // 로스터에 없거나 내가 호스트면 제외
+                guestTotal++;
+                if (!g.date) return;
+                // YYYY-MM-DD 문자열 비교로 월/년 판정 (시간 무관)
+                if (g.date.slice(0, 7) === now.toISOString().slice(0, 7)) guestMonth++;
+                if (g.date.slice(0, 4) === String(now.getFullYear())) guestYear++;
+            });
+        } catch (e) {
+            console.warn('[MyDashboard] guest meetups fetch failed:', e?.code || e);
+        }
+
+        setStats({
+            monthAttend, yearAttend, totalAttend,
+            guestMonth, guestYear, guestTotal,
+            totalGames, wins, draws, losses, winPartners, lossOpponents,
+            projectStats,
+        });
         setLoading(false);
     };
 
@@ -356,6 +424,37 @@ const MyDashboard = () => {
                 </div>
             </div>
 
+            {/* 게스트 참석 현황 — 남이 만든 게스트 모집에 게스트로 참여한 횟수 */}
+            <div>
+                <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
+                    <UserPlus size={16} className="text-indigo-500" />
+                    게스트 참석 현황
+                </h2>
+                <div className="grid grid-cols-3 gap-3">
+                    <StatCard
+                        icon={UserPlus}
+                        label="이달 게스트 참석"
+                        value={stats.guestMonth}
+                        color="bg-indigo-500"
+                        sub={`${new Date().getMonth() + 1}${t('common.month')}`}
+                    />
+                    <StatCard
+                        icon={TrendingUp}
+                        label="올해 게스트 참석"
+                        value={stats.guestYear}
+                        color="bg-teal-500"
+                        sub={`${new Date().getFullYear()}${t('common.year')}`}
+                    />
+                    <StatCard
+                        icon={Target}
+                        label="전체 게스트 참석"
+                        value={stats.guestTotal}
+                        color="bg-pink-500"
+                        sub="누적"
+                    />
+                </div>
+            </div>
+
             {/* Monthly Cost Stats */}
             <div>
                 <div className="flex items-center justify-between mb-3">
@@ -428,6 +527,68 @@ const MyDashboard = () => {
                     </div>
                 )}
             </div>
+
+            {/* 프로젝트별 통계 — 참석 · 경기 · 승/무/패 · 승률 */}
+            {Object.keys(stats.projectStats || {}).length > 0 && (
+                <div>
+                    <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
+                        <Trophy size={16} className="text-indigo-500" />
+                        프로젝트별 통계
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {Object.values(stats.projectStats)
+                            .sort((a, b) => (b.attend + b.games) - (a.attend + a.games))
+                            .map(ps => {
+                                const decided = ps.wins + ps.losses;
+                                const rate = decided > 0 ? Math.round((ps.wins / decided) * 100) : 0;
+                                return (
+                                    <div key={ps.id} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <span
+                                                className="w-8 h-8 flex items-center justify-center rounded-lg text-lg shrink-0"
+                                                style={{ background: `${ps.color}18`, border: `1px solid ${ps.color}55` }}
+                                            >{ps.icon}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-bold text-gray-900 truncate" title={ps.name}>{ps.name}</div>
+                                                <div className="text-[11px] text-gray-500">참석 {ps.attend}회 · 경기 {ps.games}회</div>
+                                            </div>
+                                            <div
+                                                className="text-right shrink-0"
+                                                title={`승 ${ps.wins} · 패 ${ps.losses} (무승부 제외 승률)`}
+                                            >
+                                                <div className="text-xs text-gray-400">승률</div>
+                                                <div className="text-lg font-bold" style={{ color: ps.color }}>
+                                                    {decided > 0 ? `${rate}%` : '—'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {ps.games > 0 && (
+                                            <>
+                                                {/* W/D/L 스택 바 */}
+                                                <div className="flex h-2 rounded-full overflow-hidden bg-gray-100 mb-2">
+                                                    {ps.wins > 0 && (
+                                                        <div className="bg-blue-500" style={{ width: `${(ps.wins / ps.games) * 100}%` }} title={`승 ${ps.wins}`} />
+                                                    )}
+                                                    {ps.draws > 0 && (
+                                                        <div className="bg-gray-400" style={{ width: `${(ps.draws / ps.games) * 100}%` }} title={`무 ${ps.draws}`} />
+                                                    )}
+                                                    {ps.losses > 0 && (
+                                                        <div className="bg-red-500" style={{ width: `${(ps.losses / ps.games) * 100}%` }} title={`패 ${ps.losses}`} />
+                                                    )}
+                                                </div>
+                                                <div className="flex justify-between text-[11px] font-semibold">
+                                                    <span className="text-blue-600">승 {ps.wins}</span>
+                                                    <span className="text-gray-500">무 {ps.draws}</span>
+                                                    <span className="text-red-500">패 {ps.losses}</span>
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                    </div>
+                </div>
+            )}
 
             {/* Game Stats */}
             <div>
