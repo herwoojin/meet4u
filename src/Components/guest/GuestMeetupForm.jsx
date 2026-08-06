@@ -30,16 +30,19 @@ const writeDefaults = (v) => {
     try { localStorage.setItem(LS_LAST, JSON.stringify(v)); } catch { /* ignore */ }
 };
 
-const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }) => {
+const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palette: T }) => {
     const isEdit = Boolean(editing);
     const defaults = useMemo(readDefaults, []);
 
-    const [date,   setDate]   = useState(editing?.date   || isoToday());
-    const [start,  setStart]  = useState(editing?.start  || defaults.start || '06:00');
-    const [end,    setEnd]    = useState(editing?.end    || defaults.end   || '08:00');
-    const [place,  setPlace]  = useState(editing?.place  || defaults.place || '');
-    const [level,  setLevel]  = useState(editing?.level  || defaults.level || '3.0');
-    const [type,   setType]   = useState(editing?.type   || defaults.type  || '혼복');
+    // 초기값 우선순위: editing > seed(다른 페이지에서 넘어온 사전값) > localStorage defaults > 기본값.
+    // seed 는 예: 캘린더 미팅에서 "게스트 초대" 로 넘어올 때 날짜/시간/장소가
+    // 미리 채워지고, level=2.5, type=남복 이 기본으로 지정된다.
+    const [date,   setDate]   = useState(editing?.date   || seed?.date   || isoToday());
+    const [start,  setStart]  = useState(editing?.start  || seed?.start  || defaults.start || '06:00');
+    const [end,    setEnd]    = useState(editing?.end    || seed?.end    || defaults.end   || '08:00');
+    const [place,  setPlace]  = useState(editing?.place  || seed?.place  || defaults.place || '');
+    const [level,  setLevel]  = useState(editing?.level  || seed?.level  || defaults.level || '3.0');
+    const [type,   setType]   = useState(editing?.type   || seed?.type   || defaults.type  || '혼복');
     const [cap,    setCap]    = useState(String(editing?.cap ?? defaults.cap ?? 3));
     // 1인당 금액 — 호스트가 직접 지정. 이전 세분류(코트/공/기타) 는 폐기.
     const [perHeadAmount, setPerHeadAmount] = useState(

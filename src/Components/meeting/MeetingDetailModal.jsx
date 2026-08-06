@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Clock, Users, Trash2, Edit, Check, XCircle, AlignLeft, EyeOff, Eye, DollarSign, ShieldCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { X, Clock, Users, Trash2, Edit, Check, XCircle, AlignLeft, EyeOff, Eye, DollarSign, ShieldCheck, UserPlus } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { deleteDoc, doc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { format, isValid } from 'date-fns';
@@ -26,7 +27,26 @@ const unsanitizeEmail = (key) => {
 const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
     const { t, i18n } = useTranslation();
     const { currentUser, isAdmin } = useAuth();
+    const navigate = useNavigate();
     const dateLocale = DATE_FNS_LOCALES[i18n.language?.split('-')[0]] || ko;
+
+    // 게스트 초대: 이 미팅의 일정 정보를 seed 로 담아 /guest-meetups 로 이동.
+    // GuestMeetups 페이지가 seed 를 읽어 GuestMeetupForm 을 자동 오픈한다.
+    const handleInviteGuest = () => {
+        navigate('/guest-meetups', {
+            state: {
+                guestMeetupSeed: {
+                    date: meeting.date || '',
+                    start: meeting.startTime || '',
+                    end: meeting.endTime || '',
+                    place: meeting.location || meeting.title || '',
+                    level: '2.5',
+                    type: '남복',
+                },
+            },
+        });
+        onClose?.();
+    };
 
     if (!meeting) return null;
 
@@ -275,9 +295,22 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                             </div>
                         </div>
                     </div>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100">
-                        <X size={24} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                        {/* 관리자 원형 버튼 — 관리자에게만 노출. 참석/불참 강제 지정 UI 오픈. */}
+                        {isAdmin && (
+                            <button
+                                onClick={() => setAdminEditorOpen(true)}
+                                title="관리자 수정 — 등록된 회원의 참석/불참 강제 지정"
+                                aria-label="관리자 수정"
+                                className="w-9 h-9 flex items-center justify-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 hover:border-amber-300 transition-colors shadow-sm"
+                            >
+                                <ShieldCheck size={16} />
+                            </button>
+                        )}
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100">
+                            <X size={24} />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Content */}
@@ -417,7 +450,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                     {meeting.status !== 'completed' && (
                         <div>
                             <h3 className="text-sm font-bold text-gray-900 mb-3">{t('meeting.responseTitle')}</h3>
-                            <div className={`grid ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-3 mb-4`}>
+                            <div className="grid grid-cols-3 gap-3 mb-4">
                                 <button
                                     onClick={() => setSelectedStatus('attend')}
                                     className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border ${selectedStatus === 'attend'
@@ -436,15 +469,14 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                 >
                                     <XCircle size={16} /> {t('meeting.decline')}
                                 </button>
-                                {isAdmin && (
-                                    <button
-                                        onClick={() => setAdminEditorOpen(true)}
-                                        className="py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border bg-white text-amber-700 border-amber-300 hover:bg-amber-50 hover:border-amber-400"
-                                        title="등록된 회원을 골라 참석/불참 직접 지정"
-                                    >
-                                        <ShieldCheck size={16} /> 관리자수정
-                                    </button>
-                                )}
+                                {/* 게스트 초대 — 이 미팅의 일정을 seed 로 담아 게스트 모집 폼을 열어준다. */}
+                                <button
+                                    onClick={handleInviteGuest}
+                                    className="py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50 hover:border-indigo-400"
+                                    title="이 일정으로 게스트 모집 만들기"
+                                >
+                                    <UserPlus size={16} /> 게스트 초대
+                                </button>
                             </div>
                             <button
                                 onClick={saveResponse}

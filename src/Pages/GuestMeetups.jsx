@@ -4,6 +4,7 @@
 // 동작한다. 데이터 소스는 lib/guestMeetups.js 의 guestMeetups 컬렉션.
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { collection, doc, onSnapshot, orderBy, query, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -275,6 +276,24 @@ const GuestMeetups = () => {
     const [detailId, setDetailId] = useState(null);
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState(null);
+    // 다른 페이지(MeetingDetailModal 등) 에서 이 페이지로 넘어올 때 미리 채워
+    // 놓을 값. editing 과 달리 id 가 없어 저장 시 createMeetup 흐름을 탄다.
+    const [seed, setSeed] = useState(null);
+
+    // 라우터 state 로 넘어온 guestMeetupSeed 를 감지해 폼 자동 오픈.
+    const location = useLocation();
+    const navigate = useNavigate();
+    useEffect(() => {
+        const s = location.state?.guestMeetupSeed;
+        if (s) {
+            setSeed(s);
+            setEditing(null);
+            setFormOpen(true);
+            // 새로고침 시 다시 열리지 않도록 state 정리
+            navigate(location.pathname, { replace: true, state: null });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // 실시간 구독
     useEffect(() => {
@@ -682,9 +701,10 @@ const GuestMeetups = () => {
             {formOpen && (
                 <GuestMeetupForm
                     editing={editing}
+                    seed={seed}
                     user={currentUser}
-                    onClose={() => setFormOpen(false)}
-                    onDone={() => { setFormOpen(false); setEditing(null); }}
+                    onClose={() => { setFormOpen(false); setSeed(null); }}
+                    onDone={() => { setFormOpen(false); setEditing(null); setSeed(null); }}
                     onToast={showToast}
                     palette={T}
                 />
