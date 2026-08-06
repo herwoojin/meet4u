@@ -64,12 +64,12 @@ const showToast = (msg, durationMs = 2200) => {
 
 // 서버로 푸시 알림 요청. 상대가 FCM 토큰을 등록해뒀다면 앱이 닫혀
 // 있어도 잠금화면에 알림이 뜬다. 응답을 기다리지 않고 fire-and-forget.
-const sendPush = ({ type, title, body, url, recipientUids, senderUid }) => {
+const sendPush = ({ type, title, body, url, tag, recipientUids, senderUid }) => {
     try {
         fetch('/.netlify/functions/send-notification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type, title, body, url, recipientUids, senderUid }),
+            body: JSON.stringify({ type, title, body, url, tag, recipientUids, senderUid }),
         }).catch(err => console.warn('[guest] push failed', err));
     } catch (e) {
         console.warn('[guest] push threw', e);
@@ -446,9 +446,23 @@ const GuestMeetups = () => {
                 const r = await joinMeetup(m.id, me);
                 if (r.status === 'joined') {
                     showToast('참가 완료!');
-                    // 내 참가로 인해 모임이 방금 마감됐다면 참가자 전원(발신자
-                    // 제외) 에게 마감 알림 발송. body 는 호스트가 폼에서 지정한
-                    // closingMessage — 없으면 기본 안내 문구.
+                    // ① 매 참가 시마다 호스트에게 개별 알림. tag='gjoin-{mid}' 로
+                    //    통일해 여러 명이 짧은 시간에 참가해도 알림이 하나로 갱신.
+                    if (m.createdBy && m.createdBy !== me.uid) {
+                        const meName = me.displayName || (me.email || '').split('@')[0] || '누군가';
+                        sendPush({
+                            type: 'guest-join',
+                            title: `🎾 ${meName}님 참가!`,
+                            body: `${meetupLabel(m)} 모임에 새 참가자가 있어요.`,
+                            url: `/guest-meetups?open=${m.id}`,
+                            tag: `gjoin-${m.id}`,
+                            recipientUids: [m.createdBy],
+                            senderUid: me.uid,
+                        });
+                    }
+                    // ② 내 참가로 인해 방금 마감됐다면 참가자 전원에게 마감 알림.
+                    //    tag='gfull-{mid}' 로 통일해 사용자 여러 기기에서 delivery
+                    //    받아도 하나만 남는다.
                     if (r.closed) {
                         const allUids = (r.finalRoster || [])
                             .map(x => x.uid)
@@ -460,7 +474,8 @@ const GuestMeetups = () => {
                                 type: 'guest-full',
                                 title: '🎉 모임 마감!',
                                 body: bodyText,
-                                url: '/guest-meetups',
+                                url: `/guest-meetups?open=${m.id}`,
+                                tag: `gfull-${m.id}`,
                                 recipientUids: allUids,
                                 senderUid: me.uid,
                             });
@@ -474,13 +489,14 @@ const GuestMeetups = () => {
                 const r = await leaveMeetup(m.id, me);
                 if (r.promoted) {
                     showToast(`🎉 취소 완료 · 대기 1번 ${r.promoted.name} 님이 자동 참가했어요`, 5000);
-                    // 승격된 사람에게 푸시 — 앱을 열지 않아도 잠금화면에 뜬다
+                    // 승격된 사람에게 푸시 — tag='gpromo-{mid}-{uid}' 로 개인 고유.
                     if (r.promoted.uid && r.promoted.uid !== me.uid) {
                         sendPush({
                             type: 'guest-promoted',
                             title: '🎉 대기 → 참가 확정!',
                             body: `${meetupLabel(m)} 모임에 자동 참가됐어요.`,
-                            url: '/guest-meetups',
+                            url: `/guest-meetups?open=${m.id}`,
+                            tag: `gpromo-${m.id}-${r.promoted.uid}`,
                             recipientUids: [r.promoted.uid],
                             senderUid: me.uid,
                         });

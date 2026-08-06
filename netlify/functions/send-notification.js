@@ -20,6 +20,13 @@ const headers = {
     'Content-Type': 'application/json',
 };
 
+// Web Push Topic 헤더는 URL-safe base64 · 최대 32자만 허용된다.
+// tag 문자열을 안전하게 변환: 영숫자/_/- 만 남기고 32자로 컷.
+const sanitizeTopic = (tag) => {
+    const s = String(tag || '').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 32);
+    return s || 'default';
+};
+
 export const handler = async (event) => {
     if (event.httpMethod === 'OPTIONS') {
         return { statusCode: 200, headers, body: '' };
@@ -32,6 +39,7 @@ export const handler = async (event) => {
     try {
         const {
             type, title, body, url,           // url 은 알림 클릭 시 이동할 경로
+            tag,                              // 안정 태그 — 같은 tag 는 SW 가 자동 교체
             recipientEmails, recipientUids,   // 둘 중 하나 (게스트 모집은 uid 로 저장)
             senderEmail, senderUid,           // 자기 자신은 알림 제외
         } = JSON.parse(event.body);
@@ -95,12 +103,13 @@ export const handler = async (event) => {
         // Build FCM message for each token and send in batch
         const messages = tokens.map(({ token }) => ({
             token,
-            // data 필드는 string 만 허용. url 은 옵션.
+            // data 필드는 string 만 허용. url·tag 는 옵션.
             data: {
                 type: String(type),
                 title: String(title),
                 body: String(body),
                 ...(url ? { url: String(url) } : {}),
+                ...(tag ? { tag: String(tag) } : {}),
             },
             android: { priority: 'high' },
             apns: {
@@ -114,7 +123,15 @@ export const handler = async (event) => {
                 },
             },
             webpush: {
-                headers: { Urgency: 'high', TTL: '86400' },
+                // Topic 헤더는 web push 사양의 dedup 키. 같은 Topic 을 가진 아직
+                // 전달되지 않은 메시지는 서버가 최신 것만 남기고 나머지는 폐기.
+                // 오프라인 상태 후 접속 시 예전 알림들이 한꺼번에 밀려오는 문제를
+                // 원천 차단. URL-safe base64 형식 · 최대 32자.
+                headers: {
+                    Urgency: 'high',
+                    TTL: '86400',
+                    ...(tag ? { Topic: sanitizeTopic(tag) } : {}),
+                },
                 // notification 필드 제거 — data-only 메시지로 전송
                 // 브라우저 자동 알림 방지, SW onBackgroundMessage에서만 알림 표시
             },

@@ -843,6 +843,17 @@ const GlobalChat = () => {
         firstLoadRef.current = true;
         spokenIdsRef.current = new Set();
         try { audioRef.current?.pause(); audioRef.current = null; } catch (_) { /* ignore */ }
+
+        // 방을 열면 그 방의 미읽 알림(SW 에 남아 있던 chat-{roomId} 태그) 을 지운다.
+        // → 사용자가 앱에서 확인한 알림이 잠금화면에 남지 않도록.
+        try {
+            if (selectedRoomId && navigator.serviceWorker?.controller) {
+                navigator.serviceWorker.controller.postMessage({
+                    type: 'CLEAR_NOTIF',
+                    tag: `chat-${selectedRoomId}`,
+                });
+            }
+        } catch (_) { /* ignore */ }
     }, [selectedRoomId]);
 
     // Persist auto-voice toggle
@@ -1153,7 +1164,9 @@ const GlobalChat = () => {
             });
             setNewMessage('');
 
-            // Fire background push to other room members
+            // Fire background push to other room members.
+            // tag='chat-{roomId}' 로 통일 → 같은 방의 여러 메세지 알림이 하나로
+            // 겹쳐서 최신 것만 보이게 되므로, 예전 알림이 쌓이는 문제 해결.
             const recipientEmails = (selectedRoom?.members || []).filter(e => e && e !== myEmail);
             const roomName = selectedRoom?.name || '';
             if (recipientEmails.length > 0) {
@@ -1166,6 +1179,8 @@ const GlobalChat = () => {
                             ? `💬 [${roomName}] ${senderName}`
                             : `💬 ${senderName}`,
                         body: textToSend.length > 100 ? textToSend.slice(0, 100) + '...' : textToSend,
+                        tag: `chat-${selectedRoomId}`,
+                        url: '/chat-check',
                         recipientEmails,
                         senderEmail: currentUser.email,
                     }),
@@ -1209,7 +1224,7 @@ const GlobalChat = () => {
                 readBy: [myEmail],
             });
 
-            // Push notification
+            // Push notification (tag 는 채팅 텍스트와 같은 chat-{roomId} 로 통일)
             const recipientEmails = (selectedRoom?.members || []).filter(e => e && e !== myEmail);
             const roomName = selectedRoom?.name || '';
             if (recipientEmails.length > 0) {
@@ -1220,6 +1235,8 @@ const GlobalChat = () => {
                         type: 'globalChat',
                         title: roomName ? `📷 [${roomName}] ${senderName}` : `📷 ${senderName}`,
                         body: '사진을 보냈습니다',
+                        tag: `chat-${selectedRoomId}`,
+                        url: '/chat-check',
                         recipientEmails,
                         senderEmail: currentUser.email,
                     }),

@@ -121,6 +121,9 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                 ])).map(e => e.toLowerCase());
 
                 if (allRecipients.length > 0) {
+                    // tag='attend-{meetingId}' 로 통일 → 같은 미팅에 여러 명이
+                    // 참석 변경해도 알림이 하나로 갱신되고, 오프라인 후 접속 시
+                    // 밀린 알림도 마지막 것만 보인다.
                     fetch('/.netlify/functions/send-notification', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -128,6 +131,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                             type: 'attendance',
                             title: t('meeting.attendanceNotifTitle'),
                             body: t('meeting.attendanceNotifBody', { name: senderName, title: meeting.title }),
+                            tag: `attend-${meeting.id}`,
                             recipientEmails: allRecipients,
                             senderEmail: currentUser.email,
                         }),
