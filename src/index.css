@@ -446,3 +446,25 @@ html.theme-paper ::placeholder { color: rgba(60, 40, 20, 0.4) !important; }
     }
     .celestial-loom { opacity: 0.35; }
 }
+
+/* ============================================================
+   PIN LABEL — 저 여기있어요 지도의 마커 아래 노출되는 2글자 라벨
+   Leaflet 의 permanent Tooltip 을 재활용. 기본 스타일을 제거하고
+   깔끔한 pill 형태로 표시.
+   ============================================================ */
+.leaflet-tooltip.pin-label-tooltip {
+    background: rgba(23, 26, 51, 0.88);
+    color: #fff;
+    border: 0;
+    border-radius: 10px;
+    padding: 2px 8px;
+    font-weight: 800;
+    font-size: 11px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+}
+/* Leaflet 이 기본으로 그리는 꼬리 삼각형은 숨김 */
+.leaflet-tooltip.pin-label-tooltip::before {
+    display: none;
+}

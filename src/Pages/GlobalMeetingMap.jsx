@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query, orderBy, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -159,6 +159,19 @@ const MapFlyTo = ({ target }) => {
     return null;
 };
 
+// 현재 지도 zoom 을 상위 state 로 브로드캐스트. 마커 라벨(핀 아래 두 글자)
+// 을 zoom 임계값 이상에서만 렌더하는 데 쓴다.
+const ZoomWatcher = ({ onZoom }) => {
+    const map = useMap();
+    useEffect(() => {
+        const emit = () => onZoom(map.getZoom());
+        emit();
+        map.on('zoomend', emit);
+        return () => map.off('zoomend', emit);
+    }, [map, onZoom]);
+    return null;
+};
+
 // 핀 검색 결과 클릭 시, flyTo 애니메이션이 끝난 후 지도의 모든 마커 레이어를
 // 훑어 해당 좌표의 마커를 찾아 openPopup() 을 호출한다.
 // <Marker ref={...}> 를 <MarkerClusterGroup> 내부에서 쓰면 react-leaflet-cluster
@@ -256,6 +269,9 @@ const GlobalMeetingMap = () => {
     const pendingCardRef = useRef(null);
     // 검색 결과에서 선택된 핀 좌표. <OpenPinPopup> 이 감시해 flyTo 후 자동으로 팝업 open.
     const [pinToOpen, setPinToOpen] = useState(null);
+    // 마커 라벨 노출을 위한 zoom 추적 (임계값 이상에서만 라벨 표시)
+    const [mapZoom, setMapZoom] = useState(13);
+    const LABEL_MIN_ZOOM = 14;
 
     // Map toggle
     const [showMap, setShowMap] = useState(() => {
@@ -848,6 +864,7 @@ const GlobalMeetingMap = () => {
                             <ClickToPin onPick={handleMapClick} />
                             {flyToTarget && <MapFlyTo target={flyToTarget} />}
                             {pinToOpen && <OpenPinPopup target={pinToOpen} />}
+                            <ZoomWatcher onZoom={setMapZoom} />
 
                             {/* Pending (unsaved) pin */}
                             {pendingPin && (
@@ -879,12 +896,27 @@ const GlobalMeetingMap = () => {
                                 disableClusteringAtZoom={17}
                                 iconCreateFunction={createClusterIcon}
                             >
-                                {pins.map((pin) => (
+                                {pins.map((pin) => {
+                                    // 라벨: 제목 우선, 없으면 주소. 앞 2글자만.
+                                    const label = ((pin.title || pin.address || '').trim()).slice(0, 2);
+                                    return (
                                     <Marker
                                         key={pin.id}
                                         position={[pin.lat, pin.lng]}
                                         icon={savedPinIcon}
                                     >
+                                        {/* zoom 이 임계값 이상일 때만 핀 아래 라벨 표시.
+                                            direction=bottom, offset 으로 핀 아래로 살짝 내린다. */}
+                                        {label && mapZoom >= LABEL_MIN_ZOOM && (
+                                            <Tooltip
+                                                permanent
+                                                direction="bottom"
+                                                offset={[0, 10]}
+                                                className="pin-label-tooltip"
+                                            >
+                                                {label}
+                                            </Tooltip>
+                                        )}
                                         <Popup>
                                             <div className="p-1 min-w-[180px]">
                                                 {pin.title && <h3 className="font-bold text-slate-800 mb-1">{pin.title}</h3>}
@@ -909,7 +941,8 @@ const GlobalMeetingMap = () => {
                                             </div>
                                         </Popup>
                                     </Marker>
-                                ))}
+                                    );
+                                })}
                             </MarkerClusterGroup>
 
                             {/* My (one-time) current location dot */}
