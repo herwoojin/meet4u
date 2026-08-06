@@ -266,7 +266,8 @@ const GuestMeetups = () => {
     const [loading, setLoading] = useState(true);
 
     // Filter state
-    const [scope, setScope] = useState('open');
+    // 기본 탭은 '전체보기'. 사용자가 페이지 진입할 때마다 초기 상태로 전체보기 노출.
+    const [scope, setScope] = useState('all');
     const [places, setPlaces] = useState([]);
     const [levels, setLevels] = useState([]);
     const [types, setTypes] = useState([]);
@@ -497,30 +498,8 @@ const GuestMeetups = () => {
         }
     };
 
-    // 카톡 공유용 텍스트 만들기 (모집중 일정 요약)
-    const buildKakaoShareText = () => {
-        const open = meetups
-            .filter(m => !isClosed(m))
-            .sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
-        if (open.length === 0) return '📢 지금 모집중인 게스트 모임이 없어요.';
-        const url = typeof window !== 'undefined' ? window.location.origin + '/guest-meetups' : '';
-        const lines = ['🎾 모집중인 게스트 모임', ''];
-        open.slice(0, 10).forEach(m => {
-            const left = capTotal(m) - (m.roster?.length || 0);
-            lines.push(
-                `• ${m.date.slice(5)} (${dayName(m.date)}) ${m.start}~${m.end} · ${m.place}`,
-                `  NTRP ${m.level} / ${m.type} · 남은 ${left}자리 · 1인 ${perHead(m).toLocaleString()}원`,
-            );
-        });
-        if (url) lines.push('', `👉 ${url}`);
-        return lines.join('\n');
-    };
-
-    const handleShare = async () => {
-        const text = buildKakaoShareText();
-        const ok = await copyToClipboard(text);
-        showToast(ok ? '📋 클립보드에 복사됨 — 톡방에 붙여넣기!' : '복사 실패');
-    };
+    // '톡에 공유' 는 이제 각 상세 팝업에만 두므로 요약 텍스트 빌더는 제거.
+    // 링크복사만 헤더에 남긴다.
 
     const handleShareLink = async () => {
         const url = typeof window !== 'undefined' ? window.location.origin + '/guest-meetups' : '';
@@ -556,7 +535,6 @@ const GuestMeetups = () => {
                         <div style={{ fontWeight: 800, fontSize: 18, letterSpacing: '-0.3px' }}>🎾 게스트 모집</div>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             <GhostBtn onClick={handleShareLink}>🔗 링크복사</GhostBtn>
-                            <GhostBtn onClick={handleShare}>📋 톡에 공유</GhostBtn>
                             {/* 헤더로 승격된 모임 만들기 CTA — 어두운 톤으로 강조 */}
                             <button
                                 type="button"
