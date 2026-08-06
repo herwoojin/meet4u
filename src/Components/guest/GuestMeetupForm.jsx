@@ -8,7 +8,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-    PLACES, LEVELS, TYPES, BANKS,
+    LEVELS, TYPES, BANKS,
     createMeetup, updateMeetupMeta,
 } from '../../lib/guestMeetups';
 
@@ -37,7 +37,7 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
     const [date,   setDate]   = useState(editing?.date   || isoToday());
     const [start,  setStart]  = useState(editing?.start  || defaults.start || '06:00');
     const [end,    setEnd]    = useState(editing?.end    || defaults.end   || '08:00');
-    const [place,  setPlace]  = useState(editing?.place  || defaults.place || PLACES[0]);
+    const [place,  setPlace]  = useState(editing?.place  || defaults.place || '');
     const [level,  setLevel]  = useState(editing?.level  || defaults.level || '3.0');
     const [type,   setType]   = useState(editing?.type   || defaults.type  || '혼복');
     const [cap,    setCap]    = useState(String(editing?.cap ?? defaults.cap ?? 3));
@@ -146,10 +146,13 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
                         <F T={T} label="종료"><input type="time" value={end} onChange={(e) => setEnd(e.target.value)} style={inputStyle(T)} /></F>
                     </G2>
                     <F T={T} label="장소(코트)">
-                        <input list="places-suggest" value={place} onChange={(e) => setPlace(e.target.value)} style={inputStyle(T)} />
-                        <datalist id="places-suggest">
-                            {PLACES.map(p => <option key={p} value={p} />)}
-                        </datalist>
+                        <input
+                            type="text"
+                            value={place}
+                            onChange={(e) => setPlace(e.target.value)}
+                            placeholder="예: 삼성동 실내코트 1번"
+                            style={inputStyle(T)}
+                        />
                     </F>
                     <G2>
                         <F T={T} label="실력(NTRP)">

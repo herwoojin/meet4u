@@ -8,7 +8,7 @@ import { collection, doc, onSnapshot, orderBy, query, writeBatch } from 'firebas
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import {
-    COLLECTION, PLACE_PREFIXES, LEVELS, TYPES, placePrefix,
+    COLLECTION, LEVELS, TYPES, placePrefix,
     capTotal, isClosed, findRosterIndex, findWaitIndex, perHead,
     joinMeetup, leaveMeetup, waitMeetup, cancelWait,
 } from '../lib/guestMeetups';
@@ -336,11 +336,12 @@ const GuestMeetups = () => {
         return Array.from(map.entries());
     }, [visible]);
 
-    // 장소 필터 chip 목록 — 프리셋(PLACE_PREFIXES) + 실제 등록된 모임에서 뽑은
-    // prefix 를 합집합으로. 호스트가 새 장소를 넣어 모임을 만들면 자동으로
-    // 그 prefix 가 chip 에 나타난다.
+    // 장소 필터 chip 목록 — 오직 등록된 모임에서 뽑은 prefix 만 사용.
+    // 프리셋 시드는 없다. 호스트가 모임을 만들 때 적은 장소가 그대로
+    // 필터의 원천이 되고, 관리자는 chip 옆 ✏️/🗑 로 이름을 바꾸거나
+    // 관련 모임을 일괄 삭제해서 관리한다.
     const dynamicPrefixes = useMemo(() => {
-        const set = new Set(PLACE_PREFIXES);
+        const set = new Set();
         meetups.forEach(m => {
             const p = placePrefix(m.place);
             if (p) set.add(p);
@@ -560,6 +561,11 @@ const GuestMeetups = () => {
 
                     {/* Filters */}
                     <FilterRow label="장소">
+                        {dynamicPrefixes.length === 0 && (
+                            <span style={{ fontSize: 12, color: T.sub, paddingTop: 6 }}>
+                                아직 등록된 장소가 없어요 — 모임을 만들면 여기에 자동 추가됩니다.
+                            </span>
+                        )}
                         {dynamicPrefixes.map(p => (
                             <span key={p} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                                 <Chip label={p} active={places.includes(p)}
