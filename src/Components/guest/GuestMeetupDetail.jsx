@@ -20,12 +20,11 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
     const dayName = (dateStr) =>
         ['일', '월', '화', '수', '목', '금', '토'][new Date(dateStr + 'T00:00:00').getDay()];
 
-    const copyAcc = async () => {
-        const text = `${m.bank?.bank || ''} ${m.bank?.acc || ''} (${m.bank?.holder || ''})`.trim();
+    const copyText = async (text, successMsg) => {
         try {
             if (navigator.clipboard?.writeText) {
                 await navigator.clipboard.writeText(text);
-                onToast('📋 계좌 정보 복사됨');
+                onToast(successMsg);
                 return;
             }
         } catch (_) { /* fall through */ }
@@ -34,7 +33,39 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
         document.body.appendChild(ta); ta.select();
         document.execCommand('copy');
         document.body.removeChild(ta);
-        onToast('📋 계좌 정보 복사됨');
+        onToast(successMsg);
+    };
+
+    const copyAcc = () =>
+        copyText(`${m.bank?.bank || ''} ${m.bank?.acc || ''} (${m.bank?.holder || ''})`.trim(),
+                 '📋 계좌 정보 복사됨');
+
+    // 톡에 공유: 이 모임 정보를 카톡에 붙여넣기 좋은 텍스트 + 딥링크로 복사.
+    // 딥링크는 hanguk.netlify.app/#/guest-meetups?open=<id> 형태.
+    // 상대가 이 링크를 눌러 로그인/앱 접속 후 자동으로 이 모임 상세가 열린다.
+    const handleShareToTalk = () => {
+        const dstr = m.date || '';
+        const p = dstr.split('-');
+        const md = p.length === 3 ? `${Number(p[1])}/${Number(p[2])}(${dayName(dstr)})` : dstr;
+        const total = capTotal(m);
+        const left = Math.max(0, total - (m.roster?.length || 0));
+        const url = typeof window !== 'undefined'
+            ? `${window.location.origin}/#/guest-meetups?open=${m.id}`
+            : '';
+        const lines = [
+            `🎾 [${md}] 게스트 모집`,
+            `📍 ${m.place || ''}`,
+            `⏰ ${m.start || ''} ~ ${m.end || ''}`,
+            `🎯 NTRP ${m.level || '-'} · ${m.type || '-'}`,
+            `👥 ${cl ? '마감' : `남은 ${left}자리`} · 총 ${total}명`,
+            `💰 1인 ${head.toLocaleString()}원`,
+        ];
+        if (m.bank?.bank && m.bank?.acc) {
+            lines.push(`🏦 ${m.bank.bank} ${m.bank.acc} (${m.bank.holder || ''})`);
+        }
+        if (m.note) lines.push(`📝 ${m.note}`);
+        lines.push('', `👉 참가하기: ${url}`);
+        copyText(lines.join('\n'), '📋 톡용 안내 복사됨 — 톡방에 붙여넣기!');
     };
 
     const togglePaid = async (targetUid, currentPaid) => {
@@ -83,14 +114,26 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                 }}
             >
                 {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <b style={{ fontSize: 17 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}>
+                    <b style={{ fontSize: 17, flex: 1, minWidth: 0 }}>
                         {Number(m.date.split('-')[1])}월 {Number(m.date.split('-')[2])}일 ({dayName(m.date)}) · {m.place}
                     </b>
-                    <button onClick={onClose} style={{
-                        fontSize: 20, color: T.sub, background: 'none',
-                        border: 0, cursor: 'pointer', padding: '0 4px',
-                    }}>×</button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {/* 톡에 공유 — 이 모임 상세 URL + 요약 텍스트를 클립보드에 복사 */}
+                        <button
+                            onClick={handleShareToTalk}
+                            title="이 모임 정보와 링크를 클립보드에 복사"
+                            style={{
+                                border: `1px solid ${T.line}`, background: T.card,
+                                borderRadius: 999, padding: '6px 10px', fontSize: 12.5,
+                                fontWeight: 700, color: T.ink, cursor: 'pointer',
+                            }}
+                        >📋 톡에 공유</button>
+                        <button onClick={onClose} style={{
+                            fontSize: 20, color: T.sub, background: 'none',
+                            border: 0, cursor: 'pointer', padding: '0 4px',
+                        }}>×</button>
+                    </div>
                 </div>
 
                 {/* Time / meta */}

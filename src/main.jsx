@@ -21,6 +21,19 @@ if (
     // replace 후 페이지가 리로드되므로 아래 코드는 실행되지 않음
 }
 
+// ── 게스트 모집 딥링크 캡처 ────────────────────────────────────────
+// 카톡에서 공유된 URL 형태: https://hanguk.netlify.app/#/guest-meetups?open=<id>
+// 로그인이 필요한 상태였다면 PrivateRoute 가 /login 으로 리다이렉트하며
+// hash 에서 ?open=<id> 부분이 사라진다. 앱 마운트 전에 미리 sessionStorage
+// 에 stash 해 두고, GuestMeetups 페이지가 로드되면 자동으로 상세 팝업을 연다.
+try {
+    const h = window.location.hash || '';
+    const m = h.match(/[?&]open=([^&]+)/);
+    if (m && m[1]) {
+        sessionStorage.setItem('guest_pending_open', decodeURIComponent(m[1]));
+    }
+} catch (_) { /* ignore */ }
+
 // Clear old workbox/SW caches (but preserve Firestore offline cache)
 if ('caches' in window) {
     caches.keys().then(names => {

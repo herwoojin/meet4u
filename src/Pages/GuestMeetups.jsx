@@ -295,6 +295,23 @@ const GuestMeetups = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // 딥링크 자동 오픈. URL query(?open=id) 우선, 없으면 main.jsx 가 stash 한
+    // sessionStorage.guest_pending_open 을 사용(로그인 리다이렉트로 잃어버린 경우).
+    useEffect(() => {
+        let openId = '';
+        try {
+            openId = new URLSearchParams(location.search).get('open') || '';
+        } catch (_) { /* ignore */ }
+        if (!openId) {
+            try {
+                openId = sessionStorage.getItem('guest_pending_open') || '';
+                if (openId) sessionStorage.removeItem('guest_pending_open');
+            } catch (_) { /* ignore */ }
+        }
+        if (openId) setDetailId(openId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.search]);
+
     // 실시간 구독
     useEffect(() => {
         const q = query(collection(db, COLLECTION), orderBy('date', 'asc'));
