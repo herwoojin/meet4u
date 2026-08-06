@@ -269,9 +269,10 @@ const GlobalMeetingMap = () => {
     const pendingCardRef = useRef(null);
     // 검색 결과에서 선택된 핀 좌표. <OpenPinPopup> 이 감시해 flyTo 후 자동으로 팝업 open.
     const [pinToOpen, setPinToOpen] = useState(null);
-    // 마커 라벨 노출을 위한 zoom 추적 (임계값 이상에서만 라벨 표시)
-    const [mapZoom, setMapZoom] = useState(13);
-    const LABEL_MIN_ZOOM = 14;
+    // 마커 라벨 노출을 위한 zoom 추적. 도시 규모(zoom 10~) 정도부터 이미
+    // 개별 핀이 클러스터에서 분리돼 보이는 경우가 많아 그때부터 라벨을 노출.
+    const [mapZoom, setMapZoom] = useState(10);
+    const LABEL_MIN_ZOOM = 10;
 
     // Map toggle
     const [showMap, setShowMap] = useState(() => {
