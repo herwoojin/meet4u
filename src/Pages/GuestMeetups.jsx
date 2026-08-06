@@ -4,7 +4,7 @@
 // 동작한다. 데이터 소스는 lib/guestMeetups.js 의 guestMeetups 컬렉션.
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -256,7 +256,7 @@ const Chip = ({ label, active, kind = 'default', onClick }) => {
 // Main Page
 // ────────────────────────────────────────────────────────────────
 const GuestMeetups = () => {
-    const { currentUser } = useAuth();
+    const { currentUser, isAdmin } = useAuth();
     const me = currentUser
         ? { uid: currentUser.uid, displayName: currentUser.displayName, email: currentUser.email }
         : null;
@@ -335,6 +335,66 @@ const GuestMeetups = () => {
         });
         return Array.from(map.entries());
     }, [visible]);
+
+    // 장소 필터 chip 목록 — 프리셋(PLACE_PREFIXES) + 실제 등록된 모임에서 뽑은
+    // prefix 를 합집합으로. 호스트가 새 장소를 넣어 모임을 만들면 자동으로
+    // 그 prefix 가 chip 에 나타난다.
+    const dynamicPrefixes = useMemo(() => {
+        const set = new Set(PLACE_PREFIXES);
+        meetups.forEach(m => {
+            const p = placePrefix(m.place);
+            if (p) set.add(p);
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'));
+    }, [meetups]);
+
+    // 관리자: 장소 prefix 이름을 일괄 rename. 해당 prefix 를 가진 모든 모임의
+    // place 필드에서 prefix 부분만 새 이름으로 교체(뒷 번호는 유지).
+    const handleRenamePrefix = async (oldPrefix) => {
+        if (!isAdmin) return;
+        const newName = window.prompt(
+            `"${oldPrefix}" 장소명을 무엇으로 바꿀까요?\n(해당 prefix 를 가진 모든 모임이 함께 갱신됩니다)`,
+            oldPrefix,
+        );
+        if (newName == null) return;
+        const trimmed = newName.trim();
+        if (!trimmed || trimmed === oldPrefix) return;
+        const targets = meetups.filter(m => placePrefix(m.place) === oldPrefix);
+        if (targets.length === 0) { showToast('바뀌는 모임이 없어요.'); return; }
+        try {
+            const batch = writeBatch(db);
+            targets.forEach(m => {
+                const newPlace = (m.place || '').replace(oldPrefix, trimmed);
+                batch.update(doc(db, COLLECTION, m.id), { place: newPlace });
+            });
+            await batch.commit();
+            setPlaces(prev => prev.map(p => (p === oldPrefix ? trimmed : p)));
+            showToast(`장소명 "${oldPrefix}" → "${trimmed}" · ${targets.length}건 갱신`);
+        } catch (e) {
+            console.error(e);
+            showToast('갱신 실패: ' + (e.message || ''));
+        }
+    };
+
+    // 관리자: 장소 prefix 를 가진 모든 모임을 일괄 삭제.
+    const handleDeletePrefix = async (prefix) => {
+        if (!isAdmin) return;
+        const targets = meetups.filter(m => placePrefix(m.place) === prefix);
+        if (targets.length === 0) { showToast('삭제할 모임이 없어요.'); return; }
+        if (!window.confirm(
+            `"${prefix}" 장소의 모임 ${targets.length}건을 모두 삭제할까요?\n되돌릴 수 없습니다.`
+        )) return;
+        try {
+            const batch = writeBatch(db);
+            targets.forEach(m => batch.delete(doc(db, COLLECTION, m.id)));
+            await batch.commit();
+            setPlaces(prev => prev.filter(p => p !== prefix));
+            showToast(`"${prefix}" 관련 ${targets.length}건 삭제됨`);
+        } catch (e) {
+            console.error(e);
+            showToast('삭제 실패: ' + (e.message || ''));
+        }
+    };
 
     // Actions
     const runAction = async (action, m) => {
@@ -500,9 +560,35 @@ const GuestMeetups = () => {
 
                     {/* Filters */}
                     <FilterRow label="장소">
-                        {PLACE_PREFIXES.map(p => (
-                            <Chip key={p} label={p} active={places.includes(p)}
-                                onClick={() => toggleChip(places, setPlaces, p)} />
+                        {dynamicPrefixes.map(p => (
+                            <span key={p} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                <Chip label={p} active={places.includes(p)}
+                                    onClick={() => toggleChip(places, setPlaces, p)} />
+                                {isAdmin && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            title={`"${p}" 장소명 일괄 변경`}
+                                            onClick={() => handleRenamePrefix(p)}
+                                            style={{
+                                                border: 'none', background: 'transparent',
+                                                color: T.sub, cursor: 'pointer',
+                                                padding: '2px 3px', fontSize: 11, opacity: 0.7,
+                                            }}
+                                        >✏️</button>
+                                        <button
+                                            type="button"
+                                            title={`"${p}" 관련 모임 모두 삭제`}
+                                            onClick={() => handleDeletePrefix(p)}
+                                            style={{
+                                                border: 'none', background: 'transparent',
+                                                color: T.red, cursor: 'pointer',
+                                                padding: '2px 3px', fontSize: 11, opacity: 0.7,
+                                            }}
+                                        >🗑</button>
+                                    </>
+                                )}
+                            </span>
                         ))}
                     </FilterRow>
                     <FilterRow label="실력 NTRP">

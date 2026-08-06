@@ -73,11 +73,13 @@ export const totalCost = (m) => {
     return (c.court || 0) + (c.ball || 0) + (c.etc || 0);
 };
 
-// 1인당 = 총액 / 목표 인원(호스트 1 + 게스트 cap), 100원 단위 올림.
-// 스펙 완료 기준: 40000+12000, cap=3(총 4명) → 13000 원.
-// 참가자수(roster.length) 가 아니라 capTotal 을 쓰기 때문에, 아직 아무도
-// 참가하지 않아도 "모집이 다 찼을 때" 1인당 예상 금액이 그대로 보인다.
+// 1인당 부담금.
+//   1) 호스트가 perHeadAmount 로 직접 지정한 값이 있으면 그대로 사용.
+//   2) 없으면(레거시 데이터) 총액 / capTotal 을 100원 단위 올림 (구 계산식).
 export const perHead = (m) => {
+    if (typeof m?.perHeadAmount === 'number' && m.perHeadAmount > 0) {
+        return Math.round(m.perHeadAmount);
+    }
     const n = Math.max(1, capTotal(m));
     return Math.ceil(totalCost(m) / n / 100) * 100;
 };
@@ -117,6 +119,9 @@ export const createMeetup = async ({ user, ...data }) => {
         cap: Number(data.cap) || 3,
         roster: [hostEntry],
         wait: [],
+        // 호스트가 직접 지정한 1인당 금액. 이 값이 있으면 perHead 는 이 값을
+        // 그대로 사용한다. cost 세분류(코트/공/기타) 는 레거시 문서 하위호환용.
+        perHeadAmount: Number(data.perHeadAmount) || 0,
         cost: {
             court: Number(data.cost?.court) || 0,
             ball: Number(data.cost?.ball) || 0,

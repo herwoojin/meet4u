@@ -108,21 +108,36 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                     {m.note && <div style={{ marginTop: 8, fontSize: 12.5, color: T.sub, lineHeight: 1.6 }}>📝 {m.note}</div>}
                 </Box>
 
-                {/* 정산 */}
+                {/* 정산 — 호스트가 지정한 1인당 금액을 우선 표시. 레거시 문서
+                    (코트/공/기타 세분류만 있는 옛 데이터) 는 breakdown 유지. */}
                 <Box T={T} title="정산">
-                    <SumRow label="코트 예약비" value={won(m.cost?.court)} T={T} />
-                    <SumRow label="테니스공" value={won(m.cost?.ball)} T={T} />
-                    <SumRow label="기타비용" value={won(m.cost?.etc)} T={T} />
-                    <SumRow label="합계" value={won(total)} bold T={T} />
-                    <div style={{ borderTop: `1px solid ${T.line}`, marginTop: 8, paddingTop: 10 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                            <span style={{ color: T.sub, fontSize: 13 }}>1인당</span>
-                            <span style={{ fontSize: 24, fontWeight: 800, color: T.dark }}>{won(head)}</span>
+                    {typeof m.perHeadAmount === 'number' && m.perHeadAmount > 0 ? (
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <span style={{ color: T.sub, fontSize: 13 }}>1인당</span>
+                                <span style={{ fontSize: 28, fontWeight: 800, color: T.dark }}>{won(head)}</span>
+                            </div>
+                            <div style={{ fontSize: 12, color: T.sub, marginTop: 6 }}>
+                                입금완료 {paid}/{m.roster?.length || 0}명
+                            </div>
                         </div>
-                        <div style={{ fontSize: 12, color: T.sub, marginTop: 4 }}>
-                            입금완료 {paid}/{m.roster?.length || 0}명
-                        </div>
-                    </div>
+                    ) : (
+                        <>
+                            <SumRow label="코트 예약비" value={won(m.cost?.court)} T={T} />
+                            <SumRow label="테니스공" value={won(m.cost?.ball)} T={T} />
+                            <SumRow label="기타비용" value={won(m.cost?.etc)} T={T} />
+                            <SumRow label="합계" value={won(total)} bold T={T} />
+                            <div style={{ borderTop: `1px solid ${T.line}`, marginTop: 8, paddingTop: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                    <span style={{ color: T.sub, fontSize: 13 }}>1인당</span>
+                                    <span style={{ fontSize: 24, fontWeight: 800, color: T.dark }}>{won(head)}</span>
+                                </div>
+                                <div style={{ fontSize: 12, color: T.sub, marginTop: 4 }}>
+                                    입금완료 {paid}/{m.roster?.length || 0}명
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </Box>
 
                 {/* 참가자 */}

@@ -41,9 +41,10 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
     const [level,  setLevel]  = useState(editing?.level  || defaults.level || '3.0');
     const [type,   setType]   = useState(editing?.type   || defaults.type  || '혼복');
     const [cap,    setCap]    = useState(String(editing?.cap ?? defaults.cap ?? 3));
-    const [court,  setCourt]  = useState(String(editing?.cost?.court ?? defaults.cost?.court ?? 40000));
-    const [ball,   setBall]   = useState(String(editing?.cost?.ball  ?? defaults.cost?.ball  ?? 12000));
-    const [etc,    setEtc]    = useState(String(editing?.cost?.etc   ?? defaults.cost?.etc   ?? 0));
+    // 1인당 금액 — 호스트가 직접 지정. 이전 세분류(코트/공/기타) 는 폐기.
+    const [perHeadAmount, setPerHeadAmount] = useState(
+        String(editing?.perHeadAmount ?? defaults.perHeadAmount ?? 13000)
+    );
     // 은행 종류는 편의상 defaults 유지(대부분 같은 은행을 반복 사용).
     const [bankNm, setBankNm] = useState(editing?.bank?.bank || defaults.bank?.bank || '카카오뱅크');
     // 계좌번호 · 예금주는 매번 확인해서 새로 입력하도록 defaults 를 쓰지 않는다.
@@ -63,9 +64,7 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
         setPlace(editing.place);
         setLevel(editing.level); setType(editing.type);
         setCap(String(editing.cap));
-        setCourt(String(editing.cost?.court || 0));
-        setBall(String(editing.cost?.ball || 0));
-        setEtc(String(editing.cost?.etc || 0));
+        setPerHeadAmount(String(editing.perHeadAmount || 0));
         setBankNm(editing.bank?.bank || '카카오뱅크');
         setBankAcc(editing.bank?.acc || '');
         setHolder(editing.bank?.holder || '');
@@ -82,11 +81,7 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
         const payload = {
             date, start, end, place, level, type,
             cap: Math.max(1, Number(cap) || 1),
-            cost: {
-                court: Math.max(0, Number(court) || 0),
-                ball:  Math.max(0, Number(ball)  || 0),
-                etc:   Math.max(0, Number(etc)   || 0),
-            },
+            perHeadAmount: Math.max(0, Number(perHeadAmount) || 0),
             bank: { bank: bankNm, acc: bankAcc, holder },
             note,
             closingMessage,
@@ -103,7 +98,7 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
             // 새로 적도록 일부러 저장하지 않는다(은행 종류만 유지).
             writeDefaults({
                 start, end, place, level, type, cap: payload.cap,
-                cost: payload.cost,
+                perHeadAmount: payload.perHeadAmount,
                 bank: { bank: bankNm },
             });
             onDone();
@@ -170,12 +165,16 @@ const GuestMeetupForm = ({ editing, user, onClose, onDone, onToast, palette: T }
                     </G2>
                 </Box>
 
-                <Box T={T} title="비용 (원)">
-                    <G2>
-                        <F T={T} label="코트비"><input type="number" min="0" step="1000" value={court} onChange={(e) => setCourt(e.target.value)} style={inputStyle(T)} /></F>
-                        <F T={T} label="테니스공"><input type="number" min="0" step="1000" value={ball} onChange={(e) => setBall(e.target.value)} style={inputStyle(T)} /></F>
-                        <F T={T} label="기타"><input type="number" min="0" step="1000" value={etc} onChange={(e) => setEtc(e.target.value)} style={inputStyle(T)} /></F>
-                    </G2>
+                <Box T={T} title="1인당 비용 (원)">
+                    <F T={T} label="게스트 1명이 낼 금액">
+                        <input
+                            type="number" min="0" step="500"
+                            value={perHeadAmount}
+                            onChange={(e) => setPerHeadAmount(e.target.value)}
+                            placeholder="예: 13000"
+                            style={inputStyle(T)}
+                        />
+                    </F>
                 </Box>
 
                 <Box T={T} title="입금 계좌">
