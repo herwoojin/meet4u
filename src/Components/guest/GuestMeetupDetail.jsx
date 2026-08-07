@@ -47,8 +47,16 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
         const dstr = m.date || '';
         const p = dstr.split('-');
         const md = p.length === 3 ? `${Number(p[1])}/${Number(p[2])}(${dayName(dstr)})` : dstr;
-        const total = capTotal(m);
-        const left = Math.max(0, total - (m.roster?.length || 0));
+        // 모달 화면과 동일한 기준으로 통일: 호스트 제외한 게스트 카운트만 노출.
+        //   총 인원 = m.cap (모집인원)
+        //   현재 게스트 = roster.length - (호스트가 있으면 1)
+        //   남은 자리 = 총 인원 - 현재 게스트
+        const cap = Math.max(1, m.cap ?? 0);
+        const guests = Math.max(0, (m.roster?.length || 0) - (m.roster?.[0]?.host ? 1 : 0));
+        const left = Math.max(0, cap - guests);
+        // 1인당 금액 — perHead 헬퍼는 m.perHeadAmount 우선, 없으면 옛 계산식 사용.
+        // 새 스키마에서 m.perHeadAmount 만 저장하므로 이 값을 그대로 신뢰.
+        const amount = perHead(m);
         const url = typeof window !== 'undefined'
             ? `${window.location.origin}/#/guest-meetups?open=${m.id}`
             : '';
@@ -57,8 +65,8 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
             `📍 ${m.place || ''}`,
             `⏰ ${m.start || ''} ~ ${m.end || ''}`,
             `🎯 NTRP ${m.level || '-'} · ${m.type || '-'}`,
-            `👥 ${cl ? '마감' : `남은 ${left}자리`} · 총 ${total}명`,
-            `💰 1인 ${head.toLocaleString()}원`,
+            `👥 ${cl ? '마감' : `남은 ${left}자리`} · ${guests}/${cap}명`,
+            `💰 1인 ${amount.toLocaleString()}원`,
         ];
         if (m.bank?.bank && m.bank?.acc) {
             lines.push(`🏦 ${m.bank.bank} ${m.bank.acc} (${m.bank.holder || ''})`);
