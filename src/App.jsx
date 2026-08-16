@@ -18,6 +18,7 @@ import GlobalMeetingMap from './Pages/GlobalMeetingMap';
 import ProjectsPage from './Pages/Projects';
 import GuestMeetups from './Pages/GuestMeetups';
 import ChatCheck from './Pages/ChatCheck';
+import MobileHome from './Pages/MobileHome';
 import HomeRedirect from './Components/HomeRedirect';
 import KakaoCallback from './Components/auth/KakaoCallback';
 import { useFCM } from './hooks/useFCM';
@@ -65,6 +66,7 @@ const App = () => {
                                     <Route path="/projects" element={<ProjectsPage />} />
                                     <Route path="/guest-meetups" element={<GuestMeetups />} />
                                     <Route path="/chat-check" element={<ChatCheck />} />
+                                    <Route path="/menu" element={<MobileHome />} />
                                 </Routes>
                             </MainLayout>
                         </PrivateRoute>

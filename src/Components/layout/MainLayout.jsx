@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import useCommentNotifications, { requestNotificationPermission } from '../../hooks/useCommentNotifications';
 import useAttendanceNotifications from '../../hooks/useAttendanceNotifications';
@@ -9,7 +10,7 @@ import Sidebar from './Sidebar';
 import LanguageSwitcher from './LanguageSwitcher';
 import ServerCapacityIndicator from './ServerCapacityIndicator';
 import { useRouteTracker } from '../../hooks/useRouteTracker';
-import { Menu, Calendar, Bell, BellRing, BellOff } from 'lucide-react';
+import { Menu, Calendar, Bell, BellRing, BellOff, LayoutGrid } from 'lucide-react';
 
 const MainLayout = ({ children }) => {
     const { t } = useTranslation();
@@ -70,13 +71,21 @@ const MainLayout = ({ children }) => {
             <div className="flex-1 flex flex-col min-h-screen bg-white">
                 {/* Mobile Header */}
                 <header className="bg-white p-4 border-b border-gray-200 flex items-center justify-between md:hidden sticky top-0 z-30">
-                    <div className="flex items-center">
-                        <button onClick={toggleMobileMenu} className="text-gray-500 hover:text-gray-900 mr-4">
-                            <Menu size={24} />
+                    <div className="flex items-center gap-1">
+                        {/* 홈(메뉴) 아이콘 — /menu 로 이동해 큰 카드 홈 화면으로 돌아간다.
+                            /menu 에 있을 때는 노출하지 않는다. */}
+                        <MobileMenuButton />
+                        {/* 사이드바 햄버거 — 여전히 접근성 유지 (프로젝트 스위처 등) */}
+                        <button
+                            onClick={toggleMobileMenu}
+                            className="text-gray-500 hover:text-gray-900 p-1"
+                            aria-label="사이드바 열기"
+                        >
+                            <Menu size={22} />
                         </button>
-                        <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            <Calendar className="text-gray-900" size={20} />
-                            <span className="truncate max-w-[180px]">{displayAppTitle}</span>
+                        <h1 className="text-lg font-bold text-gray-900 flex items-center gap-1.5 ml-1">
+                            <Calendar className="text-gray-900" size={18} />
+                            <span className="truncate max-w-[140px]">{displayAppTitle}</span>
                         </h1>
                     </div>
                     <div className="flex items-center gap-2">
@@ -132,6 +141,23 @@ const MainLayout = ({ children }) => {
             {/* Backend capacity traffic-light — always visible bottom-right */}
             <ServerCapacityIndicator />
         </div>
+    );
+};
+
+// 모바일 헤더의 홈(메뉴) 버튼. 현재 페이지가 /menu 면 노출하지 않는다.
+// 큰 카드 홈으로 즉시 돌아가서 다른 화면으로 이동할 수 있게 해 준다.
+const MobileMenuButton = () => {
+    const location = useLocation();
+    if (location.pathname === '/menu') return null;
+    return (
+        <Link
+            to="/menu"
+            title="메뉴로 돌아가기"
+            aria-label="메뉴로 돌아가기"
+            className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg"
+        >
+            <LayoutGrid size={22} />
+        </Link>
     );
 };
 
