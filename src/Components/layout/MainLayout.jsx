@@ -10,7 +10,7 @@ import Sidebar from './Sidebar';
 import LanguageSwitcher from './LanguageSwitcher';
 import ServerCapacityIndicator from './ServerCapacityIndicator';
 import { useRouteTracker } from '../../hooks/useRouteTracker';
-import { Menu, Calendar, Bell, BellRing, BellOff, LayoutGrid } from 'lucide-react';
+import { Calendar, Bell, BellRing, BellOff, LayoutGrid } from 'lucide-react';
 
 const MainLayout = ({ children }) => {
     const { t } = useTranslation();
@@ -71,21 +71,14 @@ const MainLayout = ({ children }) => {
             <div className="flex-1 flex flex-col min-h-screen bg-white">
                 {/* Mobile Header */}
                 <header className="bg-white p-4 border-b border-gray-200 flex items-center justify-between md:hidden sticky top-0 z-30">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-2">
                         {/* 홈(메뉴) 아이콘 — /menu 로 이동해 큰 카드 홈 화면으로 돌아간다.
-                            /menu 에 있을 때는 노출하지 않는다. */}
+                            /menu 에 있을 때는 노출하지 않는다. 햄버거 사이드바 버튼은
+                            메인 메뉴와 기능이 겹쳐 삭제. */}
                         <MobileMenuButton />
-                        {/* 사이드바 햄버거 — 여전히 접근성 유지 (프로젝트 스위처 등) */}
-                        <button
-                            onClick={toggleMobileMenu}
-                            className="text-gray-500 hover:text-gray-900 p-1"
-                            aria-label="사이드바 열기"
-                        >
-                            <Menu size={22} />
-                        </button>
-                        <h1 className="text-lg font-bold text-gray-900 flex items-center gap-1.5 ml-1">
+                        <h1 className="text-lg font-bold text-gray-900 flex items-center gap-1.5">
                             <Calendar className="text-gray-900" size={18} />
-                            <span className="truncate max-w-[140px]">{displayAppTitle}</span>
+                            <span className="truncate max-w-[160px]">{displayAppTitle}</span>
                         </h1>
                     </div>
                     <div className="flex items-center gap-2">
