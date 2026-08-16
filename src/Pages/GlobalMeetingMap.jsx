@@ -899,7 +899,7 @@ const GlobalMeetingMap = () => {
                             >
                                 {pins.map((pin) => {
                                     // 라벨: 제목 우선, 없으면 주소. 앞 2글자만.
-                                    const label = ((pin.title || pin.address || '').trim()).slice(0, 2);
+                                    const label = ((pin.title || pin.address || '').trim()).slice(0, 4);
                                     return (
                                     <Marker
                                         key={pin.id}
