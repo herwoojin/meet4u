@@ -220,7 +220,7 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
 
             {/* ── 모바일 전용 안내 헤더 ── */}
             <div className="md:hidden px-5 pt-4 pb-3">
-                <h2 className="text-lg font-bold text-blue-900 leading-snug">어디로 가볼까요? 👋</h2>
+                <h2 className="text-lg font-bold text-blue-900 leading-snug">어느 모임에 활동해 볼까요? 👋</h2>
                 <p className="text-xs text-blue-700/70 mt-1">큰 버튼을 눌러 원하는 화면을 여세요</p>
             </div>
 

@@ -11,10 +11,11 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import { useProjects } from '../context/ProjectContext';
 import { useMenuPermissions, canAccessMenu, minRequiredGroup, GROUP_BADGE_SHORT } from '../lib/menuPermissions';
 import {
     Calendar, Home, PlusCircle, Settings, Shield, BarChart3, Globe,
-    Trophy, MessageSquare, ChevronRight,
+    Trophy, MessageSquare, ChevronRight, Folder, FolderPlus, Check,
 } from 'lucide-react';
 
 const MENU_META = {
@@ -79,6 +80,7 @@ const MobileHome = () => {
     const { t } = useTranslation();
     const { userProfile, isAdmin } = useAuth();
     const { permissions } = useMenuPermissions();
+    const { projects, currentProjectId, currentProject, setCurrentProjectId } = useProjects();
 
     const allItems = [
         { key: 'weeklyCalendar', to: '/weekly', icon: Home, label: t('nav.weeklyCalendar') },
@@ -111,12 +113,62 @@ const MobileHome = () => {
         <div className="min-h-[calc(100vh-6rem)] -m-4 md:-m-8 p-4 md:p-6 bg-gradient-to-b from-blue-50 via-indigo-50 to-sky-100">
             <header className="text-center pt-2 pb-5">
                 <h1 className="text-2xl font-extrabold text-blue-900 leading-snug">
-                    어디로 가볼까요? 👋
+                    어느 모임에 활동해 볼까요? 👋
                 </h1>
                 <p className="text-sm text-blue-700/70 mt-1.5">
                     큰 버튼을 눌러 원하는 화면을 여세요
                 </p>
             </header>
+
+            {/* ── 프로젝트 선택 (2개 이상일 때) ── */}
+            {projects.length > 1 && (
+                <div className="max-w-md mx-auto mb-4">
+                    <div className="text-[10px] uppercase tracking-wide text-blue-700/50 font-bold mb-2 flex items-center gap-1 justify-center">
+                        <Folder size={11} /> 내 모임 프로젝트
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap justify-center">
+                        {projects.map(p => {
+                            const active = p.id === currentProjectId;
+                            return (
+                                <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => setCurrentProjectId(p.id)}
+                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${active
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-105'
+                                        : 'bg-white/80 text-blue-800 border-blue-200 hover:bg-white hover:border-blue-300'
+                                    }`}
+                                >
+                                    <span>{p.icon || '📁'}</span>
+                                    <span className="truncate max-w-[120px]">{p.name}</span>
+                                    {active && <Check size={12} className="shrink-0" />}
+                                </button>
+                            );
+                        })}
+                        <Link
+                            to="/projects"
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-semibold text-blue-600 bg-white/70 border border-blue-100 hover:bg-white transition-colors"
+                            title="프로젝트 관리"
+                        >
+                            <FolderPlus size={12} />
+                        </Link>
+                    </div>
+                    {currentProject && (
+                        <p className="text-center text-xs text-blue-600/70 mt-2">
+                            현재: <span className="font-bold text-blue-800">{currentProject.icon || '📁'} {currentProject.name}</span>
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {/* 프로젝트 1개일 때 현재 프로젝트 표시 */}
+            {projects.length === 1 && currentProject && (
+                <div className="max-w-md mx-auto mb-4 text-center">
+                    <p className="text-xs text-blue-600/70">
+                        <span className="font-bold text-blue-800">{currentProject.icon || '📁'} {currentProject.name}</span> 모임
+                    </p>
+                </div>
+            )}
 
             <div className="max-w-md mx-auto space-y-3">
                 {mainItems.map(item => (
