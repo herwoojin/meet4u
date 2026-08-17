@@ -3,8 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { BarChart3, Trophy, Calendar, TrendingUp, Users, Target, DollarSign, CreditCard, ChevronLeft, ChevronRight, UserPlus } from 'lucide-react';
+import { useProjects } from '../context/ProjectContext';
+import { BarChart3, Trophy, Calendar, TrendingUp, Users, Target, DollarSign, CreditCard, ChevronLeft, ChevronRight, UserPlus, BarChart2, Folder } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import AttendanceStats from '../Components/admin/AttendanceStats';
+import CostManagement from '../Components/dashboard/CostManagement';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
@@ -34,6 +37,10 @@ const StatCard = ({ icon: Icon, label, value, color, sub }) => (
 const MyDashboard = () => {
     const { t } = useTranslation();
     const { currentUser } = useAuth();
+    const { projects } = useProjects();
+    // 프로젝트별 참석/비용 통계 뷰의 프로젝트 필터. 'all' 이면 내가 속한
+    // 모든 프로젝트 합산, 특정 id 이면 그 프로젝트만.
+    const [statsProjectFilter, setStatsProjectFilter] = useState('all');
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         monthAttend: 0,
@@ -740,6 +747,77 @@ const MyDashboard = () => {
                     <p className="text-gray-300 text-xs mt-1">{t('myDashboard.joinMeetings')}</p>
                 </div>
             )}
+
+            {/* ============================================================
+                프로젝트별 월별 참석 통계 · 월별 비용 관리
+                (원래 관리자 페이지에 있던 두 탭을 옮겨왔다. 프로젝트별로
+                 별도 집계할 수 있도록 상단에 프로젝트 필터 chip 을 둔다.)
+                ============================================================ */}
+            <div className="pt-4 mt-6 border-t border-gray-200 space-y-6">
+                <div>
+                    <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
+                        <Folder size={16} className="text-indigo-500" />
+                        프로젝트별 상세 통계
+                    </h2>
+                    {projects.length === 0 ? (
+                        <div className="bg-white rounded-xl border border-gray-100 p-5 text-center text-sm text-gray-500">
+                            아직 참여 중인 프로젝트가 없어요.
+                        </div>
+                    ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setStatsProjectFilter('all')}
+                                className={`text-xs px-3 py-1.5 rounded-full border font-semibold ${statsProjectFilter === 'all'
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                }`}
+                            >전체 ({projects.length}개)</button>
+                            {projects.map(p => (
+                                <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => setStatsProjectFilter(p.id)}
+                                    className={`text-xs px-3 py-1.5 rounded-full border font-semibold inline-flex items-center gap-1 ${statsProjectFilter === p.id
+                                        ? 'bg-blue-600 text-white border-blue-600'
+                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    <span>{p.icon || '📁'}</span>{p.name}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* 월별 참석 통계 */}
+                <div>
+                    <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
+                        <BarChart2 size={16} className="text-purple-500" />
+                        월별 참석 통계
+                    </h2>
+                    <AttendanceStats
+                        meetings={statsProjectFilter === 'all'
+                            ? allMeetings.filter(m => projects.some(p => p.id === m.projectId))
+                            : allMeetings.filter(m => m.projectId === statsProjectFilter)}
+                        users={allUsers}
+                    />
+                </div>
+
+                {/* 월별 비용 관리 */}
+                <div>
+                    <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
+                        <DollarSign size={16} className="text-green-500" />
+                        월별 비용 관리
+                    </h2>
+                    <CostManagement
+                        meetings={statsProjectFilter === 'all'
+                            ? allMeetings.filter(m => projects.some(p => p.id === m.projectId))
+                            : allMeetings.filter(m => m.projectId === statsProjectFilter)}
+                        users={allUsers}
+                    />
+                </div>
+            </div>
         </div>
     );
 };
