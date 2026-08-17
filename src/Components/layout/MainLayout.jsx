@@ -10,11 +10,11 @@ import Sidebar from './Sidebar';
 import LanguageSwitcher from './LanguageSwitcher';
 import ServerCapacityIndicator from './ServerCapacityIndicator';
 import { useRouteTracker } from '../../hooks/useRouteTracker';
-import { Calendar, Bell, BellRing, BellOff, LayoutGrid } from 'lucide-react';
+import { Calendar, Bell, BellRing, BellOff, LayoutGrid, LogOut } from 'lucide-react';
 
 const MainLayout = ({ children }) => {
     const { t } = useTranslation();
-    const { activeChatUser, closeChat, userProfile } = useAuth();
+    const { activeChatUser, closeChat, userProfile, logout } = useAuth();
     // 라우트가 바뀔 때마다 마지막 화면을 기억해 다음 로그인 시 복원
     useRouteTracker();
     const displayAppTitle = (userProfile?.appTitle && userProfile.appTitle.trim()) || t('app.name');
@@ -83,6 +83,17 @@ const MainLayout = ({ children }) => {
                     </div>
                     <div className="flex items-center gap-2">
                         <LanguageSwitcher compact />
+                        {/* 로그아웃 — 한국어 옆 원형 아이콘 버튼 */}
+                        <button
+                            onClick={() => {
+                                if (window.confirm(t('nav.logout') + '?')) logout();
+                            }}
+                            title={t('nav.logout')}
+                            aria-label={t('nav.logout')}
+                            className="w-9 h-9 flex items-center justify-center rounded-full bg-white text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
+                        >
+                            <LogOut size={16} />
+                        </button>
                         {notifPermission !== 'unsupported' && (
                             <button
                                 onClick={async () => {

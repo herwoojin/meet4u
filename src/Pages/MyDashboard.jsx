@@ -4,6 +4,7 @@ import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useProjects } from '../context/ProjectContext';
+import { DEFAULT_PROJECT_ID } from '../lib/projects';
 import { BarChart3, Trophy, Calendar, TrendingUp, Users, Target, DollarSign, CreditCard, ChevronLeft, ChevronRight, UserPlus, BarChart2, Folder } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import AttendanceStats from '../Components/admin/AttendanceStats';
@@ -790,6 +791,14 @@ const MyDashboard = () => {
                     )}
                 </div>
 
+                {/* 프로젝트 필터가 적용된 meetings — legacy 문서(projectId 없음)
+                    는 DEFAULT_PROJECT_ID 로 간주해 하위호환. */}
+                {(() => {
+                    // NOTE: 함수 컴포넌트 안의 IIFE 로 필터를 한 번만 계산해 두 섹션에 공유.
+                    // 하지만 JSX 안에서 별도 변수 선언이 어려워 여기선 useMemo 를 상위에 두는 대신
+                    // 인라인 상수로 처리. React 는 매 렌더마다 재계산되지만 O(n) 이라 문제없음.
+                    return null;
+                })()}
                 {/* 월별 참석 통계 */}
                 <div>
                     <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
@@ -797,9 +806,11 @@ const MyDashboard = () => {
                         월별 참석 통계
                     </h2>
                     <AttendanceStats
-                        meetings={statsProjectFilter === 'all'
-                            ? allMeetings.filter(m => projects.some(p => p.id === m.projectId))
-                            : allMeetings.filter(m => m.projectId === statsProjectFilter)}
+                        meetings={allMeetings.filter(m => {
+                            const pid = m.projectId || DEFAULT_PROJECT_ID;
+                            if (statsProjectFilter === 'all') return projects.some(p => p.id === pid);
+                            return pid === statsProjectFilter;
+                        })}
                         users={allUsers}
                     />
                 </div>
@@ -811,9 +822,11 @@ const MyDashboard = () => {
                         월별 비용 관리
                     </h2>
                     <CostManagement
-                        meetings={statsProjectFilter === 'all'
-                            ? allMeetings.filter(m => projects.some(p => p.id === m.projectId))
-                            : allMeetings.filter(m => m.projectId === statsProjectFilter)}
+                        meetings={allMeetings.filter(m => {
+                            const pid = m.projectId || DEFAULT_PROJECT_ID;
+                            if (statsProjectFilter === 'all') return projects.some(p => p.id === pid);
+                            return pid === statsProjectFilter;
+                        })}
                         users={allUsers}
                     />
                 </div>
