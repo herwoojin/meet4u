@@ -1,47 +1,32 @@
 import React, { useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { getUserGroup } from '../lib/menuPermissions';
 
-// Smart entry-point for the root "/" route.
+// 로그인 직후 첫 화면 라우팅 — 회원 등급 기반
 //
-//  • Mobile viewport (< md, 768px)
-//      → 로그인 후 항상 /menu (모바일 큰 카드 홈) 로 진입. 사용자는 카드에서
-//        원하는 화면을 골라 이동하고, 각 페이지 헤더의 홈 아이콘으로 다시 /menu
-//        로 돌아온다.
-//  • First-time desktop visitor (no `meet4u_setup_visited` flag yet)
-//      → mark the flag and send them to /settings so they configure
-//        language, profile, permissions, etc.
-//  • Returning desktop visitor
-//      → restore the last route they were on (saved by useRouteTracker)
-//      → fall back to /global-meeting when nothing is saved.
-
-const SETUP_KEY = 'meet4u_setup_visited';
-const LAST_ROUTE_KEY = 'meet4u_last_route';
-const FALLBACK = '/global-meeting';
-
-const isMobileViewport = () => {
-    try {
-        return typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
-    } catch { return false; }
-};
+//  • 정회원(full) · 특별회원(special) · 관리자(admin)
+//      → /calendar (월간 모임) + 모아보기(list) 뷰 자동 적용
+//        localStorage.meet4u_calendar_view = 'list' 를 미리 세팅해 두면
+//        CalendarGrid 가 mount 될 때 그 값을 읽어 곧바로 list 모드로 열림.
+//  • 일반회원(general) · 프로필 미확정
+//      → /guest-meetups (게스트 모집)
+//
+// 모바일에서도 동일 규칙 적용. /menu 큰 카드 홈은 각 페이지 헤더의 격자
+// 아이콘 버튼으로 언제든 다시 열 수 있음.
 
 const HomeRedirect = () => {
-    const target = useMemo(() => {
-        // 모바일: 로그인 직후 항상 큰 카드 홈으로.
-        if (isMobileViewport()) return '/menu';
+    const { userProfile, isAdmin } = useAuth();
 
-        try {
-            const setupVisited = localStorage.getItem(SETUP_KEY);
-            if (!setupVisited) {
-                localStorage.setItem(SETUP_KEY, '1');
-                return '/settings';
-            }
-            const lastRoute = localStorage.getItem(LAST_ROUTE_KEY);
-            if (lastRoute && lastRoute !== '/' && lastRoute !== '/login') {
-                return lastRoute;
-            }
-        } catch { /* localStorage may be disabled in private mode */ }
-        return FALLBACK;
-    }, []);
+    const target = useMemo(() => {
+        const group = isAdmin ? 'admin' : getUserGroup(userProfile);
+        const isPremium = group === 'full' || group === 'special' || group === 'admin';
+        if (isPremium) {
+            try { localStorage.setItem('meet4u_calendar_view', 'list'); } catch (_) { /* ignore */ }
+            return '/calendar';
+        }
+        return '/guest-meetups';
+    }, [userProfile, isAdmin]);
 
     return <Navigate to={target} replace />;
 };
