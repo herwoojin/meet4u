@@ -2,6 +2,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ⚠️⚠️ 공유 파일 — 반드시 읽을 것 ⚠️⚠️
+    //
+    // 이 규칙은 Firebase 프로젝트(gen-lang-client-0283055211) 전체에 적용된다.
+    // 이 프로젝트는 서로 다른 두 앱이 공유한다:
+    //   - meet4u    (~/meet4u)                  → users, meetings, projects, chats, ...
+    //   - call_map  (~/call_map/global-meet)    → callMap* 네임스페이스
+    //
+    // Firestore 보안 규칙은 프로젝트당 하나뿐이고, 배포하면 전체가 통째로
+    // 덮어써진다. 따라서 두 저장소의 firestore.rules 는 항상 똑같아야 한다.
+    //
+    //   diff ~/meet4u/firestore.rules ~/call_map/global-meet/firestore.rules
+    //
+    // 위 명령 결과가 비어 있어야 정상이다. 한쪽에서만 고치고 배포하면
+    // 다른 앱이 default deny 에 걸려 즉시 죽는다. 규칙을 바꿀 때는
+    // 양쪽 파일을 함께 고치고 한 번만 배포할 것.
+
     // ---------- Helpers ----------
     function isSignedIn() {
       return request.auth != null;
@@ -39,6 +55,25 @@ service cloud.firestore {
       return isSignedIn()
         && exists(/databases/$(database)/documents/globalChatRooms/$(roomId))
         && roomDoc(roomId).data.createdBy == myEmail();
+    }
+
+    // ---------- Helpers: call_map 전용 ----------
+    // 위 roomDoc/isRoomMember/isRoomOwner 는 globalChatRooms 를 보므로
+    // callMapChatRooms 에는 재사용할 수 없다. 같은 로직의 별도 헬퍼가 필요하다.
+    function callMapRoomDoc(roomId) {
+      return get(/databases/$(database)/documents/callMapChatRooms/$(roomId));
+    }
+
+    function isCallMapRoomMember(roomId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/callMapChatRooms/$(roomId))
+        && myEmail() in callMapRoomDoc(roomId).data.members;
+    }
+
+    function isCallMapRoomOwner(roomId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/callMapChatRooms/$(roomId))
+        && callMapRoomDoc(roomId).data.createdBy == myEmail();
     }
 
     // ---------- Users ----------
@@ -117,6 +152,7 @@ service cloud.firestore {
     }
 
     // ---------- Global pins (map) ----------
+    // meet4u 전용. call_map 은 더 이상 이 컬렉션을 쓰지 않는다(callMapPins 참고).
     // Anyone signed-in can read and add pins.
     // Only the creator (or admin) can delete. No updates.
     match /globalPins/{pinId} {
@@ -221,6 +257,82 @@ service cloud.firestore {
     match /config/{configId} {
       allow read:  if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    // ============================================================
+    // call_map 전용 영역 (~/call_map/global-meet)
+    //
+    // meet4u 와 데이터가 섞이지 않도록 분리한 네임스페이스다.
+    // 컬렉션 이름은 call_map 의 src/lib/collections.js 안 COL 값과
+    // 반드시 일치해야 한다. meet4u 는 이 컬렉션들을 쓰지 않지만,
+    // 이 블록을 지우고 배포하면 call_map 사이트가 즉시 죽는다.
+    //
+    // 참고: 아래 규칙은 일부러 isAdmin() 을 쓰지 않는다. isAdmin() 은
+    // meet4u 의 users 컬렉션을 보는데, call_map 사용자는 callMapUsers 에
+    // 있어서 절대 admin 으로 판정되지 않기 때문이다.
+    // ============================================================
+
+    match /callMapUsers/{userId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && myUid() == userId;
+      allow update: if isSignedIn() && myUid() == userId;
+      allow delete: if false;
+    }
+
+    // globalPins 와 달리 update 를 허용한다.
+    // call_map 에는 핀 제목/추가정보를 인라인 편집하는 기능이 있다.
+    match /callMapPins/{pinId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.token.email;
+      allow update: if isSignedIn() && (
+        resource.data.createdBy == request.auth.token.email ||
+        onlyAffects(['additionalInfo', 'title'])
+      );
+      allow delete: if isSignedIn()
+        && resource.data.createdBy == request.auth.token.email;
+    }
+
+    match /callMapLiveLocations/{userId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && myUid() == userId;
+      allow update: if isSignedIn() && myUid() == userId;
+      allow delete: if isSignedIn() && myUid() == userId;
+    }
+
+    match /callMapChatRooms/{roomId} {
+      allow read: if isSignedIn() && myEmail() in resource.data.members;
+
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == myEmail()
+        && (myEmail() in request.resource.data.members);
+
+      // 방장은 전체 수정 가능. 일반 멤버는 "나가기"(자기 이메일만 제거)만 가능.
+      allow update: if isSignedIn() && (
+        resource.data.createdBy == myEmail()
+        ||
+        (
+          myEmail() in resource.data.members
+          && onlyAffects(['members'])
+          && !(myEmail() in request.resource.data.members)
+        )
+      );
+
+      allow delete: if isSignedIn() && resource.data.createdBy == myEmail();
+
+      match /messages/{messageId} {
+        allow read: if isCallMapRoomMember(roomId);
+
+        allow create: if isCallMapRoomMember(roomId)
+          && request.resource.data.senderEmail == request.auth.token.email;
+
+        // readBy arrayUnion 갱신을 위해 멤버의 update 를 허용.
+        allow update: if isCallMapRoomMember(roomId);
+
+        allow delete: if isSignedIn()
+          && (resource.data.senderEmail == request.auth.token.email
+              || isCallMapRoomOwner(roomId));
+      }
     }
 
     // ---------- Default deny ----------

@@ -1,8 +1,24 @@
 rules_version = '2';
 
-// Firebase Storage rules for Meet4U / PromiseU
-// - commentImages/{meetingId}/{uid}/*  — 댓글 첨부 이미지
-// - globalChatImages/{roomId}/{uid}/*  — 글로벌 대화방 이미지
+// ⚠️⚠️ 공유 파일 — 반드시 읽을 것 ⚠️⚠️
+//
+// 이 규칙은 Firebase 프로젝트(gen-lang-client-0283055211) 의 Storage 전체에
+// 적용된다. 이 프로젝트는 서로 다른 두 앱이 공유한다:
+//   - meet4u    (~/meet4u)               → commentImages/, globalChatImages/
+//   - call_map  (~/call_map/global-meet)  → callMapChatImages/
+//
+// Storage 규칙은 버킷당 하나뿐이고 배포하면 전체가 덮어써진다.
+// 두 저장소의 storage.rules 는 항상 똑같아야 한다.
+//
+//   diff ~/meet4u/storage.rules ~/call_map/global-meet/storage.rules
+//
+// 결과가 비어 있어야 정상. 한쪽 경로를 지우고 배포하면 그 앱의
+// 이미지 업로드와 조회가 즉시 막힌다.
+//
+// 경로별 용도:
+//   - commentImages/{meetingId}/{uid}/*    — meet4u 댓글 첨부 이미지
+//   - globalChatImages/{roomId}/{uid}/*    — meet4u 글로벌 대화방 이미지
+//   - callMapChatImages/{roomId}/{uid}/*   — call_map 대화방 이미지
 // 업로드한 본인만 삭제 가능. 로그인한 사용자만 읽기 가능.
 
 service firebase.storage {
@@ -22,6 +38,7 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // ---------- meet4u ----------
     match /commentImages/{meetingId}/{uid}/{fileName} {
       allow read:   if isSignedIn();
       allow create: if isOwner(uid) && isSafeImage();
@@ -30,6 +47,16 @@ service firebase.storage {
     }
 
     match /globalChatImages/{roomId}/{uid}/{fileName} {
+      allow read:   if isSignedIn();
+      allow create: if isOwner(uid) && isSafeImage();
+      allow update: if false;
+      allow delete: if isOwner(uid);
+    }
+
+    // ---------- call_map ----------
+    // 경로 이름은 call_map 의 src/lib/collections.js 안 STORAGE 값과
+    // 반드시 일치해야 한다. 지우고 배포하면 call_map 이미지 전송이 막힌다.
+    match /callMapChatImages/{roomId}/{uid}/{fileName} {
       allow read:   if isSignedIn();
       allow create: if isOwner(uid) && isSafeImage();
       allow update: if false;
