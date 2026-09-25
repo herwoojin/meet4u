@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Calendar, Clock, MapPin, AlignLeft, Loader, DollarSign, User, Plus, Trash2, Search, ChevronDown } from 'lucide-react';
+import { Calendar, Clock, MapPin, AlignLeft, Loader, DollarSign, User, Plus, Trash2, Search, ChevronDown, Sparkles } from 'lucide-react';
+import OcrImportModal from './OcrImportModal';
 import { db } from '../../lib/firebase';
 import { collection, addDoc, doc, updateDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
@@ -102,6 +103,8 @@ const MeetingForm = () => {
     const gcal = useGoogleCalendar();
     const location = useLocation();
     const [loading, setLoading] = useState(false);
+    // 예약 완료 문자 캡처 → OCR 자동 등록 모달
+    const [ocrOpen, setOcrOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editId, setEditId] = useState(null);
     const [allUsers, setAllUsers] = useState([]);
@@ -282,10 +285,23 @@ const MeetingForm = () => {
     return (
         <div className="max-w-2xl mx-auto">
             <h2 className="text-3xl font-bold text-gray-900 mb-2">{isEditing ? t('meeting.editTitle') : t('meeting.newTitle')}</h2>
-            <div className="mb-6 flex items-center gap-2 text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+            <div className="mb-4 flex items-center gap-2 text-sm text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
                 <span className="text-lg">{currentProject.icon || '📁'}</span>
                 <span>이 미팅은 <b className="text-blue-800">{currentProject.name}</b> 프로젝트에 등록됩니다.</span>
             </div>
+
+            {/* 예약 완료 문자 캡처 → 자동 등록 (신규 생성일 때만) */}
+            {!isEditing && (
+                <button
+                    type="button"
+                    onClick={() => setOcrOpen(true)}
+                    className="w-full mb-6 flex items-center justify-center gap-2 py-3.5 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 text-indigo-700 font-bold text-sm hover:bg-indigo-100 hover:border-indigo-400 transition-colors active:scale-[0.99]"
+                >
+                    <Sparkles size={18} />
+                    예약 문자 캡처로 한 번에 등록
+                </button>
+            )}
+
             <form onSubmit={handleSubmit} className="bg-white p-8 rounded-xl border border-gray-200 space-y-6 shadow-sm">
 
                 {/* Title */}
@@ -457,6 +473,12 @@ const MeetingForm = () => {
                     )}
                 </button>
             </form>
+
+            <OcrImportModal
+                open={ocrOpen}
+                onClose={() => setOcrOpen(false)}
+                onDone={() => navigate('/calendar')}
+            />
         </div>
     );
 };
