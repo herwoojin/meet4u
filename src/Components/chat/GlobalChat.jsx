@@ -21,6 +21,7 @@ import ImageLightbox from './ImageLightbox';
 import GrammarPopup from './GrammarPopup';
 import LiveTranslatorModal from './LiveTranslatorModal';
 import MeetingMinutesModal from './MeetingMinutesModal';
+import { SUPPORTED_LANGUAGES, shortLangLabel } from '../../lib/languages';
 import {
     romajiToHangul,
     pinyinToHangul,
@@ -1533,6 +1534,24 @@ const GlobalChat = () => {
                 >
                     <FileText size={16} />
                 </button>
+
+                {/* 내 수신 언어 — 번역의 기준값(users/{uid}.preferredLanguage).
+                    모바일에는 설정 화면 진입 경로가 마땅치 않아 여기서 바로 바꿀 수 있게 둔다.
+                    내 언어 = 메시지 원문 언어 이면 번역을 건너뛰므로, 안 될 때 여기부터 확인. */}
+                <select
+                    value={myLang}
+                    onChange={async (e) => {
+                        try { await updateUserProfile({ preferredLanguage: e.target.value }); }
+                        catch (err) { console.error('언어 저장 실패', err); }
+                    }}
+                    disabled={!currentUser}
+                    title="내가 받을 번역 언어"
+                    className="shrink-0 max-w-[104px] px-2 py-1.5 text-xs font-medium border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-40"
+                >
+                    {SUPPORTED_LANGUAGES.map(l => (
+                        <option key={l.code} value={l.code}>{shortLangLabel(l.code)}</option>
+                    ))}
+                </select>
 
                 {/* New room button */}
                 <button

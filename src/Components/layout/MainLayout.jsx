@@ -10,11 +10,11 @@ import Sidebar from './Sidebar';
 import LanguageSwitcher from './LanguageSwitcher';
 import ServerCapacityIndicator from './ServerCapacityIndicator';
 import { useRouteTracker } from '../../hooks/useRouteTracker';
-import { Calendar, Bell, BellRing, BellOff, LayoutGrid, LogOut } from 'lucide-react';
+import { Calendar, Bell, BellRing, BellOff, LayoutGrid, LogOut, User } from 'lucide-react';
 
 const MainLayout = ({ children }) => {
     const { t } = useTranslation();
-    const { activeChatUser, closeChat, userProfile, logout } = useAuth();
+    const { activeChatUser, closeChat, currentUser, userProfile, logout } = useAuth();
     // 라우트가 바뀔 때마다 마지막 화면을 기억해 다음 로그인 시 복원
     useRouteTracker();
     const displayAppTitle = (userProfile?.appTitle && userProfile.appTitle.trim()) || t('app.name');
@@ -83,6 +83,18 @@ const MainLayout = ({ children }) => {
                     </div>
                     <div className="flex items-center gap-2">
                         <LanguageSwitcher compact />
+                        {/* 내 프로필(별명·사용 언어) — 모바일엔 사이드바 진입로가 없어
+                            여기가 설정 화면으로 가는 상시 통로다. */}
+                        <Link
+                            to="/profile"
+                            title={t('nav.profile', '내 프로필')}
+                            aria-label={t('nav.profile', '내 프로필')}
+                            className="w-9 h-9 flex items-center justify-center rounded-full overflow-hidden bg-white border border-blue-200 hover:bg-blue-50 transition-colors shrink-0"
+                        >
+                            {currentUser?.photoURL
+                                ? <img src={currentUser.photoURL} alt="" className="w-full h-full object-cover" />
+                                : <User size={16} className="text-blue-600" />}
+                        </Link>
                         {/* 로그아웃 — 한국어 옆 원형 아이콘 버튼 */}
                         <button
                             onClick={() => {

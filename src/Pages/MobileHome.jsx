@@ -12,7 +12,8 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useProjects } from '../context/ProjectContext';
-import { useMenuPermissions, canAccessMenu, minRequiredGroup, GROUP_BADGE_SHORT } from '../lib/menuPermissions';
+import { useMenuPermissions, canAccessMenu, minRequiredGroup, GROUP_BADGE_SHORT, getUserGroup, GROUP_LABEL_KEY } from '../lib/menuPermissions';
+import { shortLangLabel } from '../lib/languages';
 import {
     Calendar, Home, PlusCircle, Settings, Shield, BarChart3, Globe,
     Trophy, MessageSquare, ChevronRight, Folder, FolderPlus, Check,
@@ -76,9 +77,17 @@ const BigCard = ({ item }) => {
     return <Link to={item.to} className={`${clsBase} ${clsState}`}>{inner}</Link>;
 };
 
+// 회원 등급 뱃지 색 (사이드바와 동일 팔레트)
+const GROUP_BADGE_STYLE = {
+    general: 'bg-gray-100 text-gray-600 border-gray-200',
+    full:    'bg-blue-100 text-blue-700 border-blue-200',
+    special: 'bg-purple-100 text-purple-700 border-purple-200',
+    admin:   'bg-amber-100 text-amber-800 border-amber-300',
+};
+
 const MobileHome = () => {
     const { t } = useTranslation();
-    const { userProfile, isAdmin } = useAuth();
+    const { currentUser, userProfile, isAdmin } = useAuth();
     const { permissions } = useMenuPermissions();
     const { projects, currentProjectId, currentProject, setCurrentProjectId } = useProjects();
 
@@ -108,6 +117,10 @@ const MobileHome = () => {
     const mainItems = allItems.map(decorate);
     const sysItems = footerItems.map(decorate);
     const displayAppTitle = (userProfile?.appTitle && userProfile.appTitle.trim()) || t('app.name');
+
+    const userGroup = isAdmin ? 'admin' : getUserGroup(userProfile);
+    const groupLabel = t(GROUP_LABEL_KEY[userGroup] || 'admin.groupGeneral');
+    const myLangLabel = shortLangLabel(userProfile?.preferredLanguage || 'ko');
 
     return (
         <div className="min-h-[calc(100vh-6rem)] -m-4 md:-m-8 p-4 md:p-6 bg-gradient-to-b from-blue-50 via-indigo-50 to-sky-100">
@@ -180,6 +193,34 @@ const MobileHome = () => {
                 {sysItems.map(item => (
                     <BigCard key={item.key} item={item} />
                 ))}
+
+                {/* 내 프로필 — 닉네임 · 사용 언어 변경 진입점.
+                    모바일에는 사이드바 진입 경로가 없으므로 여기가 유일한 통로다.
+                    현재 언어를 함께 보여줘 번역이 왜 안 되는지 바로 알 수 있게 한다. */}
+                <Link
+                    to="/profile"
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl border border-white/70 bg-white/90 shadow-sm hover:bg-white active:scale-[0.98] transition-all mt-1"
+                >
+                    <img
+                        src={currentUser?.photoURL || 'https://ui-avatars.com/api/?name=User'}
+                        alt=""
+                        className="w-16 h-16 rounded-2xl object-cover border border-blue-100 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                            <div className="font-bold text-lg text-blue-900 truncate">
+                                {currentUser?.displayName || '내 프로필'}
+                            </div>
+                            <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${GROUP_BADGE_STYLE[userGroup] || GROUP_BADGE_STYLE.general}`}>
+                                {groupLabel}
+                            </span>
+                        </div>
+                        <div className="text-sm text-blue-700/60 truncate">
+                            🌐 {myLangLabel} · 닉네임 · 언어 변경
+                        </div>
+                    </div>
+                    <ChevronRight size={22} className="text-blue-400 shrink-0" />
+                </Link>
             </div>
 
             <footer className="text-center text-[11px] text-blue-700/40 mt-6 pb-3">
