@@ -1,7 +1,7 @@
 {
   "project": "Meet4U (PromiseU)",
   "description": "Meeting/약속 스케줄러 PWA. 사용자별 약속 생성, 글로벌 미팅 맵(Leaflet), 출석/댓글/글로벌 채팅 실시간 알림(FCM), 다국어(ko/en/zh), 음성 합성, 댓글 자동 번역을 제공한다.",
-  "lastUpdated": "2026-09-26",
+  "lastUpdated": "2026-10-22",
   "architectureSummary": "프론트엔드: React 19 + Vite 7 SPA를 PWA로 빌드. 백엔드: Firebase(Auth/Firestore/Storage/Analytics/FCM) + Netlify Functions(번역·TTS·푸시 전송). 다중 호스팅 대상(Netlify/Vercel/Firebase Hosting/gh-pages) 지원. 사용자 데이터는 모두 Firestore에 저장되며, 정적 자산만 호스팅 플랫폼이 서빙.",
   "repo": "/Users/heoujin/meet4u",
   "categories": [
@@ -269,6 +269,12 @@
           "version": "gemini-2.5-flash → 2.0-flash → flash-latest 폴백",
           "purpose": "Tesseract 인식률이 낮을 때 이미지에서 예약 건을 JSON 배열로 직접 구조화 추출. 사용자 개인 무료 키 사용.",
           "config": "src/lib/ocrReservation.js (ocrWithGemini), 키는 grammar.js getGeminiKey 공유"
+        },
+        {
+          "name": "Kakao JavaScript SDK (카카오톡 공유)",
+          "version": "2.8.4 (t1.kakaocdn.net, SRI sha384 고정)",
+          "purpose": "게스트 모집을 카톡방에 이미지 카드(피드 템플릿)로 공유. 카드 버튼은 https://<도메인>/?guest=<id> 로 연결되고 main.jsx 가 /#/guest-meetups?open=<id> 로 바꿔 상세 팝업을 연다. SDK 는 상세 팝업이 열릴 때만 동적 로드(88KB). 키가 없거나 로드 실패 시 텍스트 복사로 폴백.",
+          "config": "src/lib/kakaoShare.js (loadKakaoSdk/shareGuestMeetupToKakao/summarizeMeetup/guestShareText), src/Components/guest/GuestMeetupDetail.jsx 하단 노란 버튼, public/share/guest-invite.jpg (1200×600 카드 이미지), .env VITE_KAKAO_JS_KEY + Kakao Developers Web 사이트 도메인 등록 필요"
         }
       ]
     },

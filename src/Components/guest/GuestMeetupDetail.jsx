@@ -5,8 +5,9 @@
 //
 // 참가/취소/대기 액션은 부모(GuestMeetups) 의 onAction 을 그대로 재사용.
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { totalCost, perHead, paidCount, capTotal, isClosed, setPaid, setClosed, deleteMeetup } from '../../lib/guestMeetups';
+import { isKakaoShareConfigured, loadKakaoSdk, shareGuestMeetupToKakao, guestShareText } from '../../lib/kakaoShare';
 
 const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette: T }) => {
     const cl = isClosed(m);
@@ -40,40 +41,30 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
         copyText(`${m.bank?.bank || ''} ${m.bank?.acc || ''} (${m.bank?.holder || ''})`.trim(),
                  '📋 계좌 정보 복사됨');
 
-    // 톡에 공유: 이 모임 정보를 카톡에 붙여넣기 좋은 텍스트 + 딥링크로 복사.
-    // 딥링크는 hanguk.netlify.app/#/guest-meetups?open=<id> 형태.
-    // 상대가 이 링크를 눌러 로그인/앱 접속 후 자동으로 이 모임 상세가 열린다.
-    const handleShareToTalk = () => {
-        const dstr = m.date || '';
-        const p = dstr.split('-');
-        const md = p.length === 3 ? `${Number(p[1])}/${Number(p[2])}(${dayName(dstr)})` : dstr;
-        // 모달 화면과 동일한 기준으로 통일: 호스트 제외한 게스트 카운트만 노출.
-        //   총 인원 = m.cap (모집인원)
-        //   현재 게스트 = roster.length - (호스트가 있으면 1)
-        //   남은 자리 = 총 인원 - 현재 게스트
-        const cap = Math.max(1, m.cap ?? 0);
-        const guests = Math.max(0, (m.roster?.length || 0) - (m.roster?.[0]?.host ? 1 : 0));
-        const left = Math.max(0, cap - guests);
-        // 1인당 금액 — perHead 헬퍼는 m.perHeadAmount 우선, 없으면 옛 계산식 사용.
-        // 새 스키마에서 m.perHeadAmount 만 저장하므로 이 값을 그대로 신뢰.
-        const amount = perHead(m);
-        const url = typeof window !== 'undefined'
-            ? `${window.location.origin}/#/guest-meetups?open=${m.id}`
-            : '';
-        const lines = [
-            `🎾 [${md}] 게스트 모집`,
-            `📍 ${m.place || ''}`,
-            `⏰ ${m.start || ''} ~ ${m.end || ''}`,
-            `🎯 NTRP ${m.level || '-'} · ${m.type || '-'}`,
-            `👥 ${cl ? '마감' : `남은 ${left}자리`} · ${guests}/${cap}명`,
-            `💰 1인 ${amount.toLocaleString()}원`,
-        ];
-        if (m.bank?.bank && m.bank?.acc) {
-            lines.push(`🏦 ${m.bank.bank} ${m.bank.acc} (${m.bank.holder || ''})`);
+    // 팝업이 열릴 때 SDK 를 미리 받아 둔다. 클릭 시점에 다운로드를 기다리면
+    // 데스크톱 브라우저가 카카오 공유 창을 팝업 차단으로 막을 수 있다.
+    useEffect(() => {
+        if (isKakaoShareConfigured()) loadKakaoSdk().catch(() => { /* 클릭 시 폴백 */ });
+    }, []);
+
+    // 밴드·문자 등 카카오 외 공유용 — 요약 텍스트 + 딥링크를 클립보드에 복사.
+    // 숫자는 카드와 같은 summarizeMeetup() 을 거치므로 화면과 어긋나지 않는다.
+    const handleCopyShareText = () =>
+        copyText(guestShareText(m), '📋 안내 글 복사됨 — 톡방에 붙여넣기!');
+
+    // 카카오톡 공유: 이미지 + 제목 + 설명 + "참가 신청 바로가기" 버튼 카드로 전송.
+    // 키 미설정·SDK 실패 시에는 텍스트 복사로 대신해 공유 흐름이 끊기지 않게 한다.
+    const handleKakaoShare = async () => {
+        if (!isKakaoShareConfigured()) {
+            copyText(guestShareText(m), '카카오 공유 준비 중이라 안내 글을 복사했어요 — 톡방에 붙여넣기!');
+            return;
         }
-        if (m.note) lines.push(`📝 ${m.note}`);
-        lines.push('', `👉 참가하기: ${url}`);
-        copyText(lines.join('\n'), '📋 톡용 안내 복사됨 — 톡방에 붙여넣기!');
+        try {
+            await shareGuestMeetupToKakao(m);
+        } catch (e) {
+            console.error('[kakao share]', e);
+            copyText(guestShareText(m), '카카오 공유를 열지 못해 안내 글을 복사했어요 — 톡방에 붙여넣기!');
+        }
     };
 
     const togglePaid = async (targetUid, currentPaid) => {
@@ -127,16 +118,16 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                         {Number(m.date.split('-')[1])}월 {Number(m.date.split('-')[2])}일 ({dayName(m.date)}) · {m.place}
                     </b>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        {/* 톡에 공유 — 이 모임 상세 URL + 요약 텍스트를 클립보드에 복사 */}
+                        {/* 텍스트 복사 — 밴드·문자 등 카카오 외 공유용. 카톡은 하단 노란 버튼 */}
                         <button
-                            onClick={handleShareToTalk}
-                            title="이 모임 정보와 링크를 클립보드에 복사"
+                            onClick={handleCopyShareText}
+                            title="밴드·문자용 안내 글과 링크를 클립보드에 복사"
                             style={{
                                 border: `1px solid ${T.line}`, background: T.card,
                                 borderRadius: 999, padding: '6px 10px', fontSize: 12.5,
                                 fontWeight: 700, color: T.ink, cursor: 'pointer',
                             }}
-                        >📋 톡에 공유</button>
+                        >📋 복사</button>
                         <button onClick={onClose} style={{
                             fontSize: 20, color: T.sub, background: 'none',
                             border: 0, cursor: 'pointer', padding: '0 4px',
@@ -295,10 +286,38 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                         <ActionBtn danger T={T} onClick={doDelete}>삭제</ActionBtn>
                     </div>
                 )}
+
+                {/* 카카오톡 공유 — 톡방에 이미지 카드로 올라가고, 버튼을 누르면 이 모임이 바로 열린다 */}
+                <button
+                    onClick={handleKakaoShare}
+                    style={{
+                        width: '100%', marginTop: 14,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                        background: '#FEE500', color: 'rgba(0,0,0,.85)',
+                        border: 0, borderRadius: 999, padding: '14px 0',
+                        fontSize: 16, fontWeight: 800, cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(0,0,0,.12)',
+                    }}
+                >
+                    <KakaoTalkIcon />
+                    카카오톡 공유하기
+                </button>
             </div>
         </div>
     );
 };
+
+// 카카오톡 말풍선 심볼 (브랜드 가이드: 노란 바탕 #FEE500 위 짙은 갈색 심볼)
+const KakaoTalkIcon = () => (
+    <svg width="30" height="28" viewBox="0 0 30 28" aria-hidden="true">
+        <path
+            d="M15 2C7.8 2 2 6.6 2 12.3c0 3.7 2.4 6.9 6.1 8.7l-1.3 4.8c-.1.4.3.7.7.5l5.6-3.7c.6.1 1.3.1 1.9.1 7.2 0 13-4.6 13-10.3S22.2 2 15 2z"
+            fill="#3A1D1D"
+        />
+        <text x="15" y="15.4" textAnchor="middle" fontSize="7.2" fontWeight="800"
+              fill="#FEE500" fontFamily="Arial, Helvetica, sans-serif">TALK</text>
+    </svg>
+);
 
 // ────────────────────────────────────────────────────────────────
 const Box = ({ T, title, children }) => (

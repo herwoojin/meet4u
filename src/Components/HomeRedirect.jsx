@@ -19,6 +19,13 @@ const HomeRedirect = () => {
     const { userProfile, isAdmin } = useAuth();
 
     const target = useMemo(() => {
+        // 카톡 공유 카드로 들어와 로그인한 경우: 등급과 무관하게 그 모임부터 연다.
+        // (로그인 후 구글·카카오 모두 '/' 로 오므로, 여기서 안 보면 정회원은
+        //  월간 모임으로 가 버리고 공유받은 모임 팝업이 열리지 않는다.)
+        try {
+            if (sessionStorage.getItem('guest_pending_open')) return '/guest-meetups';
+        } catch (_) { /* ignore */ }
+
         const group = isAdmin ? 'admin' : getUserGroup(userProfile);
         const isPremium = group === 'full' || group === 'special' || group === 'admin';
         if (isPremium) {

@@ -3,7 +3,7 @@
 > 약속·모임 스케줄러 PWA. React 19 + Vite 7 SPA 를 Firebase(Auth·Firestore·Storage·FCM) 와
 > Netlify Functions 위에 올린 **서버리스 전면 무료** 구성.
 >
-> **마지막 업데이트: 2026-09-26** · 머신 판독용 원본: [`techstack.json`](./techstack.json)
+> **마지막 업데이트: 2026-10-22** · 머신 판독용 원본: [`techstack.json`](./techstack.json)
 > (두 파일은 항상 같은 커밋에서 함께 갱신한다.)
 
 ---
@@ -139,6 +139,7 @@ flowchart TD
 | **Gemini Live API (실시간 양방향 통역)** | gemini-2.0-flash-exp | wss://generativelanguage.googleapis.com BidiGenerateContent 로 마이크 PCM 16kHz 입력 → 모델이 상대 언어로 통역하여 24kHz PCM 또는 텍스트로 응답. WebAudio API 로 캡처/리샘플/재생 큐 직접 구현, 외부 SDK 없음. 키는 grammar.js 의 getGeminiKey({isAdmin}) 공유. | src/lib/liveApi.js (LiveTranslatorSession 클래스), src/Components/chat/LiveTranslatorModal.jsx, GlobalChat 헤더의 Radio 아이콘 버튼 |
 | **Tesseract.js (무료 클라이언트 OCR)** | ^7.0.0 | 예약 완료 문자 스크린샷을 브라우저 안에서 kor+eng 인식. API 키·서버 비용 0원. 언어 데이터(~15MB)는 최초 1회 CDN 다운로드 후 IndexedDB 캐시. 번들이 커서 사용 시점에만 동적 import. | src/lib/ocrReservation.js (ocrWithTesseract/parseReservations), src/Components/meeting/OcrImportModal.jsx |
 | **Gemini Vision (OCR 폴백)** | gemini-2.5-flash → 2.0-flash → flash-latest 폴백 | Tesseract 인식률이 낮을 때 이미지에서 예약 건을 JSON 배열로 직접 구조화 추출. 사용자 개인 무료 키 사용. | src/lib/ocrReservation.js (ocrWithGemini), 키는 grammar.js getGeminiKey 공유 |
+| **Kakao JavaScript SDK (카카오톡 공유)** | 2.8.4 (t1.kakaocdn.net, SRI sha384 고정) | 게스트 모집을 카톡방에 이미지 카드(피드 템플릿)로 공유. 카드 버튼은 https://<도메인>/?guest=<id> 로 연결되고 main.jsx 가 /#/guest-meetups?open=<id> 로 바꿔 상세 팝업을 연다. SDK 는 상세 팝업이 열릴 때만 동적 로드(88KB). 키가 없거나 로드 실패 시 텍스트 복사로 폴백. | src/lib/kakaoShare.js (loadKakaoSdk/shareGuestMeetupToKakao/summarizeMeetup/guestShareText), src/Components/guest/GuestMeetupDetail.jsx 하단 노란 버튼, public/share/guest-invite.jpg (1200×600 카드 이미지), .env VITE_KAKAO_JS_KEY + Kakao Developers Web 사이트 도메인 등록 필요 |
 
 ### 인증/접근제어
 
@@ -241,6 +242,7 @@ flowchart TD
 | Gemini (개인 키) | 계정별 무료 티어 | 429 → 분석/OCR 폴백 실패 | 호출부 에러 표면화 |
 | Google Translate gtx | 공식 한도 없음(비공식) | 레이트 리밋 시 번역 미동작 | 실패 시 원문 표시 |
 | FCM | 사실상 무제한 | — | — |
+| 카카오톡 공유 (JS SDK) | 앱별 쿼터(디벨로퍼스 콘솔) | 공유 창이 안 열림 → 텍스트 복사 폴백 | 콘솔 쿼터 화면 |
 
 신호등 임계값은 모든 메트릭 사용률 중 worst 기준 40 / 70 / 90 %.
 
@@ -265,4 +267,7 @@ flowchart TD
 - **UI 언어와 번역 언어가 서로 다른 개념이다.** i18next 의 UI 언어는 ko/en/zh 3종이고,
   `users/{uid}.preferredLanguage` 는 채팅 번역 대상 19종이다. 후자를 바꿀 수 없으면 모두가
   `ko` 로 남아 한국어→한국어 번역이 건너뛰어지므로 "번역이 안 된다"로 보인다.
+- **카카오톡 공유는 도메인 등록이 전제다.** Kakao Developers 의 Web 사이트 도메인에 없는
+  도메인에서 공유하면 SDK 초기화나 카드 링크가 거부된다. 도메인을 추가하면 콘솔에도 같이 넣는다.
+  카드 이미지는 카카오가 URL 기준으로 캐시하므로, 배너를 바꾸면 파일명이나 `?v=` 를 바꿔야 반영된다.
 - **`_backup/`, `temp_*.jsx`, `build_error.log` 등 레거시 파일이 남아 있다.** 정리 후보.

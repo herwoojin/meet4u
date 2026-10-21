@@ -307,12 +307,13 @@ const GuestMeetups = () => {
         try {
             openId = new URLSearchParams(location.search).get('open') || '';
         } catch (_) { /* ignore */ }
-        if (!openId) {
-            try {
-                openId = sessionStorage.getItem('guest_pending_open') || '';
-                if (openId) sessionStorage.removeItem('guest_pending_open');
-            } catch (_) { /* ignore */ }
-        }
+        // stash 는 URL 에서 id 를 찾았더라도 반드시 지운다. 남겨 두면 같은 탭에서
+        // 나중에 이 페이지로 올 때(또는 HomeRedirect 가) 지난 모임을 다시 연다.
+        try {
+            const pending = sessionStorage.getItem('guest_pending_open') || '';
+            if (pending) sessionStorage.removeItem('guest_pending_open');
+            if (!openId) openId = pending;
+        } catch (_) { /* ignore */ }
         if (openId) setDetailId(openId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [location.search]);

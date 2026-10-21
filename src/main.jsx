@@ -21,6 +21,17 @@ if (
     // replace 후 페이지가 리로드되므로 아래 코드는 실행되지 않음
 }
 
+// ── 카카오톡 공유 카드 진입 ────────────────────────────────────────
+// 카드 버튼 URL 은 https://k-app.click/?guest=<id> 처럼 해시가 없다
+// (카톡이 # 이하를 보존한다는 보장이 없어서). 렌더 전에 해시 라우트로 바꿔
+// 두면 아래 딥링크 캡처가 그대로 이어받는다. replaceState 라 새로고침 없음.
+try {
+    const gid = new URLSearchParams(window.location.search).get('guest');
+    if (gid && !window.location.hash) {
+        window.history.replaceState(null, '', `/#/guest-meetups?open=${encodeURIComponent(gid)}`);
+    }
+} catch (_) { /* ignore */ }
+
 // ── 게스트 모집 딥링크 캡처 ────────────────────────────────────────
 // 카톡에서 공유된 URL 형태: https://hanguk.netlify.app/#/guest-meetups?open=<id>
 // 로그인이 필요한 상태였다면 PrivateRoute 가 /login 으로 리다이렉트하며
