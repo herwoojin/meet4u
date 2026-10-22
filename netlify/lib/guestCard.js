@@ -78,6 +78,9 @@ const tree = (s) => {
         ? { bg: 'rgba(192,73,43,.25)', border: 'rgba(240,140,110,.65)', dot: '#f08c6e', color: '#ffd9cc' }
         : { bg: 'rgba(47,143,91,.28)', border: 'rgba(110,214,150,.6)', dot: '#6ed696', color: '#cdf3da' };
 
+    // 마감이면 본문을 흐리게 하고 큰 "마감" 도장을 찍는다 (앱의 LiveGuestCard 와 같은 연출의 정지판).
+    const dim = s.closed ? { opacity: 0.55 } : {};
+
     const chips = [chip(`NTRP ${s.level}`), chip(s.type)];
     if (s.priceText) chips.push(chip(s.priceText, true));
 
@@ -132,14 +135,27 @@ const tree = (s) => {
                 s.closed ? '마감 · 대기 신청 가능' : `모집중 · ${s.status}`,
             ),
             h({
+                ...dim,
                 marginTop: 22, fontSize: placeSize(s.place), fontWeight: 800, color: '#fff',
                 lineHeight: 1.12, letterSpacing: -1,
                 maxWidth: 620, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',   // 620: 코트와 겹치지 않는 폭
             }, s.place || '게스트 모집'),
-            h({ marginTop: 14, fontSize: 50, fontWeight: 800, color: C.paper }, s.dateLong),
-            h({ marginTop: 2, fontSize: 50, fontWeight: 800, color: C.amber }, s.time),
-            h({ marginTop: 30, gap: 12 }, ...chips),
+            h({ ...dim, marginTop: 14, fontSize: 50, fontWeight: 800, color: C.paper }, s.dateLong),
+            h({ ...dim, marginTop: 2, fontSize: 50, fontWeight: 800, color: C.amber }, s.time),
+            h({ ...dim, marginTop: 30, gap: 12 }, ...chips),
         ),
+        // satori 는 transform 이 걸린 요소를 형제보다 먼저 칠해 공 밑에 깔린다.
+        // 위치는 변형 없는 바깥 층이 잡고, 회전은 안쪽에만 건다.
+        ...(s.closed ? [h(
+            { position: 'absolute', left: 0, top: 0, width: W, height: H },
+            h({ position: 'absolute', left: 640, top: 175 },
+                h({
+                    padding: '6px 40px', borderRadius: 20,
+                    border: '10px solid #ff5a4e', color: '#ff5a4e', background: 'rgba(23,26,51,.6)',
+                    fontSize: 160, fontWeight: 800, lineHeight: 1.1, letterSpacing: 8,
+                    transform: 'rotate(-12deg)', boxShadow: '0 0 40px rgba(255,90,78,.35)',
+                }, '마감')),
+        )] : []),
     );
 };
 

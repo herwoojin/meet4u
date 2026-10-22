@@ -7,6 +7,7 @@
 
 import React, { useEffect } from 'react';
 import { totalCost, perHead, paidCount, capTotal, isClosed, setPaid, setClosed, deleteMeetup } from '../../lib/guestMeetups';
+import LiveGuestCard from './LiveGuestCard';
 import { isKakaoShareConfigured, loadKakaoSdk, shareGuestMeetupToKakao, guestShareText, guestShareLink, guestCardImage, warmGuestCardImage } from '../../lib/kakaoShare';
 
 const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette: T }) => {
@@ -142,6 +143,9 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                         }}>×</button>
                     </div>
                 </div>
+
+                {/* 살아있는 모집 카드 — 카톡 카드와 같은 디자인, 남은 자리 실시간 반영 */}
+                <LiveGuestCard m={m} />
 
                 {/* Time / meta */}
                 <Box T={T}>
