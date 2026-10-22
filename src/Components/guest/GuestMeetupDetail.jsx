@@ -236,6 +236,13 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
 
                 {/* 참가자 */}
                 <Box T={T} title="참가자">
+                    {/* 입금 확인은 참가자가 직접 체크하는 방식이라 바로 안내한다 */}
+                    <div style={{
+                        fontSize: 12.5, color: '#5b4a12', background: '#fff7d6', border: '1px solid #f2d36b',
+                        borderRadius: 8, padding: '7px 10px', marginBottom: 6, lineHeight: 1.5,
+                    }}>
+                        💡 입금을 완료하면 직접 <b style={{ color: T.green }}>입금완료</b> 버튼을 눌러주세요.
+                    </div>
                     {(m.roster || []).length === 0 && <div style={{ color: T.sub, fontSize: 13 }}>아직 없어요.</div>}
                     {(m.roster || []).map(r => {
                         const isMine = r.uid === me?.uid;

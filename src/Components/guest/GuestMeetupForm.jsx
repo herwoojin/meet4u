@@ -7,8 +7,9 @@
 // 장소/실력/은행/예금주 등이 미리 채워지도록 한다.
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-    LEVELS, TYPES, BANKS,
+    LEVELS, TYPES, BANKS, DEFAULT_BANK,
     createMeetup, updateMeetupMeta,
 } from '../../lib/guestMeetups';
 
@@ -30,7 +31,16 @@ const writeDefaults = (v) => {
     try { localStorage.setItem(LS_LAST, JSON.stringify(v)); } catch { /* ignore */ }
 };
 
+// 이 기기의 알림 권한 상태 — 마감메세지 블럭에 "내 알림: …" 으로 보여 준다.
+const pushStatus = () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return { label: '이 브라우저 미지원', tone: '#8b8069' };
+    if (Notification.permission === 'granted') return { label: '켜짐', tone: '#2f8f5b' };
+    if (Notification.permission === 'denied') return { label: '차단됨', tone: '#c0492b' };
+    return { label: '미설정', tone: '#8b8069' };
+};
+
 const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palette: T }) => {
+    const navigate = useNavigate();
     const isEdit = Boolean(editing);
     const defaults = useMemo(readDefaults, []);
 
@@ -50,8 +60,8 @@ const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palett
     const [perHeadAmount, setPerHeadAmount] = useState(
         String(editing?.perHeadAmount ?? defaults.perHeadAmount ?? 13000)
     );
-    // 은행 종류는 편의상 defaults 유지(대부분 같은 은행을 반복 사용).
-    const [bankNm, setBankNm] = useState(editing?.bank?.bank || defaults.bank?.bank || '카카오뱅크');
+    // 새 모임은 항상 카톡입금으로 시작(목록 맨 위). 수정할 땐 저장된 은행 그대로.
+    const [bankNm, setBankNm] = useState(editing?.bank?.bank || DEFAULT_BANK);
     // 계좌번호 · 예금주는 매번 확인해서 새로 입력하도록 defaults 를 쓰지 않는다.
     // 이렇게 해야 새 모임 생성 시 placeholder("예: 3333-01-1234567", "예: 홍길동")
     // 가 노출되고, 이전에 만든 모임의 실명·계좌가 자동으로 미리 채워지지 않는다.
@@ -70,7 +80,7 @@ const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palett
         setLevel(editing.level); setType(editing.type);
         setCap(String(editing.cap));
         setPerHeadAmount(String(editing.perHeadAmount || 0));
-        setBankNm(editing.bank?.bank || '카카오뱅크');
+        setBankNm(editing.bank?.bank || DEFAULT_BANK);
         setBankAcc(editing.bank?.acc || '');
         setHolder(editing.bank?.holder || '');
         setNote(editing.note || '');
@@ -100,12 +110,11 @@ const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palett
                 await createMeetup({ user, ...payload, meetingId: seed?.meetingId || null });
                 onToast('모임 생성 완료');
             }
-            // 다음 생성 시 자동 채워질 값 — 장소/계좌번호/예금주는 매번
-            // 확인해 새로 적도록 일부러 저장하지 않는다(은행 종류만 유지).
+            // 다음 생성 시 자동 채워질 값 — 장소/은행/계좌번호/예금주는 저장하지 않는다
+            // (장소·계좌는 매번 확인해 새로 적고, 은행은 늘 카톡입금으로 시작).
             writeDefaults({
                 start, end, level, type, cap: payload.cap,
                 perHeadAmount: payload.perHeadAmount,
-                bank: { bank: bankNm },
             });
             onDone();
         } catch (e) {
@@ -208,6 +217,29 @@ const GuestMeetupForm = ({ editing, seed, user, onClose, onDone, onToast, palett
                             style={{ ...inputStyle(T), resize: 'vertical' }}
                         />
                     </F>
+                    {/* 마감 푸시를 받으려면 알림이 켜져 있어야 한다 → 설정의 푸시 알림 칸으로 바로 */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 12.5, color: T.sub }}>
+                            내 알림: <b style={{ color: pushStatus().tone }}>{pushStatus().label}</b>
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const typed = [place, closingMessage, bankAcc, holder].some((v) => String(v || '').trim());
+                                if (typed && !window.confirm('작성 중인 내용은 저장되지 않아요. 알림 설정으로 이동할까요?')) return;
+                                onClose?.();
+                                navigate('/settings', { state: { focus: 'push' } });
+                            }}
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                padding: '8px 14px', borderRadius: 999, cursor: 'pointer',
+                                border: `1px solid ${T.line}`, background: '#fff', color: T.ink,
+                                fontSize: 13, fontWeight: 800,
+                            }}
+                        >
+                            🔔 알림 푸시 설정 바로가기 ›
+                        </button>
+                    </div>
                 </Box>
 
                 <Box T={T}>

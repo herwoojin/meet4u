@@ -56,8 +56,10 @@ export const PLACE_PREFIXES = Array.from(
 export const LEVELS  = ['2.0', '2.5', '3.0', '3.5'];
 export const TYPES   = ['여단', '남단', '혼복', '남복', '여복'];
 export const REGIONS = ['고양', '파주', '김포'];
+// 동호회는 대부분 카톡 송금으로 받으므로 카톡입금을 맨 위·기본값으로 둔다.
+export const DEFAULT_BANK = '카톡입금';
 export const BANKS   = [
-    '카카오뱅크', '카톡입금', '국민은행', '신한은행', '우리은행', '하나은행',
+    '카톡입금', '카카오뱅크', '국민은행', '신한은행', '우리은행', '하나은행',
     '농협', '기업은행', '새마을금고', '토스뱅크',
 ];
 
@@ -114,7 +116,7 @@ export const createMeetup = async ({ user, ...data }) => {
             etc: Number(data.cost?.etc) || 0,
         },
         bank: {
-            bank: data.bank?.bank || '카카오뱅크',
+            bank: data.bank?.bank || DEFAULT_BANK,
             acc: data.bank?.acc || '',
             holder: data.bank?.holder || hostEntry.name,
         },

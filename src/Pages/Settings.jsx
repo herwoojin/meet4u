@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { Bell, BellRing, BellOff, Settings as SettingsIcon, Calendar, Check, Loader, Link as LinkIcon, Unlink, Type, Palette, Sparkles, FileText, Key, Eye, EyeOff, Trash2, Cloud, Monitor } from 'lucide-react';
 import { requestFCMToken } from '../hooks/useFCM';
 import { useAuth } from '../context/AuthContext';
@@ -8,6 +9,21 @@ import { useGeminiApiKey } from '../hooks/useGeminiApiKey';
 
 const Settings = () => {
     const { t } = useTranslation();
+
+    // 다른 화면(게스트 모집 마감메세지 등)에서 "알림 푸시 설정 바로가기"로 오면
+    // 푸시 알림 칸으로 스크롤하고 잠깐 강조한다.
+    const location = useLocation();
+    const pushRef = React.useRef(null);
+    const [pushFocus, setPushFocus] = useState(false);
+    useEffect(() => {
+        if (location.state?.focus !== 'push') return undefined;
+        const t1 = setTimeout(() => {
+            pushRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setPushFocus(true);
+        }, 150);
+        const t2 = setTimeout(() => setPushFocus(false), 2600);
+        return () => { clearTimeout(t1); clearTimeout(t2); };
+    }, [location.state]);
     const [notifPermission, setNotifPermission] = useState('unsupported');
     const { currentUser: user, userProfile, updateUserProfile } = useAuth();
     const gcal = useGoogleCalendar();
@@ -366,7 +382,12 @@ const Settings = () => {
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-6 border-b border-gray-100">
+                <div
+                    id="push-settings"
+                    ref={pushRef}
+                    style={{ scrollMarginTop: 84 }}
+                    className={`p-6 border-b border-gray-100 transition-colors duration-700 ${pushFocus ? 'bg-blue-50 ring-2 ring-inset ring-blue-400' : ''}`}
+                >
                     <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                         <Bell className="text-gray-600" size={20} />
                         {t('settings.pushTitle')}
