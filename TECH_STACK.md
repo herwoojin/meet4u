@@ -122,6 +122,10 @@ flowchart TD
 | **send-notification.js** | in-repo | Firebase Admin SDK 기반 FCM 푸시 전송 | — |
 | **firebase-admin** | ^13.7.0 | 서버리스 함수에서 FCM 전송/Firestore 어드민 접근 | FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY 환경변수 |
 | **google-translate-api-x** | ^10.7.2 | 함수 의존성으로 등록되어 있음(현재 코드는 fetch로 translate.googleapis.com 직접 호출). 미사용 시 추후 정리 후보. | — |
+| **guest-card.js** | in-repo | 게스트 모집 카드 이미지(1200×600 PNG)를 모임마다 서버에서 그림 — 장소·날짜·시간·NTRP·유형·모집 상태·1인당 금액. 카카오톡 공유 카드의 imageUrl 과 링크 미리보기 og:image 가 같은 URL(?c=<id>.<버전>)을 쓴다. 버전이 현재 내용과 같을 때만 1년 캐시, 실패 시 정적 배너로 302. | netlify/functions/guest-card.js, netlify/lib/guestCard.js(렌더), netlify/lib/guestMeetupStore.js(Admin SDK 조회, preferRest) |
+| **guest-og.js** | in-repo | 공유 링크 /?guest=<id> 요청 시 index.html 의 og 태그를 그 모임 제목·일시·금액·카드 이미지로 바꿔 반환 → 링크를 붙여넣어도 모임별 미리보기 카드가 뜬다. 실패해도 원본 index.html(최악은 해시 딥링크 302)로 앱 진입은 유지. | netlify/functions/guest-og.js, netlify.toml 의 query={guest} force 리다이렉트(SPA catch-all 보다 위) |
+| **satori** | ^0.63.2 | 카드 이미지 레이아웃 → SVG (guest-card). 이모지는 그리지 못해 쓰지 않음. | netlify/lib/guestCard.js |
+| **@resvg/resvg-wasm** | 2.6.2 (고정) | SVG → PNG. wasm 은 cold start 때 jsDelivr 에서 받으므로 npm 버전과 반드시 일치시켜 고정. | netlify/lib/guestCard.js WASM_URL |
 
 ### AI/외부 API — 무료 엔드포인트 위주
 
@@ -139,7 +143,8 @@ flowchart TD
 | **Gemini Live API (실시간 양방향 통역)** | gemini-2.0-flash-exp | wss://generativelanguage.googleapis.com BidiGenerateContent 로 마이크 PCM 16kHz 입력 → 모델이 상대 언어로 통역하여 24kHz PCM 또는 텍스트로 응답. WebAudio API 로 캡처/리샘플/재생 큐 직접 구현, 외부 SDK 없음. 키는 grammar.js 의 getGeminiKey({isAdmin}) 공유. | src/lib/liveApi.js (LiveTranslatorSession 클래스), src/Components/chat/LiveTranslatorModal.jsx, GlobalChat 헤더의 Radio 아이콘 버튼 |
 | **Tesseract.js (무료 클라이언트 OCR)** | ^7.0.0 | 예약 완료 문자 스크린샷을 브라우저 안에서 kor+eng 인식. API 키·서버 비용 0원. 언어 데이터(~15MB)는 최초 1회 CDN 다운로드 후 IndexedDB 캐시. 번들이 커서 사용 시점에만 동적 import. | src/lib/ocrReservation.js (ocrWithTesseract/parseReservations), src/Components/meeting/OcrImportModal.jsx |
 | **Gemini Vision (OCR 폴백)** | gemini-2.5-flash → 2.0-flash → flash-latest 폴백 | Tesseract 인식률이 낮을 때 이미지에서 예약 건을 JSON 배열로 직접 구조화 추출. 사용자 개인 무료 키 사용. | src/lib/ocrReservation.js (ocrWithGemini), 키는 grammar.js getGeminiKey 공유 |
-| **Kakao JavaScript SDK (카카오톡 공유)** | 2.8.4 (t1.kakaocdn.net, SRI sha384 고정) | 게스트 모집을 카톡방에 이미지 카드(피드 템플릿)로 공유. 카드 버튼은 https://<도메인>/?guest=<id> 로 연결되고 main.jsx 가 /#/guest-meetups?open=<id> 로 바꿔 상세 팝업을 연다. SDK 는 상세 팝업이 열릴 때만 동적 로드(88KB). 키가 없거나 로드 실패 시 텍스트 복사로 폴백. | src/lib/kakaoShare.js (loadKakaoSdk/shareGuestMeetupToKakao/summarizeMeetup/guestShareText), src/Components/guest/GuestMeetupDetail.jsx 하단 노란 버튼, public/share/guest-invite.jpg (1200×600 카드 이미지), .env VITE_KAKAO_JS_KEY + Kakao Developers Web 사이트 도메인 등록 필요 |
+| **Kakao JavaScript SDK (카카오톡 공유)** | 2.8.4 (t1.kakaocdn.net, SRI sha384 고정) | 게스트 모집을 카톡방에 이미지 카드(피드 템플릿)로 공유. 카드 버튼은 https://<도메인>/?guest=<id> 로 연결되고 main.jsx 가 /#/guest-meetups?open=<id> 로 바꿔 상세 팝업을 연다. SDK 는 상세 팝업이 열릴 때만 동적 로드(88KB). 카드 이미지는 guest-card 함수가 모임별로 그린다. 키가 없거나 로드 실패 시 링크 한 줄만 복사(붙여넣으면 guest-og 미리보기 카드가 뜸). | src/lib/kakaoShare.js (loadKakaoSdk/shareGuestMeetupToKakao/summarizeMeetup/guestShareText), src/Components/guest/GuestMeetupDetail.jsx 하단 노란 버튼, public/share/guest-invite.jpg (함수 실패 시 폴백 배너), .env VITE_KAKAO_JS_KEY + Kakao Developers Web 사이트 도메인 등록 필요 |
+| **Google Fonts CSS API (Noto Sans KR 서브셋)** | fonts.googleapis.com css2?text= | 카드 이미지에 쓰인 글자만 잘라 TTF 로 받음(약 30KB). 함수 번들에 수 MB 한글 폰트를 넣지 않기 위함. 실패 시 정적 배너로 폴백. | netlify/lib/guestCard.js loadFont |
 
 ### 인증/접근제어
 
@@ -242,7 +247,8 @@ flowchart TD
 | Gemini (개인 키) | 계정별 무료 티어 | 429 → 분석/OCR 폴백 실패 | 호출부 에러 표면화 |
 | Google Translate gtx | 공식 한도 없음(비공식) | 레이트 리밋 시 번역 미동작 | 실패 시 원문 표시 |
 | FCM | 사실상 무제한 | — | — |
-| 카카오톡 공유 (JS SDK) | 앱별 쿼터(디벨로퍼스 콘솔) | 공유 창이 안 열림 → 텍스트 복사 폴백 | 콘솔 쿼터 화면 |
+| 카카오톡 공유 (JS SDK) | 앱별 쿼터(디벨로퍼스 콘솔) | 공유 창이 안 열림 → 링크 복사 폴백 | 콘솔 쿼터 화면 |
+| 카드 이미지 런타임 의존 (Google Fonts · jsDelivr wasm) | 공식 한도 없음 | 카드가 정적 배너로 대체(공유 자체는 정상) | 함수 로그 `[guest-card]` |
 
 신호등 임계값은 모든 메트릭 사용률 중 worst 기준 40 / 70 / 90 %.
 
@@ -270,4 +276,10 @@ flowchart TD
 - **카카오톡 공유는 도메인 등록이 전제다.** Kakao Developers 의 Web 사이트 도메인에 없는
   도메인에서 공유하면 SDK 초기화나 카드 링크가 거부된다. 도메인을 추가하면 콘솔에도 같이 넣는다.
   카드 이미지는 카카오가 URL 기준으로 캐시하므로, 배너를 바꾸면 파일명이나 `?v=` 를 바꿔야 반영된다.
+- **카드 이미지 함수는 Firestore 를 REST(`preferRest`)로 읽는다.** esbuild 번들에서 gRPC 모듈이
+  깨져 `GrpcClient is not a constructor` 로 실패하기 때문. Admin SDK 로 Firestore 를 쓰는 함수를
+  새로 만들 때도 같은 설정이 필요하다.
+- **카톡은 링크 미리보기를 URL 단위로 캐시한다.** 이미 붙여넣었던 `?guest=` 링크는 모임 내용이
+  바뀌어도 옛 미리보기가 남을 수 있다(카카오 디벨로퍼스의 캐시 초기화 도구로 갱신). SDK 카드는
+  내용이 바뀌면 이미지 URL 버전이 바뀌어 항상 새로 그려진다.
 - **`_backup/`, `temp_*.jsx`, `build_error.log` 등 레거시 파일이 남아 있다.** 정리 후보.

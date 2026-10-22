@@ -7,7 +7,7 @@
 
 import React, { useEffect } from 'react';
 import { totalCost, perHead, paidCount, capTotal, isClosed, setPaid, setClosed, deleteMeetup } from '../../lib/guestMeetups';
-import { isKakaoShareConfigured, loadKakaoSdk, shareGuestMeetupToKakao, guestShareText } from '../../lib/kakaoShare';
+import { isKakaoShareConfigured, loadKakaoSdk, shareGuestMeetupToKakao, guestShareText, guestShareLink, guestCardImage, warmGuestCardImage } from '../../lib/kakaoShare';
 
 const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette: T }) => {
     const cl = isClosed(m);
@@ -47,23 +47,31 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
         if (isKakaoShareConfigured()) loadKakaoSdk().catch(() => { /* 클릭 시 폴백 */ });
     }, []);
 
+    // 카드 이미지도 미리 그려 둔다. 내용(인원·금액 등)이 바뀌면 URL 이 바뀌므로 다시.
+    const cardImageUrl = guestCardImage(m);
+    useEffect(() => { warmGuestCardImage(m); }, [cardImageUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // 밴드·문자 등 카카오 외 공유용 — 요약 텍스트 + 딥링크를 클립보드에 복사.
     // 숫자는 카드와 같은 summarizeMeetup() 을 거치므로 화면과 어긋나지 않는다.
     const handleCopyShareText = () =>
         copyText(guestShareText(m), '📋 안내 글 복사됨 — 톡방에 붙여넣기!');
 
-    // 카카오톡 공유: 이미지 + 제목 + 설명 + "참가 신청 바로가기" 버튼 카드로 전송.
-    // 키 미설정·SDK 실패 시에는 텍스트 복사로 대신해 공유 흐름이 끊기지 않게 한다.
+    // 카카오톡 공유: 이미지 + 제목 + 설명 + "참가 신청 바로가기" 버튼 카드 하나만 전송.
+    // 키 미설정·SDK 실패 시에는 링크만 복사한다. 긴 안내 글 대신 링크 한 줄을
+    // 붙여넣으면, 카톡이 그 링크의 모임 카드(이미지·일시·금액)를 바로 아래에 띄운다.
+    const copyLinkFallback = (why) =>
+        copyText(guestShareLink(m), `🔗 ${why}링크를 복사했어요 — 톡방에 붙여넣으면 모임 카드가 함께 보여요`);
+
     const handleKakaoShare = async () => {
         if (!isKakaoShareConfigured()) {
-            copyText(guestShareText(m), '카카오 공유 준비 중이라 안내 글을 복사했어요 — 톡방에 붙여넣기!');
+            copyLinkFallback('');
             return;
         }
         try {
             await shareGuestMeetupToKakao(m);
         } catch (e) {
             console.error('[kakao share]', e);
-            copyText(guestShareText(m), '카카오 공유를 열지 못해 안내 글을 복사했어요 — 톡방에 붙여넣기!');
+            copyLinkFallback('카카오 공유 창을 열지 못해 ');
         }
     };
 

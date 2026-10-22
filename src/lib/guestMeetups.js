@@ -24,6 +24,7 @@
 // race 를 봉쇄한다.
 
 import { db } from './firebase';
+import { capTotal, isRosterFull, isClosed, totalCost, perHead } from './guestSummary';
 import {
     collection, doc, addDoc, deleteDoc, updateDoc,
     runTransaction, serverTimestamp,
@@ -64,25 +65,9 @@ export const BANKS   = [
 // 유틸
 // ────────────────────────────────────────────────────────────────
 
-export const capTotal = (m) => (m?.cap ?? 0) + 1;
-export const isRosterFull = (m) => (m?.roster?.length ?? 0) >= capTotal(m);
-export const isClosed = (m) => Boolean(m?.closed) || isRosterFull(m);
-
-export const totalCost = (m) => {
-    const c = m?.cost || {};
-    return (c.court || 0) + (c.ball || 0) + (c.etc || 0);
-};
-
-// 1인당 부담금.
-//   1) 호스트가 perHeadAmount 로 직접 지정한 값이 있으면 그대로 사용.
-//   2) 없으면(레거시 데이터) 총액 / capTotal 을 100원 단위 올림 (구 계산식).
-export const perHead = (m) => {
-    if (typeof m?.perHeadAmount === 'number' && m.perHeadAmount > 0) {
-        return Math.round(m.perHeadAmount);
-    }
-    const n = Math.max(1, capTotal(m));
-    return Math.ceil(totalCost(m) / n / 100) * 100;
-};
+// 정원·마감·금액 계산은 Netlify 함수(카드 이미지·링크 미리보기)도 같이 쓰므로
+// firebase 의존이 없는 guestSummary.js 에 두고 여기서는 다시 내보내기만 한다.
+export { capTotal, isRosterFull, isClosed, totalCost, perHead };
 
 export const paidCount = (m) => (m?.roster || []).filter(r => r.paid).length;
 

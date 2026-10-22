@@ -6,6 +6,16 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+# 게스트 모집 공유 링크(/?guest=<id>) — 모임별 링크 미리보기(og 태그)를 붙인 index.html.
+# 루트(/)는 정적 index.html 이 있어 force 가 없으면 이 규칙이 무시된다.
+# 반드시 아래 SPA catch-all 보다 위에 둔다.
+[[redirects]]
+  from = "/"
+  query = { guest = ":guest" }
+  to = "/.netlify/functions/guest-og?guest=:guest"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
