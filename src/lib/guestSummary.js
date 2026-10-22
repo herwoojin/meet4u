@@ -28,7 +28,17 @@ const DAY = ['일', '월', '화', '수', '목', '금', '토'];
 
 // 카톡 인앱 브라우저·공유 링크가 # 이하를 보존하는지 클라이언트마다 보장되지
 // 않으므로 해시 없는 진입 URL 을 쓴다. main.jsx 가 이를 해시 라우트로 바꾼다.
-export const guestShareUrl = (origin, id) => `${origin}/?guest=${encodeURIComponent(id)}`;
+//
+// 링크에 카드 버전을 붙인다: /?guest=<id>.<버전>
+// 카카오톡은 링크 미리보기를 URL 단위로 오래 캐시해서, 같은 URL 이면 모임 내용이
+// 바뀌어도(또는 미리보기 기능이 생기기 전에 한 번 붙였던 링크라면) 옛 미리보기를
+// 계속 보여준다. 내용이 바뀔 때 URL 도 바뀌면 카톡이 새로 읽어 간다.
+// '.' 로 묶는 이유: & 를 쓰면 og:url 등에 &amp; 로 들어가고, Firestore 자동 ID 에는 '.' 이 없다.
+export const guestShareUrl = (origin, id, version) =>
+    `${origin}/?guest=${encodeURIComponent(id)}${version ? `.${version}` : ''}`;
+
+// ?guest= 값에서 모임 ID 만 꺼낸다. 버전 없는 옛 링크(?guest=<id>)도 그대로 동작.
+export const parseGuestParam = (raw) => String(raw || '').split('.')[0];
 
 /**
  * 공유에 쓰는 요약. 인원은 화면과 같은 기준 — 호스트를 뺀 게스트 수 / 모집인원.
@@ -47,17 +57,19 @@ export const summarizeMeetup = (m, origin) => {
     const dateLong = ok ? `${p[1]}월 ${p[2]}일(${day})` : (m?.date || '');
     const dateShort = ok ? `${p[1]}/${p[2]}(${day})` : (m?.date || '');
 
-    return {
+    const s = {
         id: m?.id || '',
         closed, cap, guests, left, amount, dateLong, dateShort,
         time: `${m?.start || ''} ~ ${m?.end || ''}`,
         place: m?.place || '',
         level: m?.level || '-',
         type: m?.type || '-',
-        url: guestShareUrl(origin, m?.id || ''),
         status: closed ? '마감 · 대기 신청 가능' : `남은 ${left}자리`,
         priceText: amount > 0 ? `1인 ${amount.toLocaleString('ko-KR')}원` : '',
     };
+    s.version = cardVersion(s);
+    s.url = guestShareUrl(origin, s.id, s.version);
+    return s;
 };
 
 // 카드 이미지 URL 의 버전 값. 이미지에 찍히는 내용이 바뀌면 URL 이 바뀌어

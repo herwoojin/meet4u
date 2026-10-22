@@ -22,11 +22,12 @@ if (
 }
 
 // ── 카카오톡 공유 카드 진입 ────────────────────────────────────────
-// 카드 버튼 URL 은 https://k-app.click/?guest=<id> 처럼 해시가 없다
+// 카드 버튼 URL 은 https://k-app.click/?guest=<id>.<버전> 처럼 해시가 없다
 // (카톡이 # 이하를 보존한다는 보장이 없어서). 렌더 전에 해시 라우트로 바꿔
 // 두면 아래 딥링크 캡처가 그대로 이어받는다. replaceState 라 새로고침 없음.
+// '.' 뒤 버전은 카톡 미리보기 캐시를 깨기 위한 값이라 앱에서는 버린다.
 try {
-    const gid = new URLSearchParams(window.location.search).get('guest');
+    const gid = (new URLSearchParams(window.location.search).get('guest') || '').split('.')[0];
     if (gid && !window.location.hash) {
         window.history.replaceState(null, '', `/#/guest-meetups?open=${encodeURIComponent(gid)}`);
     }

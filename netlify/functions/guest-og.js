@@ -1,4 +1,4 @@
-// GET /?guest=<모임ID>  (netlify.toml 의 쿼리 매칭 리다이렉트로 들어온다)
+// GET /?guest=<모임ID>.<버전>  (public/_redirects 의 쿼리 매칭 규칙으로 들어온다)
 //
 // 링크를 카톡·밴드·문자에 붙여넣으면 각 서비스가 이 주소의 og 태그를 읽어
 // 미리보기 카드를 만든다. SPA 의 index.html 은 모든 페이지가 같은 og 태그를
@@ -10,7 +10,7 @@
 // index.html 조차 못 받으면 → 해시 딥링크로 302.
 
 import { readGuestMeetup } from '../lib/guestMeetupStore.js';
-import { summarizeMeetup, guestCardImageUrl } from '../../src/lib/guestSummary.js';
+import { summarizeMeetup, guestCardImageUrl, parseGuestParam } from '../../src/lib/guestSummary.js';
 
 const esc = (v) => String(v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -41,7 +41,8 @@ export const injectGuestOg = (html, m, origin) => {
 };
 
 export const handler = async (event) => {
-    const id = event.queryStringParameters?.guest || '';
+    // ?guest=<id>.<버전> — 버전은 카톡 캐시용이라 조회에는 ID 만 쓴다.
+    const id = parseGuestParam(event.queryStringParameters?.guest);
     const host = event.headers?.['x-forwarded-host'] || event.headers?.host || 'k-app.click';
     const origin = `https://${host}`;
 
