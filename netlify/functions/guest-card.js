@@ -4,8 +4,8 @@
 // 카카오톡 공유 카드(Kakao SDK imageUrl)와 링크 미리보기(og:image)가 이 URL 을 쓴다.
 // 실패하면 정적 배너로 302 — 카드에 이미지가 비는 일은 없게 한다.
 
-import { readGuestMeetup } from '../lib/guestMeetupStore.js';
-import { renderGuestCard, ensureWasm } from '../lib/guestCard.js';
+import { readGuestMeetup } from '../lib/publicDocs.js';
+import { renderGuestCard, ensureWasm } from '../lib/shareCard.js';
 import { summarizeMeetup, cardVersion } from '../../src/lib/guestSummary.js';
 
 export const handler = async (event) => {

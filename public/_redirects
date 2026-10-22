@@ -5,4 +5,7 @@
 # 루트(/)는 정적 index.html 이 있어 강제(!) 가 아니면 이 규칙이 무시된다.
 /  guest=:guest  /.netlify/functions/guest-og?guest=:guest  200!
 
+# 정기 모임 참석 체크 링크(/?meeting=<id>) — 모임별 링크 미리보기. (위와 같은 이유로 catch-all 위)
+/  meeting=:meeting  /.netlify/functions/meeting-og?meeting=:meeting  200!
+
 /* /index.html 200

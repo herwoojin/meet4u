@@ -1,4 +1,4 @@
-// 게스트 모집 카드 이미지(1200×600 PNG) 렌더러.
+// 카톡 공유 카드 이미지(1200×600 PNG) 렌더러 — 게스트 모집 · 정기 모임 공용.
 //
 // satori 로 레이아웃 → SVG, resvg(wasm) 로 SVG → PNG.
 // 한글 폰트는 Google Fonts 에서 "이 카드에 쓰인 글자만" 잘라 받아(약 30KB)
@@ -65,12 +65,27 @@ const placeSize = (t) => {
     return 54;
 };
 
-const chip = (text, strong) => h({
-    padding: '10px 24px', borderRadius: 999, fontSize: 28, fontWeight: strong ? 800 : 600,
-    background: strong ? C.amber : 'rgba(255,255,255,.08)',
-    border: `2px solid ${strong ? C.amber : 'rgba(255,255,255,.2)'}`,
-    color: strong ? C.bg : C.paper,
-}, text);
+// 아래쪽 정보 칩. tone: amber(강조 금액) · green(참석) · red(불참) · 기본(회색 테두리)
+const CHIP_TONE = {
+    amber: { bg: C.amber, border: C.amber, color: C.bg, weight: 800 },
+    green: { bg: C.green, border: '#6ed696', color: '#fff', weight: 800 },
+    red: { bg: 'rgba(192,73,43,.28)', border: 'rgba(240,140,110,.65)', color: '#ffd9cc', weight: 700 },
+    plain: { bg: 'rgba(255,255,255,.08)', border: 'rgba(255,255,255,.2)', color: C.paper, weight: 600 },
+};
+const chip = ({ text, tone = 'plain' }) => {
+    const t = CHIP_TONE[tone] || CHIP_TONE.plain;
+    return h({
+        padding: '10px 24px', borderRadius: 999, fontSize: 28, fontWeight: t.weight,
+        background: t.bg, border: `2px solid ${t.border}`, color: t.color,
+    }, text);
+};
+
+// 상단 상태 칩 색
+const STATUS_TONE = {
+    green: { bg: 'rgba(47,143,91,.28)', border: 'rgba(110,214,150,.6)', dot: '#6ed696', color: '#cdf3da', glow: 'rgba(110,214,150,.45)' },
+    red: { bg: 'rgba(192,73,43,.25)', border: 'rgba(240,140,110,.65)', dot: '#f08c6e', color: '#ffd9cc', glow: 'rgba(240,140,110,.35)' },
+    gray: { bg: 'rgba(255,255,255,.08)', border: 'rgba(255,255,255,.3)', dot: '#b8bfd6', color: '#e3e6f2', glow: 'rgba(184,191,214,.25)' },
+};
 
 const courtLine = (style) => h({ position: 'absolute', background: 'rgba(255,255,255,.28)', ...style });
 
@@ -109,16 +124,17 @@ const flyingBall = () => [
     ball(842, 252, 170, 1, true),
 ];
 
-const tree = (s) => {
-    const statusChip = s.closed
-        ? { bg: 'rgba(192,73,43,.25)', border: 'rgba(240,140,110,.65)', dot: '#f08c6e', color: '#ffd9cc', glow: 'rgba(240,140,110,.35)' }
-        : { bg: 'rgba(47,143,91,.28)', border: 'rgba(110,214,150,.6)', dot: '#6ed696', color: '#cdf3da', glow: 'rgba(110,214,150,.45)' };
-
-    // 마감이면 본문을 흐리게 하고 큰 "마감" 도장을 찍는다 (앱의 LiveGuestCard 와 같은 연출의 정지판).
-    const dim = s.closed ? { opacity: 0.55 } : {};
-
-    const chips = [chip(`NTRP ${s.level}`), chip(s.type)];
-    if (s.priceText) chips.push(chip(s.priceText, true));
+/**
+ * 카드 한 장의 구성.
+ * @param spec {
+ *   eyebrow, status: { text, tone }, title, date, time,
+ *   chips: [{ text, tone }], stamp: { text, color, glow } | null,
+ *   moving: 공이 튀어 오르는 연출 여부, dim: 본문 흐림 여부(마감·완료)
+ * }
+ */
+const cardTree = (spec) => {
+    const st = STATUS_TONE[spec.status.tone] || STATUS_TONE.green;
+    const dim = spec.dim ? { opacity: 0.55 } : {};
 
     return h(
         {
@@ -142,8 +158,8 @@ const tree = (s) => {
             courtLine({ left: 273, top: 120, bottom: 120, width: 4 }),
         ),
         // 공 — 카톡은 이미지를 움직이게 보여주지 않으므로(GIF 도 첫 프레임만) 정지 화면 안에
-        // "튀어 오르는 순간"을 그린다. 마감이면 공이 멈춘 원래 자리 (앱 라이브 카드와 같은 의미).
-        ...(s.closed ? [ball(780, 350, 170, 1, true)] : flyingBall()),
+        // "튀어 오르는 순간"을 그린다. 마감·완료면 공이 멈춘 원래 자리 (앱 라이브 카드와 같은 의미).
+        ...(spec.moving ? flyingBall() : [ball(780, 350, 170, 1, true)]),
         // 우상단: 이 카드는 공유 시점의 정지 화면이라는 안내 (앱 라이브 카드의 LIVE 배지 자리)
         h(
             {
@@ -158,7 +174,7 @@ const tree = (s) => {
         h({
             position: 'absolute', left: 72, top: 44, fontSize: 22, fontWeight: 800,
             letterSpacing: 6, color: C.amber,
-        }, 'TENNIS · GUEST'),
+        }, spec.eyebrow),
         // 본문
         h(
             {
@@ -168,36 +184,65 @@ const tree = (s) => {
             h(
                 {
                     alignSelf: 'flex-start', alignItems: 'center', padding: '10px 22px', borderRadius: 999,
-                    background: statusChip.bg, border: `2px solid ${statusChip.border}`,
-                    color: statusChip.color, fontSize: 28, fontWeight: 800,
-                    boxShadow: `0 0 28px ${statusChip.glow}`,
+                    background: st.bg, border: `2px solid ${st.border}`,
+                    color: st.color, fontSize: 28, fontWeight: 800,
+                    boxShadow: `0 0 28px ${st.glow}`,
                 },
-                pulseDot(14, statusChip.dot),
-                s.closed ? '마감 · 대기 신청 가능' : `모집중 · ${s.status}`,
+                pulseDot(14, st.dot),
+                spec.status.text,
             ),
             h({
                 ...dim,
-                marginTop: 22, fontSize: placeSize(s.place), fontWeight: 800, color: '#fff',
+                marginTop: 22, fontSize: placeSize(spec.title), fontWeight: 800, color: '#fff',
                 lineHeight: 1.12, letterSpacing: -1,
                 maxWidth: 620, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',   // 620: 코트와 겹치지 않는 폭
-            }, s.place || '게스트 모집'),
-            h({ ...dim, marginTop: 14, fontSize: 50, fontWeight: 800, color: C.paper }, s.dateLong),
-            h({ ...dim, marginTop: 2, fontSize: 50, fontWeight: 800, color: C.amber }, s.time),
-            h({ ...dim, marginTop: 30, gap: 12 }, ...chips),
+            }, spec.title),
+            h({ ...dim, marginTop: 14, fontSize: 50, fontWeight: 800, color: C.paper }, spec.date),
+            h({ ...dim, marginTop: 2, fontSize: 50, fontWeight: 800, color: C.amber }, spec.time),
+            h({ ...dim, marginTop: 30, gap: 12 }, ...spec.chips.map(chip)),
         ),
         // satori 는 transform 이 걸린 요소를 형제보다 먼저 칠해 공 밑에 깔린다.
         // 위치는 변형 없는 바깥 층이 잡고, 회전은 안쪽에만 건다.
-        ...(s.closed ? [h(
+        ...(spec.stamp ? [h(
             { position: 'absolute', left: 0, top: 0, width: W, height: H },
             h({ position: 'absolute', left: 640, top: 175 },
                 h({
                     padding: '6px 40px', borderRadius: 20,
-                    border: '10px solid #ff5a4e', color: '#ff5a4e', background: 'rgba(23,26,51,.6)',
+                    border: `10px solid ${spec.stamp.color}`, color: spec.stamp.color, background: 'rgba(23,26,51,.6)',
                     fontSize: 160, fontWeight: 800, lineHeight: 1.1, letterSpacing: 8,
-                    transform: 'rotate(-12deg)', boxShadow: '0 0 40px rgba(255,90,78,.35)',
-                }, '마감')),
+                    transform: 'rotate(-12deg)', boxShadow: `0 0 40px ${spec.stamp.glow}`,
+                }, spec.stamp.text)),
         )] : []),
     );
+};
+
+// 게스트 모집 (summarizeMeetup 결과 → 카드 구성)
+const guestSpec = (s) => {
+    const chips = [{ text: `NTRP ${s.level}` }, { text: s.type }];
+    if (s.priceText) chips.push({ text: s.priceText, tone: 'amber' });
+    return {
+        eyebrow: 'TENNIS · GUEST',
+        status: s.closed ? { text: '마감 · 대기 신청 가능', tone: 'red' } : { text: `모집중 · ${s.status}`, tone: 'green' },
+        title: s.place || '게스트 모집',
+        date: s.dateLong, time: s.time, chips,
+        stamp: s.closed ? { text: '마감', color: '#ff5a4e', glow: 'rgba(255,90,78,.35)' } : null,
+        moving: !s.closed, dim: s.closed,
+    };
+};
+
+// 정기 모임 참석 체크 (summarizeMeeting 결과 → 카드 구성)
+// 참석자 이름·비용은 넣지 않는다 — 링크만 있으면 누구나 볼 수 있는 미리보기라서.
+const meetingSpec = (s) => {
+    const chips = [{ text: `참석 ${s.attend}`, tone: 'green' }, { text: `불참 ${s.decline}`, tone: 'red' }];
+    if (s.pending > 0) chips.push({ text: `미응답 ${s.pending}` });
+    return {
+        eyebrow: 'TENNIS · MEETING',
+        status: s.completed ? { text: '완료된 모임', tone: 'gray' } : { text: '참석 · 불참 체크 중', tone: 'green' },
+        title: s.title,
+        date: s.dateLong, time: s.time, chips,
+        stamp: s.completed ? { text: '완료', color: '#8fb3ff', glow: 'rgba(143,179,255,.35)' } : null,
+        moving: !s.completed, dim: s.completed,
+    };
 };
 
 // 트리에 쓰인 모든 글자 — 폰트 서브셋 요청용.
@@ -208,9 +253,7 @@ const collectText = (node, out = []) => {
     return out;
 };
 
-/** @param s summarizeMeetup() 결과 @returns {Promise<Uint8Array>} PNG */
-export const renderGuestCard = async (s) => {
-    const t = tree(s);
+const renderTree = async (t) => {
     // '…' 는 satori 가 말줄임할 때 스스로 넣는 글자라 트리에 없다 → 서브셋에 직접 추가.
     const chars = Array.from(new Set(collectText(t).join('') + '…')).join('');
     const [bold, semi] = await Promise.all([loadFont(800, chars), loadFont(600, chars), ensureWasm()]);
@@ -224,3 +267,9 @@ export const renderGuestCard = async (s) => {
     });
     return new Resvg(svg, { fitTo: { mode: 'width', value: W } }).render().asPng();
 };
+
+/** @param s summarizeMeetup() 결과 @returns {Promise<Uint8Array>} PNG */
+export const renderGuestCard = (s) => renderTree(cardTree(guestSpec(s)));
+
+/** @param s summarizeMeeting() 결과 @returns {Promise<Uint8Array>} PNG */
+export const renderMeetingCard = (s) => renderTree(cardTree(meetingSpec(s)));

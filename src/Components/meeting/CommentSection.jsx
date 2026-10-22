@@ -41,6 +41,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
     const [uploadingImage, setUploadingImage] = useState(false);
     const [lightboxSrc, setLightboxSrc] = useState(null);
     const commentsEndRef = useRef(null);
+    const commentsListRef = useRef(null);
     const markedAsRead = useRef(new Set());
     const translatingRef = useRef(new Set());
     const recognitionRef = useRef(null);
@@ -189,8 +190,11 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
         });
     }, [comments, myLang, currentUser]);
 
+    // 댓글 목록 상자 안에서만 맨 아래로. scrollIntoView 는 바깥의 상세 팝업까지 끝으로
+    // 굴려서, 팝업을 열자마자 참석·불참 버튼이 화면 밖으로 밀려났다(공유 링크로 들어온 사람 포함).
     const scrollToBottom = () => {
-        commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const el = commentsListRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
     };
 
     // Clean up any ongoing recognition/speech on unmount
@@ -467,7 +471,7 @@ const CommentSection = ({ meetingId, currentUser, attendees }) => {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
+            <div ref={commentsListRef} className="flex-1 overflow-y-auto space-y-3 mb-4 pr-1">
                 {loading && <p className="text-center text-gray-400 text-sm">{t('common.loading')}</p>}
                 {!loading && comments.length === 0 && (
                     <p className="text-center text-gray-400 text-sm py-10">{t('meeting.noCommentsYet')}</p>

@@ -22,9 +22,9 @@ const JS_KEY = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_KAKA
 // localhost 에서 공유할 때도 이미지는 운영 도메인 것을 쓴다.
 const PROD_ORIGIN = 'https://k-app.click';
 
-const pageOrigin = () =>
+export const pageOrigin = () =>
     (typeof window !== 'undefined' ? window.location.origin : PROD_ORIGIN);
-const publicOrigin = () => {
+export const publicOrigin = () => {
     const o = pageOrigin();
     return /localhost|127\.0\.0\.1|\[::1\]/.test(o) ? PROD_ORIGIN : o;
 };

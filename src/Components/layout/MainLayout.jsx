@@ -9,6 +9,7 @@ import ChatModal from '../chat/ChatModal';
 import Sidebar from './Sidebar';
 import LanguageSwitcher from './LanguageSwitcher';
 import InstallAppButton from './InstallAppButton';
+import MeetingLinkOpener from '../meeting/MeetingLinkOpener';
 import ServerCapacityIndicator from './ServerCapacityIndicator';
 import { useRouteTracker } from '../../hooks/useRouteTracker';
 import { Bell, BellRing, BellOff, LayoutGrid, LogOut, User } from 'lucide-react';
@@ -142,6 +143,9 @@ const MainLayout = ({ children }) => {
                 <main className="flex-1 p-4 md:p-8">
                     {children}
                 </main>
+
+                {/* 공유된 정기 모임 링크(/?meeting=)로 들어왔으면 어느 페이지든 그 모임 팝업을 연다 */}
+                <MeetingLinkOpener />
 
                 {/* Footer */}
                 <footer className="text-center p-4 text-xs text-slate-500 bg-slate-50 border-t border-slate-100">

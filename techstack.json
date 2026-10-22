@@ -200,7 +200,7 @@
           "name": "guest-card.js",
           "version": "in-repo",
           "purpose": "게스트 모집 카드 이미지(1200×600 PNG)를 모임마다 서버에서 그림 — 장소·날짜·시간·NTRP·유형·모집 상태·1인당 금액. 카카오톡 공유 카드의 imageUrl 과 링크 미리보기 og:image 가 같은 URL(?c=<id>.<버전>)을 쓴다. 버전이 현재 내용과 같을 때만 1년 캐시, 실패 시 정적 배너로 302.",
-          "config": "netlify/functions/guest-card.js, netlify/lib/guestCard.js(렌더), netlify/lib/guestMeetupStore.js(Admin SDK 조회, preferRest)"
+          "config": "netlify/functions/guest-card.js, netlify/lib/shareCard.js(렌더), netlify/lib/publicDocs.js(Admin SDK 조회, preferRest)"
         },
         {
           "name": "guest-og.js",
@@ -212,13 +212,25 @@
           "name": "satori",
           "version": "^0.63.2",
           "purpose": "카드 이미지 레이아웃 → SVG (guest-card). 이모지는 그리지 못해 쓰지 않음.",
-          "config": "netlify/lib/guestCard.js"
+          "config": "netlify/lib/shareCard.js"
         },
         {
           "name": "@resvg/resvg-wasm",
           "version": "2.6.2 (고정)",
           "purpose": "SVG → PNG. wasm 은 cold start 때 jsDelivr 에서 받으므로 npm 버전과 반드시 일치시켜 고정.",
-          "config": "netlify/lib/guestCard.js WASM_URL"
+          "config": "netlify/lib/shareCard.js WASM_URL"
+        },
+        {
+          "name": "meeting-card.js",
+          "version": "in-repo",
+          "purpose": "정기 모임 카톡 공유 카드 이미지(1200×600 PNG) — 제목·날짜·시간·참석/불참/미응답 수. 참석자 이름·비용은 넣지 않음(링크만 있으면 볼 수 있는 미리보기). 숨김 모임·없는 ID 는 정적 배너로 302.",
+          "config": "netlify/functions/meeting-card.js, netlify/lib/shareCard.js renderMeetingCard, src/lib/meetingSummary.js"
+        },
+        {
+          "name": "meeting-og.js",
+          "version": "in-repo",
+          "purpose": "정기 모임 링크 /?meeting=<id>.<버전> 의 og 태그를 그 모임 내용으로 교체(public/_redirects 쿼리 매칭). 열면 로그인 후 MeetingLinkOpener 가 프로젝트 멤버 확인 뒤 상세 팝업(참석·불참 저장)을 띄운다.",
+          "config": "netlify/functions/meeting-og.js, netlify/lib/ogHtml.js(공용 og 교체·폴백), src/Components/meeting/MeetingLinkOpener.jsx"
         }
       ]
     },
@@ -304,7 +316,7 @@
           "name": "Google Fonts CSS API (Noto Sans KR 서브셋)",
           "version": "fonts.googleapis.com css2?text=",
           "purpose": "카드 이미지에 쓰인 글자만 잘라 TTF 로 받음(약 30KB). 함수 번들에 수 MB 한글 폰트를 넣지 않기 위함. 실패 시 정적 배너로 폴백.",
-          "config": "netlify/lib/guestCard.js loadFont"
+          "config": "netlify/lib/shareCard.js loadFont"
         }
       ]
     },

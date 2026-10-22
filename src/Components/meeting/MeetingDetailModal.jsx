@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { X, Clock, Users, Trash2, Edit, Check, XCircle, AlignLeft, EyeOff, Eye, DollarSign, ShieldCheck, UserPlus } from 'lucide-react';
+import { X, Clock, Users, Trash2, Edit, Check, XCircle, AlignLeft, EyeOff, Eye, DollarSign, ShieldCheck, UserPlus, Link2 } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { deleteDoc, doc, updateDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { format, isValid } from 'date-fns';
@@ -10,6 +10,10 @@ import { useAuth } from '../../context/AuthContext';
 import CommentSection from './CommentSection';
 import ScoreBoard from './ScoreBoard';
 import AdminAttendanceEditor from './AdminAttendanceEditor';
+import KakaoTalkIcon from '../KakaoTalkIcon';
+import { useToast } from '../../context/ToastContext';
+import { isKakaoShareConfigured, loadKakaoSdk } from '../../lib/kakaoShare';
+import { meetingShareLink, meetingCardImage, warmMeetingCardImage, shareMeetingToKakao } from '../../lib/meetingShare';
 
 const DATE_FNS_LOCALES = { ko, en: enUS, zh: zhCN };
 
@@ -67,6 +71,42 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
         });
         return () => unsub();
     }, [meeting?.id, currentUser?.uid]);
+
+    // ── 카톡 공유 (참석·불참 체크 링크) ─────────────────────────────
+    // 링크를 톡방에 올리면 모임 카드가 뜨고, 누르면 로그인 후 이 팝업이 열려 바로 응답할 수 있다.
+    // 팝업이 열릴 때 SDK·카드 이미지를 미리 준비해 공유 순간에 기다리지 않게 한다.
+    const toast = useToast();
+    const cardImageUrl = meeting ? meetingCardImage(meeting) : '';
+    React.useEffect(() => {
+        if (meeting && !meeting.hidden && isKakaoShareConfigured()) loadKakaoSdk().catch(() => {});
+    }, [meeting?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    React.useEffect(() => {
+        if (meeting && !meeting.hidden) warmMeetingCardImage(meeting);
+    }, [cardImageUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const [linkCopied, setLinkCopied] = React.useState(false);
+    const copyMeetingLink = async (msg) => {
+        const url = meetingShareLink(meeting);
+        try {
+            await navigator.clipboard.writeText(url);
+        } catch (_) {
+            const ta = document.createElement('textarea');
+            ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+        }
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 1600);
+        toast?.addToast?.(msg || '🔗 링크를 복사했어요 — 톡방에 붙여넣으면 모임 카드가 함께 보여요');
+    };
+    const handleShareMeeting = async () => {
+        if (!isKakaoShareConfigured()) { copyMeetingLink(); return; }
+        try {
+            await shareMeetingToKakao(meeting);
+        } catch (e) {
+            console.error('[meeting share]', e);
+            copyMeetingLink('🔗 카카오 공유 창을 열지 못해 링크를 복사했어요 — 톡방에 붙여넣어 주세요');
+        }
+    };
 
     const closedGuestMeetup = linkedGuestMeetups.find(m => m.closed);
     const guestCount = closedGuestMeetup?.roster?.length || 0;
@@ -323,6 +363,19 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-1">
+                        {/* 참석 체크 링크 복사 — 톡방에 붙여넣으면 이 모임 카드가 뜬다 (숨김 모임은 공유 안 함) */}
+                        {!meeting.hidden && (
+                            <button
+                                onClick={() => copyMeetingLink()}
+                                title="참석 체크 링크 복사 — 톡방에 붙여넣으면 이 모임 팝업이 열려요"
+                                aria-label="참석 체크 링크 복사"
+                                className={`w-9 h-9 flex items-center justify-center rounded-full border transition-colors shadow-sm ${linkCopied
+                                    ? 'bg-green-50 text-green-600 border-green-200'
+                                    : 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100'}`}
+                            >
+                                {linkCopied ? <Check size={16} /> : <Link2 size={16} />}
+                            </button>
+                        )}
                         {/* 관리자 원형 버튼 — 관리자에게만 노출. 참석/불참 강제 지정 UI 오픈. */}
                         {isAdmin && (
                             <button
@@ -592,6 +645,18 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                 .map(([key]) => unsanitizeEmail(key))
                             }
                         />
+
+                        {/* 카카오톡 공유 — 톡방에 모임 카드로 올라가고, 누르면 이 팝업이 열려 참석·불참 체크 */}
+                        {!meeting.hidden && (
+                            <button
+                                onClick={handleShareMeeting}
+                                className="w-full flex items-center justify-center gap-2.5 py-3 rounded-full text-base font-extrabold shadow-md transition-transform active:scale-[0.99]"
+                                style={{ background: '#FEE500', color: 'rgba(0,0,0,.85)' }}
+                            >
+                                <KakaoTalkIcon />
+                                카카오톡으로 참석 체크 공유
+                            </button>
+                        )}
 
                         <button
                             onClick={onClose}

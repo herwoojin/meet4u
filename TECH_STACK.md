@@ -122,10 +122,12 @@ flowchart TD
 | **send-notification.js** | in-repo | Firebase Admin SDK 기반 FCM 푸시 전송 | — |
 | **firebase-admin** | ^13.7.0 | 서버리스 함수에서 FCM 전송/Firestore 어드민 접근 | FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY 환경변수 |
 | **google-translate-api-x** | ^10.7.2 | 함수 의존성으로 등록되어 있음(현재 코드는 fetch로 translate.googleapis.com 직접 호출). 미사용 시 추후 정리 후보. | — |
-| **guest-card.js** | in-repo | 게스트 모집 카드 이미지(1200×600 PNG)를 모임마다 서버에서 그림 — 장소·날짜·시간·NTRP·유형·모집 상태·1인당 금액. 카카오톡 공유 카드의 imageUrl 과 링크 미리보기 og:image 가 같은 URL(?c=<id>.<버전>)을 쓴다. 버전이 현재 내용과 같을 때만 1년 캐시, 실패 시 정적 배너로 302. | netlify/functions/guest-card.js, netlify/lib/guestCard.js(렌더), netlify/lib/guestMeetupStore.js(Admin SDK 조회, preferRest) |
+| **guest-card.js** | in-repo | 게스트 모집 카드 이미지(1200×600 PNG)를 모임마다 서버에서 그림 — 장소·날짜·시간·NTRP·유형·모집 상태·1인당 금액. 카카오톡 공유 카드의 imageUrl 과 링크 미리보기 og:image 가 같은 URL(?c=<id>.<버전>)을 쓴다. 버전이 현재 내용과 같을 때만 1년 캐시, 실패 시 정적 배너로 302. | netlify/functions/guest-card.js, netlify/lib/shareCard.js(렌더), netlify/lib/publicDocs.js(Admin SDK 조회, preferRest) |
 | **guest-og.js** | in-repo | 공유 링크 /?guest=<id> 요청 시 index.html 의 og 태그를 그 모임 제목·일시·금액·카드 이미지로 바꿔 반환 → 링크를 붙여넣어도 모임별 미리보기 카드가 뜬다. 실패해도 원본 index.html(최악은 해시 딥링크 302)로 앱 진입은 유지. | netlify/functions/guest-og.js, netlify.toml 의 query={guest} force 리다이렉트(SPA catch-all 보다 위) |
-| **satori** | ^0.63.2 | 카드 이미지 레이아웃 → SVG (guest-card). 이모지는 그리지 못해 쓰지 않음. | netlify/lib/guestCard.js |
-| **@resvg/resvg-wasm** | 2.6.2 (고정) | SVG → PNG. wasm 은 cold start 때 jsDelivr 에서 받으므로 npm 버전과 반드시 일치시켜 고정. | netlify/lib/guestCard.js WASM_URL |
+| **meeting-card.js** | in-repo | 정기 모임 카톡 공유 카드 이미지(1200×600 PNG) — 제목·날짜·시간·참석/불참/미응답 수. 참석자 이름·비용은 넣지 않음(링크만 있으면 볼 수 있는 미리보기). 숨김 모임·없는 ID 는 정적 배너로 302. | netlify/functions/meeting-card.js, netlify/lib/shareCard.js renderMeetingCard, src/lib/meetingSummary.js |
+| **meeting-og.js** | in-repo | 정기 모임 링크 /?meeting=<id>.<버전> 의 og 태그를 그 모임 내용으로 교체(public/_redirects 쿼리 매칭). 열면 로그인 후 MeetingLinkOpener 가 프로젝트 멤버 확인 뒤 상세 팝업(참석·불참 저장)을 띄운다. | netlify/functions/meeting-og.js, netlify/lib/ogHtml.js(공용 og 교체·폴백), src/Components/meeting/MeetingLinkOpener.jsx |
+| **satori** | ^0.63.2 | 카드 이미지 레이아웃 → SVG (guest-card). 이모지는 그리지 못해 쓰지 않음. | netlify/lib/shareCard.js |
+| **@resvg/resvg-wasm** | 2.6.2 (고정) | SVG → PNG. wasm 은 cold start 때 jsDelivr 에서 받으므로 npm 버전과 반드시 일치시켜 고정. | netlify/lib/shareCard.js WASM_URL |
 
 ### AI/외부 API — 무료 엔드포인트 위주
 
@@ -144,7 +146,7 @@ flowchart TD
 | **Tesseract.js (무료 클라이언트 OCR)** | ^7.0.0 | 예약 완료 문자 스크린샷을 브라우저 안에서 kor+eng 인식. API 키·서버 비용 0원. 언어 데이터(~15MB)는 최초 1회 CDN 다운로드 후 IndexedDB 캐시. 번들이 커서 사용 시점에만 동적 import. | src/lib/ocrReservation.js (ocrWithTesseract/parseReservations), src/Components/meeting/OcrImportModal.jsx |
 | **Gemini Vision (OCR 폴백)** | gemini-2.5-flash → 2.0-flash → flash-latest 폴백 | Tesseract 인식률이 낮을 때 이미지에서 예약 건을 JSON 배열로 직접 구조화 추출. 사용자 개인 무료 키 사용. | src/lib/ocrReservation.js (ocrWithGemini), 키는 grammar.js getGeminiKey 공유 |
 | **Kakao JavaScript SDK (카카오톡 공유)** | 2.8.4 (t1.kakaocdn.net, SRI sha384 고정) | 게스트 모집을 카톡방에 이미지 카드(피드 템플릿)로 공유. 카드 버튼은 https://<도메인>/?guest=<id> 로 연결되고 main.jsx 가 /#/guest-meetups?open=<id> 로 바꿔 상세 팝업을 연다. SDK 는 상세 팝업이 열릴 때만 동적 로드(88KB). 카드 이미지는 guest-card 함수가 모임별로 그린다. 키가 없거나 로드 실패 시 링크 한 줄만 복사(붙여넣으면 guest-og 미리보기 카드가 뜸). | src/lib/kakaoShare.js (loadKakaoSdk/shareGuestMeetupToKakao/summarizeMeetup/guestShareText), src/Components/guest/GuestMeetupDetail.jsx 하단 노란 버튼, public/share/guest-invite.jpg (함수 실패 시 폴백 배너), .env VITE_KAKAO_JS_KEY + Kakao Developers Web 사이트 도메인 등록 필요 |
-| **Google Fonts CSS API (Noto Sans KR 서브셋)** | fonts.googleapis.com css2?text= | 카드 이미지에 쓰인 글자만 잘라 TTF 로 받음(약 30KB). 함수 번들에 수 MB 한글 폰트를 넣지 않기 위함. 실패 시 정적 배너로 폴백. | netlify/lib/guestCard.js loadFont |
+| **Google Fonts CSS API (Noto Sans KR 서브셋)** | fonts.googleapis.com css2?text= | 카드 이미지에 쓰인 글자만 잘라 TTF 로 받음(약 30KB). 함수 번들에 수 MB 한글 폰트를 넣지 않기 위함. 실패 시 정적 배너로 폴백. | netlify/lib/shareCard.js loadFont |
 
 ### 인증/접근제어
 

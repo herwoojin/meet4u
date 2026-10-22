@@ -85,15 +85,17 @@ const CARD_DESIGN_REV = 3;
 // 카드에 찍히는 내용만 이은 값. 공유 후 "현황이 바뀌었는지" 판단에도 쓴다(디자인 개정은 제외).
 export const cardContent = (s) => [s.place, s.dateLong, s.time, s.level, s.type, s.status, s.priceText].join('|');
 
-export const cardVersion = (s) => {
-    const key = `${CARD_DESIGN_REV}|${cardContent(s)}`;
-    let h = 2166136261;                                   // FNV-1a 32bit
+// 짧은 해시(FNV-1a 32bit → 36진수). 정기 모임 카드(meetingSummary.js)도 같이 쓴다.
+export const hash36 = (key) => {
+    let h = 2166136261;
     for (let i = 0; i < key.length; i++) {
         h ^= key.charCodeAt(i);
         h = Math.imul(h, 16777619);
     }
     return (h >>> 0).toString(36);
 };
+
+export const cardVersion = (s) => hash36(`${CARD_DESIGN_REV}|${cardContent(s)}`);
 
 // 쿼리를 c=<id>.<버전> 하나로 묶는다. & 가 있으면 og:image 에 &amp; 로 들어가는데,
 // 미리보기 스크래퍼마다 엔티티 해석을 믿을 수 없어서. (Firestore 자동 ID 에는 '.' 이 없다)

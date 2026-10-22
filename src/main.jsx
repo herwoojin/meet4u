@@ -38,6 +38,18 @@ try {
     }
 } catch (_) { /* ignore */ }
 
+// ── 정기 모임 참석 체크 링크 진입 ─────────────────────────────────
+// https://k-app.click/?meeting=<id>.<버전> — 어느 페이지에서든 그 모임 팝업을 띄우도록
+// ID 만 기억해 두고 홈으로 보낸다. 로그인이 필요하면 로그인 후에도 이 값이 남아 있어
+// MainLayout 의 MeetingLinkOpener 가 팝업(참석·불참 체크)을 연다.
+try {
+    const mid = (new URLSearchParams(window.location.search).get('meeting') || '').split('.')[0];
+    if (mid && !window.location.hash) {
+        sessionStorage.setItem('meeting_pending_open', mid);
+        window.history.replaceState(null, '', '/#/');
+    }
+} catch (_) { /* ignore */ }
+
 // ── 게스트 모집 딥링크 캡처 ────────────────────────────────────────
 // 카톡에서 공유된 URL 형태: https://hanguk.netlify.app/#/guest-meetups?open=<id>
 // 로그인이 필요한 상태였다면 PrivateRoute 가 /login 으로 리다이렉트하며
