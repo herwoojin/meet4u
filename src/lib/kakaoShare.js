@@ -12,7 +12,7 @@
 //   2) 카카오 디벨로퍼스 → 그 앱의 Web 사이트 도메인에 서비스 도메인 등록
 // 키가 없거나 SDK 를 못 불러오면 호출부가 링크 복사로 폴백한다.
 
-import { summarizeMeetup, guestCardImageUrl, SNAPSHOT_HINT } from './guestSummary';
+import { summarizeMeetup, guestCardImageUrl, SNAPSHOT_HINT, cardContent } from './guestSummary';
 
 const SDK_URL = 'https://t1.kakaocdn.net/kakao_js_sdk/2.8.4/kakao.min.js';
 const SDK_INTEGRITY = 'sha384-BGX7Wb16GmRFagri4bLJV2DgipVZaU2AI812GZtHtHzzDQJnfHasDXN5houxv45w';
@@ -100,6 +100,27 @@ export const shareGuestMeetupToKakao = async (m) => {
             { title: s.closed ? '대기 신청 바로가기' : '참가 신청 바로가기', link },
         ],
     });
+};
+
+// ── 공유 후 현황 변경 감지 ──────────────────────────────────────
+// 카톡에 올라간 카드는 갱신되지 않으므로(카카오 정책), 공유한 뒤 현황이 바뀌면
+// 다시 공유하도록 알려 준다. 이 기기에서 마지막으로 공유한 내용을 기억해 비교한다.
+const sharedKey = (id) => `guest_shared_${id}`;
+
+export const rememberShared = (m) => {
+    const s = summarizeMeetup(m, pageOrigin());
+    try {
+        localStorage.setItem(sharedKey(m.id), JSON.stringify({ content: cardContent(s), status: s.status, at: Date.now() }));
+    } catch (_) { /* 저장 불가(사파리 개인정보 모드 등) → 알림만 생략 */ }
+};
+
+/** 공유 뒤 바뀌었으면 { from, to } (상태 문구), 아니면 null. 공유한 적 없으면 null. */
+export const sharedChange = (m) => {
+    let prev = null;
+    try { prev = JSON.parse(localStorage.getItem(sharedKey(m.id)) || 'null'); } catch (_) { prev = null; }
+    if (!prev?.content) return null;
+    const s = summarizeMeetup(m, pageOrigin());
+    return prev.content === cardContent(s) ? null : { from: prev.status, to: s.status };
 };
 
 // 밴드·문자 등 카카오 외 공유용 전체 텍스트 (상세 팝업 헤더의 📋 복사).

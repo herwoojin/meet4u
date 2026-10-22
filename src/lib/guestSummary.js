@@ -77,13 +77,16 @@ export const summarizeMeetup = (m, origin) => {
 export const SNAPSHOT_HINT = '공유 시점 현황 · 눌러서 실시간 확인';
 
 // 카드 디자인을 바꾸면 올린다. 버전에 섞여 들어가 URL 이 바뀌므로, 1년 캐시된
-// 옛 디자인 이미지가 새 공유에 다시 쓰이지 않는다. (2: 공유 시점 안내 추가)
-const CARD_DESIGN_REV = 2;
+// 옛 디자인 이미지가 새 공유에 다시 쓰이지 않는다. (2: 공유 시점 안내, 3: 움직임 연출)
+const CARD_DESIGN_REV = 3;
 
 // 카드 이미지 URL 의 버전 값. 이미지에 찍히는 내용이 바뀌면 URL 이 바뀌어
 // 카카오·CDN 이 옛 이미지를 계속 보여주지 않는다.
+// 카드에 찍히는 내용만 이은 값. 공유 후 "현황이 바뀌었는지" 판단에도 쓴다(디자인 개정은 제외).
+export const cardContent = (s) => [s.place, s.dateLong, s.time, s.level, s.type, s.status, s.priceText].join('|');
+
 export const cardVersion = (s) => {
-    const key = [CARD_DESIGN_REV, s.place, s.dateLong, s.time, s.level, s.type, s.status, s.priceText].join('|');
+    const key = `${CARD_DESIGN_REV}|${cardContent(s)}`;
     let h = 2166136261;                                   // FNV-1a 32bit
     for (let i = 0; i < key.length; i++) {
         h ^= key.charCodeAt(i);

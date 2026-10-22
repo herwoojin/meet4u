@@ -74,10 +74,45 @@ const chip = (text, strong) => h({
 
 const courtLine = (style) => h({ position: 'absolute', background: 'rgba(255,255,255,.28)', ...style });
 
+// 맥박처럼 퍼지는 링을 두른 점 (정지 화면에서 "지금 살아 있음"을 표현)
+// 링이 점보다 size*0.75 만큼 바깥으로 퍼지므로, 그만큼 + 여백을 두어 옆 글자와 겹치지 않게 한다.
+const pulseDot = (size, color) => h(
+    { position: 'relative', width: size, height: size, marginLeft: size * 0.5, marginRight: Math.round(size * 0.75 + 12) },
+    h({ position: 'absolute', left: -size * 0.75, top: -size * 0.75, width: size * 2.5, height: size * 2.5,
+        borderRadius: 999, border: `2px solid ${color}`, opacity: 0.35 }),
+    h({ position: 'absolute', left: -size * 0.35, top: -size * 0.35, width: size * 1.7, height: size * 1.7,
+        borderRadius: 999, background: color, opacity: 0.25 }),
+    h({ width: size, height: size, borderRadius: 999, background: color }),
+);
+
+// 공 하나 (left/top 은 상자의 왼쪽 위, d 는 지름). ghost 면 솔기 없이 흐린 잔상.
+const ball = (left, top, d, opacity, solid) => h(
+    {
+        position: 'absolute', left, top, width: d, height: d, borderRadius: 999, opacity,
+        backgroundImage: 'radial-gradient(circle at 34% 30%, #f6fb9a 0%, #dfe955 38%, #b8c832 100%)',
+        ...(solid ? { boxShadow: '0 22px 50px rgba(0,0,0,.45)' } : {}),
+    },
+    ...(solid ? [{ type: 'img', props: { src: BALL_SEAM, width: d, height: d } }] : []),
+);
+
+// 코트에 맞고 오른쪽 위로 튀어 오르는 순간: 바운드 자국 → 속도선 → 잔상 3개 → 공
+const flyingBall = () => [
+    h({ position: 'absolute', left: 640, top: 500, width: 150, height: 34, borderRadius: 999, transform: 'rotate(-14deg)',
+        backgroundImage: 'radial-gradient(closest-side, rgba(255,255,255,.55), rgba(255,255,255,0))' }),
+    ...[[600, 430, 190], [628, 468, 140], [664, 396, 120]].map(([left, top, w]) => h({
+        position: 'absolute', left, top, width: w, height: 6, borderRadius: 3, transform: 'rotate(-32deg)',
+        backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.6))',
+    })),
+    ball(700, 412, 110, 0.13),
+    ball(742, 362, 130, 0.22),
+    ball(790, 312, 150, 0.34),
+    ball(842, 252, 170, 1, true),
+];
+
 const tree = (s) => {
     const statusChip = s.closed
-        ? { bg: 'rgba(192,73,43,.25)', border: 'rgba(240,140,110,.65)', dot: '#f08c6e', color: '#ffd9cc' }
-        : { bg: 'rgba(47,143,91,.28)', border: 'rgba(110,214,150,.6)', dot: '#6ed696', color: '#cdf3da' };
+        ? { bg: 'rgba(192,73,43,.25)', border: 'rgba(240,140,110,.65)', dot: '#f08c6e', color: '#ffd9cc', glow: 'rgba(240,140,110,.35)' }
+        : { bg: 'rgba(47,143,91,.28)', border: 'rgba(110,214,150,.6)', dot: '#6ed696', color: '#cdf3da', glow: 'rgba(110,214,150,.45)' };
 
     // 마감이면 본문을 흐리게 하고 큰 "마감" 도장을 찍는다 (앱의 LiveGuestCard 와 같은 연출의 정지판).
     const dim = s.closed ? { opacity: 0.55 } : {};
@@ -106,15 +141,9 @@ const tree = (s) => {
             courtLine({ left: 62, right: 62, bottom: 120, height: 4 }),
             courtLine({ left: 273, top: 120, bottom: 120, width: 4 }),
         ),
-        // 공
-        h(
-            {
-                position: 'absolute', right: 250, top: 350, width: 170, height: 170, borderRadius: 999,
-                backgroundImage: 'radial-gradient(circle at 34% 30%, #f6fb9a 0%, #dfe955 38%, #b8c832 100%)',
-                boxShadow: '0 22px 50px rgba(0,0,0,.45)',
-            },
-            { type: 'img', props: { src: BALL_SEAM, width: 170, height: 170 } },
-        ),
+        // 공 — 카톡은 이미지를 움직이게 보여주지 않으므로(GIF 도 첫 프레임만) 정지 화면 안에
+        // "튀어 오르는 순간"을 그린다. 마감이면 공이 멈춘 원래 자리 (앱 라이브 카드와 같은 의미).
+        ...(s.closed ? [ball(780, 350, 170, 1, true)] : flyingBall()),
         // 우상단: 이 카드는 공유 시점의 정지 화면이라는 안내 (앱 라이브 카드의 LIVE 배지 자리)
         h(
             {
@@ -122,7 +151,7 @@ const tree = (s) => {
                 borderRadius: 999, background: 'rgba(10,12,28,.78)', border: '2px solid rgba(255,255,255,.25)',
                 fontSize: 28, fontWeight: 800, color: '#fff',
             },
-            h({ width: 12, height: 12, borderRadius: 999, background: '#ff4d4f', marginRight: 12 }),
+            pulseDot(12, '#ff4d4f'),
             SNAPSHOT_HINT,
         ),
         // 상단 브랜드 라벨
@@ -141,8 +170,9 @@ const tree = (s) => {
                     alignSelf: 'flex-start', alignItems: 'center', padding: '10px 22px', borderRadius: 999,
                     background: statusChip.bg, border: `2px solid ${statusChip.border}`,
                     color: statusChip.color, fontSize: 28, fontWeight: 800,
+                    boxShadow: `0 0 28px ${statusChip.glow}`,
                 },
-                h({ width: 14, height: 14, borderRadius: 999, background: statusChip.dot, marginRight: 12 }),
+                pulseDot(14, statusChip.dot),
                 s.closed ? '마감 · 대기 신청 가능' : `모집중 · ${s.status}`,
             ),
             h({

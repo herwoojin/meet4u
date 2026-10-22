@@ -5,10 +5,10 @@
 //
 // 참가/취소/대기 액션은 부모(GuestMeetups) 의 onAction 을 그대로 재사용.
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { totalCost, perHead, paidCount, capTotal, isClosed, setPaid, setClosed, deleteMeetup } from '../../lib/guestMeetups';
 import LiveGuestCard from './LiveGuestCard';
-import { isKakaoShareConfigured, loadKakaoSdk, shareGuestMeetupToKakao, guestShareText, guestShareLink, guestCardImage, warmGuestCardImage } from '../../lib/kakaoShare';
+import { isKakaoShareConfigured, loadKakaoSdk, shareGuestMeetupToKakao, guestShareText, guestShareLink, guestCardImage, warmGuestCardImage, rememberShared, sharedChange } from '../../lib/kakaoShare';
 
 const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette: T }) => {
     const cl = isClosed(m);
@@ -54,8 +54,15 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
 
     // 밴드·문자 등 카카오 외 공유용 — 요약 텍스트 + 딥링크를 클립보드에 복사.
     // 숫자는 카드와 같은 summarizeMeetup() 을 거치므로 화면과 어긋나지 않는다.
-    const handleCopyShareText = () =>
+    // 공유할 때마다 그 시점 현황을 기억 → 이후 바뀌면 "다시 공유" 배너 (아래 shareDiff)
+    const [, setSharedTick] = useState(0);
+    const markShared = () => { rememberShared(m); setSharedTick((n) => n + 1); };
+    const shareDiff = sharedChange(m);
+
+    const handleCopyShareText = () => {
         copyText(guestShareText(m), '📋 안내 글 복사됨 — 톡방에 붙여넣기!');
+        markShared();
+    };
 
     // 카카오톡 공유: 이미지 + 제목 + 설명 + "참가 신청 바로가기" 버튼 카드 하나만 전송.
     // 키 미설정·SDK 실패 시에는 링크만 복사한다. 긴 안내 글 대신 링크 한 줄을
@@ -66,14 +73,15 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
     const handleKakaoShare = async () => {
         if (!isKakaoShareConfigured()) {
             copyLinkFallback('');
-            return;
+        } else {
+            try {
+                await shareGuestMeetupToKakao(m);
+            } catch (e) {
+                console.error('[kakao share]', e);
+                copyLinkFallback('카카오 공유 창을 열지 못해 ');
+            }
         }
-        try {
-            await shareGuestMeetupToKakao(m);
-        } catch (e) {
-            console.error('[kakao share]', e);
-            copyLinkFallback('카카오 공유 창을 열지 못해 ');
-        }
+        markShared();
     };
 
     const togglePaid = async (targetUid, currentPaid) => {
@@ -143,6 +151,33 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                         }}>×</button>
                     </div>
                 </div>
+
+                {/* 공유한 뒤 현황이 바뀌었으면 — 톡방의 카드는 그대로라 다시 올리도록 안내 */}
+                {shareDiff && (
+                    <div style={{
+                        display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
+                        padding: '10px 12px', borderRadius: 12,
+                        background: '#fff7d6', border: '1px solid #f2d36b',
+                    }}>
+                        <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 1.5, color: '#5b4a12' }}>
+                            <b>공유한 뒤 현황이 바뀌었어요</b><br />
+                            {shareDiff.from === shareDiff.to
+                                ? '모임 정보(시간·금액 등)가 바뀌었어요'
+                                : <>{shareDiff.from} → <b>{shareDiff.to}</b></>}
+                            <br /><span style={{ color: '#8a7425', fontSize: 11.5 }}>톡방에 올린 카드는 공유 시점 그대로예요</span>
+                        </div>
+                        <button
+                            onClick={handleKakaoShare}
+                            style={{
+                                flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
+                                background: '#FEE500', color: 'rgba(0,0,0,.85)', border: 0, borderRadius: 999,
+                                padding: '8px 12px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer',
+                            }}
+                        >
+                            <KakaoTalkIcon small />다시 공유
+                        </button>
+                    </div>
+                )}
 
                 {/* 살아있는 모집 카드 — 카톡 카드와 같은 디자인, 남은 자리 실시간 반영 */}
                 <LiveGuestCard m={m} />
@@ -320,8 +355,8 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
 };
 
 // 카카오톡 말풍선 심볼 (브랜드 가이드: 노란 바탕 #FEE500 위 짙은 갈색 심볼)
-const KakaoTalkIcon = () => (
-    <svg width="30" height="28" viewBox="0 0 30 28" aria-hidden="true">
+const KakaoTalkIcon = ({ small }) => (
+    <svg width={small ? 20 : 30} height={small ? 19 : 28} viewBox="0 0 30 28" aria-hidden="true">
         <path
             d="M15 2C7.8 2 2 6.6 2 12.3c0 3.7 2.4 6.9 6.1 8.7l-1.3 4.8c-.1.4.3.7.7.5l5.6-3.7c.6.1 1.3.1 1.9.1 7.2 0 13-4.6 13-10.3S22.2 2 15 2z"
             fill="#3A1D1D"
