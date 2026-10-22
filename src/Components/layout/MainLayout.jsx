@@ -8,9 +8,10 @@ import useGlobalChatNotifications from '../../hooks/useGlobalChatNotifications';
 import ChatModal from '../chat/ChatModal';
 import Sidebar from './Sidebar';
 import LanguageSwitcher from './LanguageSwitcher';
+import InstallAppButton from './InstallAppButton';
 import ServerCapacityIndicator from './ServerCapacityIndicator';
 import { useRouteTracker } from '../../hooks/useRouteTracker';
-import { Calendar, Bell, BellRing, BellOff, LayoutGrid, LogOut, User } from 'lucide-react';
+import { Bell, BellRing, BellOff, LayoutGrid, LogOut, User } from 'lucide-react';
 
 const MainLayout = ({ children }) => {
     const { t } = useTranslation();
@@ -70,19 +71,24 @@ const MainLayout = ({ children }) => {
             {/* Main Content */}
             <div className="flex-1 flex flex-col min-h-screen bg-white">
                 {/* Mobile Header */}
-                <header className="bg-white p-4 border-b border-gray-200 flex items-center justify-between md:hidden sticky top-0 z-30">
-                    <div className="flex items-center gap-2">
+                {/* 오른쪽 버튼이 늘어 360px 폭에서 원형 버튼이 찌그러지고 화면 밖으로 밀려났다 →
+                    버튼은 shrink-0 로 고정하고, 모자란 폭은 왼쪽 앱 제목이 말줄임으로 양보한다.
+                    (설치 후에는 설치 버튼이 사라져 360px 에서도 제목이 다 보인다) */}
+                <header className="bg-white px-3 py-4 border-b border-gray-200 flex items-center justify-between gap-2 md:hidden sticky top-0 z-30">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                         {/* 홈(메뉴) 아이콘 — /menu 로 이동해 큰 카드 홈 화면으로 돌아간다.
                             /menu 에 있을 때는 노출하지 않는다. 햄버거 사이드바 버튼은
                             메인 메뉴와 기능이 겹쳐 삭제. */}
                         <MobileMenuButton />
-                        <h1 className="text-lg font-bold text-gray-900 flex items-center gap-1.5">
-                            <Calendar className="text-gray-900" size={18} />
-                            <span className="truncate max-w-[160px]">{displayAppTitle}</span>
+                        {/* 제목 앞 달력 아이콘은 뺐다 — 장식인데 24px 를 먹어 제목이 먼저 잘렸다 */}
+                        <h1 className="text-lg font-bold text-gray-900 flex items-center min-w-0">
+                            <span className="truncate min-w-0">{displayAppTitle}</span>
                         </h1>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 shrink-0">
                         <LanguageSwitcher compact />
+                        {/* 앱 설치(PWA) — 이미 앱으로 열려 있으면 자동으로 숨는다 */}
+                        <InstallAppButton />
                         {/* 내 프로필(별명·사용 언어) — 모바일엔 사이드바 진입로가 없어
                             여기가 설정 화면으로 가는 상시 통로다. */}
                         <Link
@@ -102,7 +108,7 @@ const MainLayout = ({ children }) => {
                             }}
                             title={t('nav.logout')}
                             aria-label={t('nav.logout')}
-                            className="w-9 h-9 flex items-center justify-center rounded-full bg-white text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
+                            className="w-9 h-9 flex items-center justify-center rounded-full bg-white text-red-500 border border-red-200 hover:bg-red-50 transition-colors shrink-0"
                         >
                             <LogOut size={16} />
                         </button>
@@ -117,7 +123,7 @@ const MainLayout = ({ children }) => {
                                         alert(t('notification.blocked'));
                                     }
                                 }}
-                                className={`p-2 rounded-lg transition-colors ${notifPermission === 'granted'
+                                className={`p-2 rounded-lg transition-colors shrink-0 ${notifPermission === 'granted'
                                         ? 'text-green-600 bg-green-50'
                                         : notifPermission === 'denied'
                                             ? 'text-red-400 bg-red-50'

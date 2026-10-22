@@ -199,6 +199,7 @@ flowchart TD
 | **Service Worker** | Workbox(via vite-plugin-pwa) | 오프라인 캐시 + FCM 백그라운드 수신 | vite.config.js workbox 섹션 |
 | **Web App Manifest** | in-repo | PWA 설치 가능. start_url=/, display=standalone, theme #1a1a2e | — |
 | **PWA 아이콘** | 192/512px | 홈 화면 아이콘 | public/pwa-192x192.png, public/pwa-512x512.png, apple-touch-icon.png |
+| **앱 설치 버튼 (PWA 설치 유도)** | in-repo | 모바일 헤더 언어 설정 옆 원형 버튼. 안드로이드 크롬·삼성 인터넷은 beforeinstallprompt 로 바로 설치 창, iOS 는 공유 → 홈 화면에 추가 안내, 카카오톡 인앱은 kakaotalk://web/openExternal 로 외부 브라우저 열기, 기타 인앱(네이버·인스타 등)은 다른 브라우저로 열기 + 링크 복사. 홈 화면 앱(standalone·TWA)으로 실행 중이면 숨김. | src/lib/pwaInstall.js (main.jsx 에서 렌더 전 이벤트 캡처), src/Components/layout/InstallAppButton.jsx, MainLayout 모바일 헤더 |
 
 ### 관찰성/신뢰성
 

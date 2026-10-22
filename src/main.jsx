@@ -5,6 +5,11 @@ import './index.css'
 import './i18n';
 import { HashRouter } from 'react-router-dom'
 import ErrorBoundary from './Components/ErrorBoundary';
+import { capturePwaInstallPrompt } from './lib/pwaInstall';
+
+// 헤더의 "앱 설치" 버튼용 — beforeinstallprompt 는 로드 직후 한 번만 오므로
+// React 가 마운트되기 전에 잡아 둔다.
+capturePwaInstallPrompt();
 
 // ── 카카오 OAuth 콜백 → HashRouter 경로 변환 ──────────────────────────
 // 카카오가 /auth/kakao/callback?code=xxx 로 리다이렉트하면
