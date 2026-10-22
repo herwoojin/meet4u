@@ -7,6 +7,7 @@
 // 왼쪽 문구 자리에 실제 모임 정보를 넣는다. satori 는 이모지를 그리지 못하므로 쓰지 않는다.
 
 import satori from 'satori';
+import { SNAPSHOT_HINT } from '../../src/lib/guestSummary.js';
 import { Resvg, initWasm } from '@resvg/resvg-wasm';
 
 // package.json 의 @resvg/resvg-wasm 버전과 반드시 같아야 한다(JS 글루 ↔ wasm).
@@ -113,6 +114,16 @@ const tree = (s) => {
                 boxShadow: '0 22px 50px rgba(0,0,0,.45)',
             },
             { type: 'img', props: { src: BALL_SEAM, width: 170, height: 170 } },
+        ),
+        // 우상단: 이 카드는 공유 시점의 정지 화면이라는 안내 (앱 라이브 카드의 LIVE 배지 자리)
+        h(
+            {
+                position: 'absolute', right: 36, top: 34, alignItems: 'center', padding: '10px 22px',
+                borderRadius: 999, background: 'rgba(10,12,28,.78)', border: '2px solid rgba(255,255,255,.25)',
+                fontSize: 28, fontWeight: 800, color: '#fff',
+            },
+            h({ width: 12, height: 12, borderRadius: 999, background: '#ff4d4f', marginRight: 12 }),
+            SNAPSHOT_HINT,
         ),
         // 상단 브랜드 라벨
         h({

@@ -12,7 +12,7 @@
 //   2) 카카오 디벨로퍼스 → 그 앱의 Web 사이트 도메인에 서비스 도메인 등록
 // 키가 없거나 SDK 를 못 불러오면 호출부가 링크 복사로 폴백한다.
 
-import { summarizeMeetup, guestCardImageUrl } from './guestSummary';
+import { summarizeMeetup, guestCardImageUrl, SNAPSHOT_HINT } from './guestSummary';
 
 const SDK_URL = 'https://t1.kakaocdn.net/kakao_js_sdk/2.8.4/kakao.min.js';
 const SDK_INTEGRITY = 'sha384-BGX7Wb16GmRFagri4bLJV2DgipVZaU2AI812GZtHtHzzDQJnfHasDXN5houxv45w';
@@ -90,7 +90,7 @@ export const shareGuestMeetupToKakao = async (m) => {
         objectType: 'feed',
         content: {
             title: `🎾 ${s.place} 게스트 모집${s.closed ? ' (마감)' : ''}`,
-            description: `${s.dateLong} ${s.time}\nNTRP ${s.level} · ${s.type} · ${s.status}${price}`,
+            description: `${s.dateLong} ${s.time}\nNTRP ${s.level} · ${s.type} · ${s.status}${price}\n${SNAPSHOT_HINT}`,
             imageUrl: guestCardImageUrl(publicOrigin(), s),
             imageWidth: 1200,
             imageHeight: 600,

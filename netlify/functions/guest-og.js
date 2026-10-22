@@ -10,7 +10,7 @@
 // index.html 조차 못 받으면 → 해시 딥링크로 302.
 
 import { readGuestMeetup } from '../lib/guestMeetupStore.js';
-import { summarizeMeetup, guestCardImageUrl, parseGuestParam } from '../../src/lib/guestSummary.js';
+import { summarizeMeetup, guestCardImageUrl, parseGuestParam, SNAPSHOT_HINT } from '../../src/lib/guestSummary.js';
 
 const esc = (v) => String(v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -25,7 +25,9 @@ const setMeta = (html, attr, key, value) => {
 export const injectGuestOg = (html, m, origin) => {
     const s = summarizeMeetup(m, origin);
     const title = `🎾 ${s.place} 게스트 모집${s.closed ? ' (마감)' : ''}`;
-    const desc = [`${s.dateLong} ${s.time}`, `NTRP ${s.level}`, s.type, s.status, s.priceText]
+    // 안내 문구는 맨 뒤 — 카톡 미리보기는 설명이 2줄에서 잘려 앞쪽의 실제 모집 내용이 우선.
+    // (안내는 카드 이미지 우상단에 크게 들어가 있다)
+    const desc = [`${s.dateLong} ${s.time}`, `NTRP ${s.level}`, s.type, s.status, s.priceText, SNAPSHOT_HINT]
         .filter(Boolean).join(' · ');
     const image = guestCardImageUrl(origin, s);
 
