@@ -19,7 +19,8 @@ const C = {
 };
 
 let wasmReady = null;
-const ensureWasm = () => {
+// 함수 핸들러가 Firestore 조회와 동시에 미리 불러 두도록 export (콜드 스타트 단축).
+export const ensureWasm = () => {
     if (!wasmReady) {
         wasmReady = initWasm(fetch(WASM_URL)).catch((e) => { wasmReady = null; throw e; });
     }

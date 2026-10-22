@@ -5,7 +5,7 @@
 // 실패하면 정적 배너로 302 — 카드에 이미지가 비는 일은 없게 한다.
 
 import { readGuestMeetup } from '../lib/guestMeetupStore.js';
-import { renderGuestCard } from '../lib/guestCard.js';
+import { renderGuestCard, ensureWasm } from '../lib/guestCard.js';
 import { summarizeMeetup, cardVersion } from '../../src/lib/guestSummary.js';
 
 export const handler = async (event) => {
@@ -17,6 +17,9 @@ export const handler = async (event) => {
         headers: { Location: `https://${host}/share/guest-invite.jpg`, 'Cache-Control': 'no-store' },
         body: '',
     });
+
+    // 렌더 엔진(wasm 2.4MB)을 모임 조회와 동시에 받아 둔다. 실패는 렌더 단계에서 다시 드러난다.
+    ensureWasm().catch(() => {});
 
     try {
         const m = await readGuestMeetup(id);
