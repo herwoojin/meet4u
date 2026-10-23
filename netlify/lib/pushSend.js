@@ -35,6 +35,18 @@ export const findUsersByResponseKeys = async (keys) => {
     return users;
 };
 
+/** 사용자 uid 들 → 사용자 문서 Map(uid → data). 게스트 모집 참가자는 uid 로 저장된다. */
+export const findUsersByUids = async (uids) => {
+    const db = getDb();
+    const admin = getAdmin();
+    const users = new Map();
+    for (const c of chunks(Array.from(new Set(uids.filter(Boolean))), 10)) {
+        const snap = await db.collection('users').where(admin.firestore.FieldPath.documentId(), 'in', c).get();
+        snap.forEach((d) => users.set(d.id, d.data()));
+    }
+    return users;
+};
+
 /** @returns {{ users, tokens, sent, failed }} */
 export const sendPushToUsers = async (users, { type, title, body, url, tag }) => {
     const admin = getAdmin();

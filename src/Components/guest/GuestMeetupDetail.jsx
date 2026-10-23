@@ -6,12 +6,52 @@
 // 참가/취소/대기 액션은 부모(GuestMeetups) 의 onAction 을 그대로 재사용.
 
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 import { totalCost, perHead, paidCount, capTotal, isClosed, setPaid, setClosed, deleteMeetup } from '../../lib/guestMeetups';
 import LiveGuestCard from './LiveGuestCard';
 import KakaoTalkIcon from '../KakaoTalkIcon';
 import { isKakaoShareConfigured, loadKakaoSdk, shareGuestMeetupToKakao, guestShareText, guestShareLink, guestCardImage, warmGuestCardImage, rememberShared, sharedChange } from '../../lib/kakaoShare';
 
+// 참가자 알림 ON/OFF 뱃지 (정기 모임 팝업과 같은 의미: 이 사람 기기에 푸시가 켜져 있는지)
+const PushBadge = ({ on, T }) => (
+    <span
+        title={on ? '모임 시작 1시간 전 알림을 받아요' : '알림이 꺼져 있어요'}
+        style={{
+            fontSize: 10.5, fontWeight: 800, borderRadius: 999, padding: '2px 7px', whiteSpace: 'nowrap',
+            background: on ? '#e8f0ff' : '#f4f2ec', color: on ? '#2456c9' : T.sub,
+            border: `1px solid ${on ? '#bcd0fb' : T.line}`,
+        }}
+    >{on ? '🔔 알림 ON' : '🔕 알림 OFF'}</span>
+);
+
 const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette: T }) => {
+    const navigate = useNavigate();
+    const goPushSettings = () => { onClose?.(); navigate('/settings', { state: { focus: 'push' } }); };
+
+    // 참가자별 알림 ON/OFF — users.fcmTokens 가 있으면 ON. 참가자는 uid 로 저장돼 있어 uid 로 조회.
+    const [pushMap, setPushMap] = useState({});
+    const rosterUids = (m.roster || []).map((r) => r.uid).filter(Boolean);
+    const rosterKey = rosterUids.join(',');
+    useEffect(() => {
+        if (!rosterUids.length) return undefined;
+        let alive = true;
+        const chunks = [];
+        for (let i = 0; i < rosterUids.length; i += 10) chunks.push(rosterUids.slice(i, i + 10));
+        Promise.all(chunks.map((c) => getDocs(query(collection(db, 'users'), where(documentId(), 'in', c)))))
+            .then((snaps) => {
+                if (!alive) return;
+                const next = {};
+                snaps.forEach((snap) => snap.forEach((d) => {
+                    const t = d.data().fcmTokens;
+                    next[d.id] = Array.isArray(t) && t.length > 0;
+                }));
+                setPushMap(next);
+            })
+            .catch((e) => console.warn('[GuestMeetupDetail] push status', e?.code || e));
+        return () => { alive = false; };
+    }, [rosterKey]); // eslint-disable-line react-hooks/exhaustive-deps
     const cl = isClosed(m);
     const total = totalCost(m);
     const head = perHead(m);
@@ -253,7 +293,7 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                                 alignItems: 'center', padding: '8px 0',
                                 borderBottom: `1px dashed ${T.line}`, fontSize: 14,
                             }}>
-                                <div>
+                                <div style={{ minWidth: 0 }}>
                                     <span style={{ fontWeight: 700 }}>{r.name}</span>
                                     {r.host && <Tag T={T}>호스트</Tag>}
                                     {isMine && <Tag T={T} me>나</Tag>}
@@ -268,6 +308,20 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                                         >🎉 대기승격</span>
                                     )}
                                 </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                <PushBadge on={!!pushMap[r.uid]} T={T} />
+                                {isMine && !pushMap[r.uid] && (
+                                    <button
+                                        type="button"
+                                        onClick={goPushSettings}
+                                        title="설정 › 알림에서 켜기"
+                                        aria-label="알림 설정으로 이동"
+                                        style={{
+                                            width: 22, height: 22, borderRadius: 999, border: 0, cursor: 'pointer',
+                                            background: '#2456c9', color: '#fff', fontSize: 12, lineHeight: '22px', padding: 0,
+                                        }}
+                                    >⚙</button>
+                                )}
                                 <label style={{
                                     display: 'flex', alignItems: 'center', gap: 6,
                                     fontSize: 12.5, fontWeight: 800,
@@ -283,9 +337,36 @@ const GuestMeetupDetail = ({ m, me, onClose, onAction, onEdit, onToast, palette:
                                     />
                                     {r.paid ? '입금완료' : '입금대기'}
                                 </label>
+                                </div>
                             </div>
                         );
                     })}
+                    {/* 내가 참가 중이면 알림 상태 안내 (정기 모임 팝업과 같은 문구 체계) */}
+                    {isInRoster && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 8, marginTop: 10,
+                            fontSize: 12.5, lineHeight: 1.5, borderRadius: 8, padding: '8px 10px',
+                            ...(pushMap[me.uid]
+                                ? { background: '#eef4ff', border: '1px solid #bcd0fb', color: '#1f3f8f' }
+                                : { background: '#fff7e6', border: '1px solid #f2d39b', color: '#7a5410' }),
+                        }}>
+                            <div style={{ flex: 1 }}>
+                                {pushMap[me.uid]
+                                    ? <><b>🔔 알림 ON</b> · 모임 시작 1시간 전에 알림이 와요.</>
+                                    : <><b>🔕 알림 OFF</b> · 이 기기는 알림이 꺼져 있어 1시간 전 알림을 받을 수 없어요.</>}
+                            </div>
+                            {!pushMap[me.uid] && (
+                                <button
+                                    type="button"
+                                    onClick={goPushSettings}
+                                    style={{
+                                        flexShrink: 0, border: 0, borderRadius: 999, cursor: 'pointer',
+                                        background: '#2456c9', color: '#fff', fontSize: 12, fontWeight: 800, padding: '6px 10px',
+                                    }}
+                                >⚙ 알림 켜기</button>
+                            )}
+                        </div>
+                    )}
                 </Box>
 
                 {/* 대기자 */}

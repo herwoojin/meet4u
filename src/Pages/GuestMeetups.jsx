@@ -14,6 +14,7 @@ import {
     joinMeetup, leaveMeetup, waitMeetup, cancelWait,
 } from '../lib/guestMeetups';
 import GuestMeetupDetail from '../Components/guest/GuestMeetupDetail';
+import { ensurePushOn } from '../lib/pushPrompt';
 import GuestMeetupForm from '../Components/guest/GuestMeetupForm';
 
 // ────────────────────────────────────────────────────────────────
@@ -442,6 +443,9 @@ const GuestMeetups = () => {
     // Actions
     const runAction = async (action, m) => {
         if (!me?.uid) { showToast('로그인이 필요합니다.'); return; }
+        // 참가·대기 → 알림 모드 강제 활성화(시작 1시간 전 알림 · 마감 알림을 받도록).
+        // 클릭 안에서 권한을 물어야 하므로 아래 await 보다 먼저, 기다리지 않고 부른다.
+        if (action === 'join' || action === 'wait') ensurePushOn(me);
         try {
             if (action === 'join') {
                 const r = await joinMeetup(m.id, me);

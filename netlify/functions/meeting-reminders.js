@@ -1,4 +1,7 @@
-// 예약 함수 (netlify.toml: 5분마다) — 정기 모임 참석자에게 알림 + 끝난 모임의 위치 공유 정리.
+// 예약 함수 (netlify.toml: 5분마다) — 정기 모임·게스트 모집 참가자 알림 + 끝난 모임의 위치 공유 정리.
+//
+//  게스트 모집: 시작 1시간 전 알림만 (위치 공유는 프로젝트 멤버 대상이라 게스트 모집엔 없음).
+//               참가자는 roster 의 uid 로 찾고, guestMeetups.reminders.h1 로 중복을 막는다.
 //
 //  · 시작 1시간 전  : "⏰ 1시간 뒤 모임" 알림 → 누르면 그 모임 팝업
 //  · 시작 30분 전   : "📍 30분 전 · 위치 공유" 알림 → 누르면 '저 여기 있어요'가 열리며 위치 공유 자동 시작
@@ -10,7 +13,7 @@
 // 모임 시간이 바뀌면 값이 달라져 새 시간 기준으로 다시 보낸다. 종료 후에는 아무것도 보내지 않는다.
 
 import { getDb } from '../lib/adminApp.js';
-import { findUsersByResponseKeys, sendPushToUsers } from '../lib/pushSend.js';
+import { findUsersByResponseKeys, findUsersByUids, sendPushToUsers } from '../lib/pushSend.js';
 import { meetingWindow, attendKeys, kstDate, REMIND_BEFORE_MIN, AUTO_SHARE_BEFORE_MIN } from '../../src/lib/meetingTime.js';
 
 /**
@@ -33,6 +36,23 @@ export const planReminders = (meetings, nowMs) => {
         // 늦게 만든 모임처럼 둘 다 해당되면 30분 알림 하나로 (1시간 알림은 보낸 것으로 기록)
         if (needM30) plan.push({ meeting: m, kind: 'm30', startKey, minsToStart, keys, alsoMark: needH1 ? ['h1'] : [] });
         else if (needH1) plan.push({ meeting: m, kind: 'h1', startKey, minsToStart, keys, alsoMark: [] });
+    }
+    return plan;
+};
+
+/** 게스트 모집 — 시작 1시간 전 알림 대상 (순수 판단) */
+export const planGuestReminders = (guestMeetups, nowMs) => {
+    const plan = [];
+    for (const g of guestMeetups) {
+        const uids = (g.roster || []).map((r) => r?.uid).filter(Boolean);
+        if (uids.length === 0) continue;
+        const { startMs, endMs } = meetingWindow({ date: g.date, startTime: g.start, endTime: g.end });
+        if (!Number.isFinite(startMs) || nowMs >= endMs) continue;
+        const minsToStart = (startMs - nowMs) / 60000;
+        const startKey = `${g.date} ${g.start}`;
+        if (minsToStart > 0 && minsToStart <= REMIND_BEFORE_MIN && g.reminders?.h1 !== startKey) {
+            plan.push({ guest: g, startKey, minsToStart, uids });
+        }
     }
     return plan;
 };
@@ -82,11 +102,32 @@ export const runReminders = async ({ nowMs = Date.now(), dryRun = false } = {}) 
         report.push({ id: item.meeting.id, title: item.meeting.title, kind: item.kind, mins: Math.round(item.minsToStart), push: push.title, ...result });
     }
 
+    // 게스트 모집 1시간 전 알림
+    const gsnap = await db.collection('guestMeetups').where('date', 'in', [today, tomorrow]).get();
+    const guests = gsnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    for (const item of planGuestReminders(guests, nowMs)) {
+        const g = item.guest;
+        const users = await findUsersByUids(item.uids);
+        const push = {
+            type: 'guest-reminder',
+            title: '⏰ 1시간 뒤 게스트 모임이 시작돼요',
+            body: `${g.place || '게스트 모임'} · ${g.start}~${g.end || ''}`,
+            url: `/guest-meetups?open=${g.id}`,                // 서비스워커가 /#/ 경로로 바꿔 연다
+            tag: `rem-g-${g.id}`,
+        };
+        let result = { users: users.size, tokens: [...users.values()].reduce((n, u) => n + (u.fcmTokens?.length || 0), 0) };
+        if (!dryRun) {
+            result = await sendPushToUsers(users, push);
+            await db.collection('guestMeetups').doc(g.id).update({ 'reminders.h1': item.startKey });
+        }
+        report.push({ id: g.id, title: g.place, kind: 'guest-h1', mins: Math.round(item.minsToStart), push: push.title, ...result });
+    }
+
     // 끝난 모임의 자동 위치 공유 정리
     const expired = await db.collection('liveLocations').where('autoUntil', '<=', nowMs).get();
     if (!dryRun) await Promise.all(expired.docs.map((d) => d.ref.delete()));
 
-    return { now: new Date(nowMs).toISOString(), checked: meetings.length, plan: report, expiredShares: expired.size, dryRun };
+    return { now: new Date(nowMs).toISOString(), checked: meetings.length, checkedGuests: guests.length, plan: report, expiredShares: expired.size, dryRun };
 };
 
 export const handler = async () => {

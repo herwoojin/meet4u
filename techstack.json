@@ -235,7 +235,7 @@
         {
           "name": "meeting-reminders.js (예약 함수 · 5분마다)",
           "version": "in-repo",
-          "purpose": "정기 모임 참석자에게 시작 1시간 전 알림(누르면 그 모임 팝업), 30분 전 '위치 공유가 켜져요' 알림(누르면 저 여기 있어요에서 자동 공유). 같은 알림은 meetings.reminders.{h1|m30} 에 그때의 시작 시각을 적어 한 번만 — 시간이 바뀌면 새 기준으로 재발송. 종료 후엔 아무것도 보내지 않고, 자동으로 켜졌던 위치 공유(liveLocations.autoUntil 지남)를 서버가 지운다. 판단 로직(planReminders)은 순수 함수로 분리해 드라이런 가능.",
+          "purpose": "정기 모임 참석자에게 시작 1시간 전 알림(누르면 그 모임 팝업), 30분 전 '위치 공유가 켜져요' 알림(누르면 저 여기 있어요에서 자동 공유). 같은 알림은 meetings.reminders.{h1|m30} 에 그때의 시작 시각을 적어 한 번만 — 시간이 바뀌면 새 기준으로 재발송. 종료 후엔 아무것도 보내지 않고, 자동으로 켜졌던 위치 공유(liveLocations.autoUntil 지남)를 서버가 지운다. 판단 로직(planReminders)은 순수 함수로 분리해 드라이런 가능. 게스트 모집도 참가자(roster uid)에게 시작 1시간 전 알림(guestMeetups.reminders.h1, 위치 공유는 프로젝트 기반이라 제외). 참석·참가·대기 클릭 시 src/lib/pushPrompt.js 의 ensurePushOn 으로 알림 권한을 요청한다.",
           "config": "netlify/functions/meeting-reminders.js, netlify.toml [functions.\"meeting-reminders\"] schedule, netlify/lib/pushSend.js(사용자 조회·발송·만료 토큰 정리), netlify/lib/adminApp.js(Admin 앱·Firestore preferRest 공용), src/lib/meetingTime.js(KST 시각 계산)"
         }
       ]
