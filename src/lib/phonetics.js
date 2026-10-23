@@ -50,89 +50,163 @@ export const isNonLatinScript = (lang) => {
 };
 
 // ---------------------------------------------------------------------------
-// Existing helpers — kept for backward compatibility
+// 병음(중국어) · 로마자(일본어) → 한글 발음
+//
+// 예전 구현은 통문장 사전 몇 개 + 글자 치환이라 대부분의 문장을 망가뜨렸다
+// (실측: "Jīntiān de tiānqì zhēn hǎo." → "하오", "Watashi no namae wa …" → "와타시").
+// 이제 음절 단위로 파싱해 외래어 표기법에 가깝게 자모를 조립한다.
+// 병음·로마자가 아닌 단어(GS, Retail 등)는 원래 모양 그대로 둔다.
 // ---------------------------------------------------------------------------
 
-export const romajiToHangul = (text) => {
-    if (!text) return '';
-    let res = text.toLowerCase();
+// 초성: ㄱ0 ㄲ1 ㄴ2 ㄷ3 ㄸ4 ㄹ5 ㅁ6 ㅂ7 ㅃ8 ㅅ9 ㅆ10 ㅇ11 ㅈ12 ㅉ13 ㅊ14 ㅋ15 ㅌ16 ㅍ17 ㅎ18
+// 중성: ㅏ0 ㅐ1 ㅑ2 ㅒ3 ㅓ4 ㅔ5 ㅕ6 ㅖ7 ㅗ8 ㅘ9 ㅙ10 ㅚ11 ㅛ12 ㅜ13 ㅝ14 ㅞ15 ㅟ16 ㅠ17 ㅡ18 ㅢ19 ㅣ20
+// 종성: 없음0 ㄴ4 ㄹ8 ㅅ19 ㅇ21
+const syl = (cho, jung, jong = 0) => String.fromCharCode(0xAC00 + (cho * 21 + jung) * 28 + jong);
+const V = { a: 0, ya: 2, eo: 4, e: 5, ye: 7, o: 8, wa: 9, yo: 12, u: 13, wo: 14, we: 15, wi: 16, yu: 17, eu: 18, i: 20 };
+const J = { n: 4, l: 8, s: 19, ng: 21 };
+const COMBINING = /[̀-ͯ]/g;
+const WORD_RE = /[A-Za-z̀-ͯ']+/g;
 
-    const map = {
-        "kon'nichiwa": "콘니치와",
-        "arigatou": "아리가토",
-        "ohayou": "오하요",
-        "gozaimasu": "고자이마스",
-        "sumimasen": "스미마셍",
-        "hai": "하이",
-        "iie": "이이에",
-        "onegai": "오네가이",
-        "shimasu": "시마스",
-        "sayounara": "사요우나라",
-        "konbanwa": "콘반와",
-        "watashi": "와타시",
-        "anata": "아나타",
-    };
-    for (const [key, val] of Object.entries(map)) {
-        if (res.includes(key)) return val;
+// --- 중국어 병음 -----------------------------------------------------------
+const PY_INITIAL = { b: 7, p: 17, m: 6, f: 17, d: 3, t: 16, n: 2, l: 5, g: 0, k: 15, h: 18, j: 12, q: 14, x: 9, zh: 12, ch: 14, sh: 9, r: 5, z: 13, c: 14, s: 10 };
+// 운모 → [[중성, 종성?], …] (첫 음절에 성모가 붙고 나머지는 ㅇ 으로 시작)
+const PY_FINAL = {
+    a: [['a']], o: [['o']], e: [['eo']], er: [['eo', 'l']], i: [['i']], u: [['u']], v: [['wi']],
+    ai: [['a'], ['i']], ei: [['e'], ['i']], ao: [['a'], ['o']], ou: [['eo'], ['u']],
+    an: [['a', 'n']], en: [['eo', 'n']], ang: [['a', 'ng']], eng: [['eo', 'ng']], ong: [['u', 'ng']],
+    ia: [['ya']], ie: [['ye']], iao: [['ya'], ['o']], iu: [['yu']], iou: [['yu']], ian: [['ye', 'n']],
+    in: [['i', 'n']], iang: [['ya', 'ng']], ing: [['i', 'ng']], iong: [['yu', 'ng']],
+    ua: [['wa']], uo: [['wo']], uai: [['wa'], ['i']], ui: [['u'], ['i']], uei: [['we'], ['i']],
+    uan: [['wa', 'n']], un: [['u', 'n']], uen: [['wo', 'n']], uang: [['wa', 'ng']], ueng: [['wo', 'ng']],
+    ue: [['we']], ve: [['we']], van: [['wi'], ['a', 'n']], vn: [['wi', 'n']],
+};
+const PY_FINAL_KEYS = Object.keys(PY_FINAL).sort((a, b) => b.length - a.length);
+const PY_INIT_KEYS = ['zh', 'ch', 'sh', ...'bpmfdtnlgkhjqxrzcsyw'.split('')];
+
+const parsePinyinSyllable = (w, i) => {
+    let init = '';
+    for (const k of PY_INIT_KEYS) if (w.startsWith(k, i)) { init = k; break; }
+    const j = i + init.length;
+    for (const f of PY_FINAL_KEYS) {
+        if (!w.startsWith(f, j)) continue;
+        // 운모 끝 n/ng 뒤에 모음이 오면 그 n/g 는 다음 음절의 성모 (예: zhōngguó → zhong+guo)
+        const next = w[j + f.length];
+        if (/[ng]$/.test(f) && next && /[aeiouv]/.test(next)) continue;
+        return { init, fin: f, len: init.length + f.length };
     }
+    return null;
+};
 
-    const fallbacks = [
-        [/sh/g, '시'], [/ch/g, '치'], [/ts/g, '츠'],
-        [/ka/g, '카'], [/ki/g, '키'], [/ku/g, '쿠'], [/ke/g, '케'], [/ko/g, '코'],
-        [/sa/g, '사'], [/si/g, '시'], [/su/g, '스'], [/se/g, '세'], [/so/g, '소'],
-        [/ta/g, '타'], [/ti/g, '티'], [/tu/g, '투'], [/te/g, '테'], [/to/g, '토'],
-        [/na/g, '나'], [/ni/g, '니'], [/nu/g, '누'], [/ne/g, '네'], [/no/g, '노'],
-        [/ha/g, '하'], [/hi/g, '히'], [/hu/g, '후'], [/he/g, '헤'], [/ho/g, '호'], [/fu/g, '후'],
-        [/ma/g, '마'], [/mi/g, '미'], [/mu/g, '무'], [/me/g, '메'], [/mo/g, '모'],
-        [/ya/g, '야'], [/yu/g, '유'], [/yo/g, '요'],
-        [/ra/g, '라'], [/ri/g, '리'], [/ru/g, '루'], [/re/g, '레'], [/ro/g, '로'],
-        [/wa/g, '와'], [/wo/g, '오'], [/nn/g, '응'], [/n'/g, '응'],
-        [/ga/g, '가'], [/gi/g, '기'], [/gu/g, '구'], [/ge/g, '게'], [/go/g, '고'],
-        [/za/g, '자'], [/ji/g, '지'], [/zu/g, '즈'], [/ze/g, '제'], [/zo/g, '조'],
-        [/da/g, '다'], [/de/g, '데'], [/do/g, '도'],
-        [/ba/g, '바'], [/bi/g, '비'], [/bu/g, '부'], [/be/g, '베'], [/bo/g, '보'],
-        [/pa/g, '파'], [/pi/g, '피'], [/pu/g, '푸'], [/pe/g, '페'], [/po/g, '포'],
-        [/a/g, '아'], [/i/g, '이'], [/u/g, '우'], [/e/g, '에'], [/o/g, '오'],
-        [/-/g, ''],
-    ];
+const pinyinSyllableToHangul = (init, fin) => {
+    // y · w 는 성모가 아니라 운모의 일부 (ya=ia, wo=uo, yu=ü …)
+    if (init === 'y') {
+        init = '';
+        if (fin.startsWith('u')) fin = 'v' + fin.slice(1);          // yu yue yuan yun
+        else if (fin === 'ou') fin = 'iu';
+        else if (!fin.startsWith('i')) fin = 'i' + fin;             // ya ye yao yan yang yong
+    } else if (init === 'w') {
+        init = '';
+        if (fin === 'ei') fin = 'uei';
+        else if (fin === 'en') fin = 'uen';
+        else if (fin === 'eng') fin = 'ueng';
+        else if (fin !== 'u') fin = 'u' + fin;                      // wa wo wai wan wang
+    }
+    if (/^[jqx]$/.test(init) && fin.startsWith('u')) fin = 'v' + fin.slice(1);   // j q x 뒤 u = ü
+    if (!PY_FINAL[fin]) return null;
+    let parts = PY_FINAL[fin].map((x) => [...x]);
+    if (fin === 'i' && /^(zh|ch|sh|r|z|c|s)$/.test(init)) parts = [['eu']];       // zhi 즈, shi 스, si 쓰
+    const cho = init ? PY_INITIAL[init] : 11;
+    // ㅈ ㅉ ㅊ + ㅑㅖㅛㅠ → ㅏㅔㅗㅜ (표기법: jia 자, jie 제, jiu 주, qiao 차오)
+    if (cho === 12 || cho === 13 || cho === 14) {
+        const soften = { ya: 'a', ye: 'e', yo: 'o', yu: 'u' };
+        if (soften[parts[0][0]]) parts[0][0] = soften[parts[0][0]];
+    }
+    return parts.map(([v, f], k) => syl(k === 0 ? cho : 11, V[v], f ? J[f] : 0)).join('');
+};
 
-    let out = res;
-    for (const [reg, kor] of fallbacks) out = out.replace(reg, kor);
+const convertPinyinWord = (w) => {
+    let out = '', i = 0;
+    while (i < w.length) {
+        const p = parsePinyinSyllable(w, i);
+        if (!p) return null;
+        const h = pinyinSyllableToHangul(p.init, p.fin);
+        if (!h) return null;
+        out += h;
+        i += p.len;
+    }
     return out;
 };
 
 export const pinyinToHangul = (text) => {
     if (!text) return '';
-    let res = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    // 단어마다 ü 를 v 로 보존하고 성조 부호를 지운 소문자 사본으로 파싱. 아포스트로피는 음절 경계(Xī'ān 시안).
+    return String(text).normalize('NFD').replace(WORD_RE, (raw) => {
+        const lower = raw.toLowerCase().replace(/ü/g, 'v').replace(COMBINING, '');
+        const parts = lower.split("'").filter(Boolean).map(convertPinyinWord);
+        return parts.length && parts.every((x) => x != null) ? parts.join('') : raw;
+    }).normalize('NFC');
+};
 
-    const map = {
-        "ni hao": "니 하오",
-        "xiexie": "씨에씨에",
-        "zaijian": "짜이찌앤",
-        "dui bu qi": "뚜이 부 치",
-        "mei guan xi": "메이 관 시",
-        "wo ai ni": "워 아이 니",
-        "shi": "스",
-        "bushi": "부 스",
-        "hao": "하오",
-    };
-    for (const [key, val] of Object.entries(map)) {
-        if (res.includes(key)) return val;
+// --- 일본어 로마자(헵번식) -------------------------------------------------
+const RJ_CONS = {
+    k: 15, g: 0, s: 9, z: 12, t: 16, d: 3, n: 2, h: 18, f: 18, b: 7, p: 17, m: 6, r: 5, w: 11, y: 11,
+    sh: 9, ch: 14, ts: 14, j: 12,
+    ky: 15, gy: 0, ny: 2, hy: 18, by: 7, py: 17, my: 6, ry: 5,
+};
+const RJ_CONS_KEYS = Object.keys(RJ_CONS).sort((a, b) => b.length - a.length);
+const RJ_VOWELS = 'aiueo';
+
+const romajiSyllable = (cons, vowel) => {
+    let v = { a: 'a', i: 'i', u: 'u', e: 'e', o: 'o' }[vowel];
+    if (vowel === 'u' && /^(s|z|ts)$/.test(cons)) v = 'eu';                    // su 스, zu 즈, tsu 츠
+    if (cons === 'w' && vowel === 'a') v = 'wa';                               // wa 와 (wo 는 오)
+    if (cons === 'y' || /y$/.test(cons) || cons === 'sh') {                    // ya 야, kyo 쿄, sha 샤
+        v = { a: 'ya', u: 'yu', o: 'yo', e: 'ye', i: 'i' }[vowel];
     }
+    return syl(cons ? RJ_CONS[cons] : 11, V[v]);                             // ch·j 는 ㅊ·ㅈ + 단모음 (cha 차, jo 조)
+};
 
-    const fallbacks = [
-        [/zh/g, '즈'], [/ch/g, '츠'], [/sh/g, '스'],
-        [/b/g, '빠'], [/p/g, '파'], [/m/g, '마'], [/f/g, '파'],
-        [/d/g, '따'], [/t/g, '타'], [/n/g, '나'], [/l/g, '라'],
-        [/g/g, '까'], [/k/g, '카'], [/h/g, '하'],
-        [/j/g, '찌'], [/q/g, '치'], [/x/g, '씨'],
-        [/z/g, '쯔'], [/c/g, '츠'], [/s/g, '쓰'],
-        [/a/g, '아'], [/o/g, '오'], [/e/g, '어'], [/i/g, '이'], [/u/g, '우'], [/v/g, '위'],
-        [/ /g, ' '],
-    ];
-    let out = res;
-    for (const [reg, kor] of fallbacks) out = out.replace(reg, kor);
+// 앞 음절에 받침을 붙인다 (ん → ㄴ, っ → ㅅ)
+const addJong = (str, jong) => {
+    if (!str) return str;
+    const code = str.charCodeAt(str.length - 1) - 0xAC00;
+    if (code < 0 || code > 11171 || code % 28 !== 0) return str;
+    return str.slice(0, -1) + String.fromCharCode(0xAC00 + code + jong);
+};
+
+const convertRomajiWord = (word) => {
+    let out = '', i = 0;
+    while (i < word.length) {
+        const c = word[i];
+        if (c === "'") { i++; continue; }
+        // ん: n 뒤에 모음·y 가 오지 않으면 받침
+        if (c === 'n' && (i + 1 >= word.length || !/[aiueoy]/.test(word[i + 1]))) {
+            out = out ? addJong(out, J.n) : '응';
+            i++; continue;
+        }
+        // っ: 같은 자음 두 번(kk tt ss pp …) 또는 tch → 앞 음절 ㅅ 받침
+        if (/[kstpgdzbhfmr]/.test(c) && (word[i + 1] === c || (c === 't' && word.startsWith('ch', i + 1)))) {
+            out = addJong(out, J.s);
+            i++; continue;
+        }
+        if (RJ_VOWELS.includes(c)) { out += romajiSyllable('', c); i++; continue; }
+        let cons = '';
+        for (const k of RJ_CONS_KEYS) if (word.startsWith(k, i)) { cons = k; break; }
+        const vowel = word[i + cons.length];
+        if (!cons || !vowel || !RJ_VOWELS.includes(vowel)) return null;      // 로마자가 아닌 단어
+        out += romajiSyllable(cons, vowel);
+        i += cons.length + 1;
+    }
     return out;
+};
+
+export const romajiToHangul = (text) => {
+    if (!text) return '';
+    // 장음 부호(ō ū ā …)는 표기법대로 길이를 적지 않는다
+    return String(text).normalize('NFD').replace(WORD_RE, (raw) => {
+        const conv = convertRomajiWord(raw.toLowerCase().replace(COMBINING, ''));
+        return conv == null ? raw : conv;
+    }).normalize('NFC');
 };
 
 // ---------------------------------------------------------------------------

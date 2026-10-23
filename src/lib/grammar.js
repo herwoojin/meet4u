@@ -339,7 +339,7 @@ export const analyzeKorean = (text) => {
 // Chinese (zh, zh-CN, zh-TW)
 // ===========================================================================
 
-const ZH_FUNC_WORDS = {
+export const ZH_FUNC_WORDS = {
     '的': { role: '연결', detail: '소유·수식(의)', color: 'slate' },
     '了': { role: '시제·상 표지', detail: '완료·변화(~했다/되었다)', color: 'fuchsia' },
     '吗': { role: '의문', detail: '예/아니오 의문(~?)', color: 'fuchsia' },

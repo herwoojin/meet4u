@@ -2000,7 +2000,6 @@ const GlobalChat = () => {
                 onClose={() => setGrammarTarget(null)}
                 text={grammarTarget?.text || ''}
                 lang={grammarTarget?.lang || ''}
-                fullPronunciation={grammarTarget?.pronunciation || ''}
                 koreanOriginal={grammarTarget?.koreanOriginal || ''}
                 isAdmin={isAdmin}
             />

@@ -271,22 +271,28 @@
           "config": "src/lib/phonetics.js (latinToHangul/getPronunciationDisplay), netlify/functions/translate-comment.js (서버 측 미러)"
         },
         {
-          "name": "다국어 문법 분석기 (in-repo)",
+          "name": "언어 공부 엔진 (in-repo, studyPipeline)",
           "version": "in-repo",
-          "purpose": "일본어/한국어/중국어/영어/프랑스어/스페인어/베트남어 등 myLang 별로 어절을 분해하고 주어/목적어/술어/부사어/조사/관사/전치사 역할을 라벨링. 청크 단위 '/' 분할 + 어절별 발음 표시(라틴은 latinToHangul, 비라틴은 Google dt=rm 병렬 fetch + 캐시). API 키 없이 동작.",
-          "config": "src/lib/grammar.js (analyzeSentence/getPhrasePronunciations/fetchFullPronunciation/splitPronunciationByChunks), src/Components/chat/GrammarPopup.jsx, GlobalChat.jsx 메시지 옆 'BookOpen' 버튼"
+          "purpose": "챗.첵 메시지 '문법 분석' 팝업. 한국어 원문이 있으면 원문을 빈 줄 기준 단락 → Intl.Segmenter 문장으로 나눠 문장마다 따로 번역(원문은 그대로 유지, 백번역 없음). 단어는 Intl.Segmenter(중·일 ICU 사전) + 일본어 활용어미 병합(とても·です·食べました) + 중국어 대명사 분리로 실제 단어 단위로 나누고, Google gtx dt=t·bd·rm 으로 뜻·품사·다른 뜻·발음을 채운다. 영어 기능어·일본어 조사·중국어 허사는 사전 뜻 대신 문맥 설명, 영어 숙어(in charge of 등) 표시. 실패 시 3회 재시도. API 키 없이 동작.",
+          "config": "src/lib/studyPipeline.js (buildStudy/lookupWord/segmentWords/splitParagraphs), src/lib/grammar.js (ZH_FUNC_WORDS·getLanguageDisplay·Gemini 정밀 분석 유지)"
+        },
+        {
+          "name": "병음·로마자 → 한글 발음 (in-repo)",
+          "version": "in-repo",
+          "purpose": "중국어 병음은 성모·운모 음절 단위로, 일본어 로마자는 음절(ん=ㄴ받침, っ=ㅅ받침) 단위로 나눠 자모를 조합해 한글 발음을 만든다(Jīntiān → 진톈, gakkō → 갓코). 영어는 철자와 발음이 달라 한글로 적지 않고 브라우저 음성(speechSynthesis)으로 들려준다.",
+          "config": "src/lib/phonetics.js (pinyinToHangul/romajiToHangul), src/Components/chat/StudyCards.jsx (speak)"
         },
         {
           "name": "오늘의 공부 PDF 학습지",
           "version": "in-repo",
-          "purpose": "GrammarPopup 의 상단 버튼으로 새 창을 띄워 원문/발음/구조/어절 분해를 A4 portrait 14mm margin 으로 정렬하고 window.print()로 PDF 저장. 외부 PDF 라이브러리 없음. 원문이 한국어이고 보는 사람의 언어가 한국어가 아닐 때는 PDF 에도 '🇰🇷 원문 한국어 분석 (참고)' 섹션이 함께 출력됨.",
-          "config": "src/Components/chat/GrammarPopup.jsx (buildPrintHtml/openPrintWindow/renderPrintSection), @page A4 + role 색상 인라인 적용"
+          "purpose": "GrammarPopup 상단 버튼으로 새 창을 띄워 문장 카드(원문 → 번역/뜻 → 발음 → 단어표: 단어·읽기·뜻·품사·조사 설명·다른 뜻)를 단락별로 A4(14mm 여백)에 정렬하고 window.print()로 PDF 저장. 단어 뜻이 다 채워진 뒤 활성화. 외부 PDF 라이브러리 없음.",
+          "config": "src/Components/chat/StudyCards.jsx (buildStudyPrintHtml/openStudyPrint), @page A4"
         },
         {
-          "name": "한국어 원문 통합 학습 레이아웃",
+          "name": "문장별 학습 카드 UI",
           "version": "in-repo",
-          "purpose": "GlobalChat 메시지의 srcLang==='ko' 이고 viewer lang!=='ko' 일 때, 한국어/번역/발음/어절 분해를 분리하지 않고 [① 원문(한국어) → 번역 → 발음 → 어절(단어+뜻)] 4단계 카드로 문장별 묶어서 표시. 어절별 한국어 뜻은 Google Translate dt=t 로 병렬 fetch. 한국어 청크 매칭은 챕터 수 동일 시 원문 사용, 다를 시 번역문을 백번역.",
-          "config": "src/Components/chat/GrammarPopup.jsx (UnifiedClauseLayout, renderUnifiedPrintSection), grammar.js (getPhraseTranslations/pairKoreanChunks/TRANSLATION_CACHE)"
+          "purpose": "[① 원문 → 번역(또는 한국어 뜻) → 발음(로마자 + 한글) → 📌 숙어 → 단어 칩] 카드를 단락별로 표시. 문장 듣기·단어 누르면 듣기(speechSynthesis), 번역 오류 가능성(직함·이름) 안내 + Gemini 정밀 분석 연결.",
+          "config": "src/Components/chat/StudyCards.jsx (StudyCards/SentenceCard/WordChip), src/Components/chat/GrammarPopup.jsx"
         },
         {
           "name": "Gemini API (옵션 정밀 분석)",
