@@ -1,7 +1,7 @@
 {
   "project": "Meet4U (PromiseU)",
   "description": "Meeting/약속 스케줄러 PWA. 사용자별 약속 생성, 글로벌 미팅 맵(Leaflet), 출석/댓글/글로벌 채팅 실시간 알림(FCM), 다국어(ko/en/zh), 음성 합성, 댓글 자동 번역을 제공한다.",
-  "lastUpdated": "2026-10-22",
+  "lastUpdated": "2026-10-24",
   "architectureSummary": "프론트엔드: React 19 + Vite 7 SPA를 PWA로 빌드. 백엔드: Firebase(Auth/Firestore/Storage/Analytics/FCM) + Netlify Functions(번역·TTS·푸시 전송). 다중 호스팅 대상(Netlify/Vercel/Firebase Hosting/gh-pages) 지원. 사용자 데이터는 모두 Firestore에 저장되며, 정적 자산만 호스팅 플랫폼이 서빙.",
   "repo": "/Users/heoujin/meet4u",
   "categories": [
@@ -231,6 +231,12 @@
           "version": "in-repo",
           "purpose": "정기 모임 링크 /?meeting=<id>.<버전> 의 og 태그를 그 모임 내용으로 교체(public/_redirects 쿼리 매칭). 열면 로그인 후 MeetingLinkOpener 가 프로젝트 멤버 확인 뒤 상세 팝업(참석·불참 저장)을 띄운다.",
           "config": "netlify/functions/meeting-og.js, netlify/lib/ogHtml.js(공용 og 교체·폴백), src/Components/meeting/MeetingLinkOpener.jsx"
+        },
+        {
+          "name": "meeting-reminders.js (예약 함수 · 5분마다)",
+          "version": "in-repo",
+          "purpose": "정기 모임 참석자에게 시작 1시간 전 알림(누르면 그 모임 팝업), 30분 전 '위치 공유가 켜져요' 알림(누르면 저 여기 있어요에서 자동 공유). 같은 알림은 meetings.reminders.{h1|m30} 에 그때의 시작 시각을 적어 한 번만 — 시간이 바뀌면 새 기준으로 재발송. 종료 후엔 아무것도 보내지 않고, 자동으로 켜졌던 위치 공유(liveLocations.autoUntil 지남)를 서버가 지운다. 판단 로직(planReminders)은 순수 함수로 분리해 드라이런 가능.",
+          "config": "netlify/functions/meeting-reminders.js, netlify.toml [functions.\"meeting-reminders\"] schedule, netlify/lib/pushSend.js(사용자 조회·발송·만료 토큰 정리), netlify/lib/adminApp.js(Admin 앱·Firestore preferRest 공용), src/lib/meetingTime.js(KST 시각 계산)"
         }
       ]
     },
@@ -465,7 +471,7 @@
         {
           "name": "Service Worker",
           "version": "Workbox(via vite-plugin-pwa)",
-          "purpose": "오프라인 캐시 + FCM 백그라운드 수신",
+          "purpose": "오프라인 캐시 + FCM 백그라운드 수신 알림을 누르면 앱이 열려 있어도 그 알림의 화면으로 이동(client.navigate) — 예전엔 앞으로만 가져왔다. /경로 형태 url 은 /#/경로 로 바꿔 연다.",
           "config": "vite.config.js workbox 섹션"
         },
         {
@@ -484,6 +490,12 @@
           "version": "in-repo",
           "purpose": "모바일 헤더 언어 설정 옆 원형 버튼. 안드로이드 크롬·삼성 인터넷은 beforeinstallprompt 로 바로 설치 창, iOS 는 공유 → 홈 화면에 추가 안내, 카카오톡 인앱은 kakaotalk://web/openExternal 로 외부 브라우저 열기, 기타 인앱(네이버·인스타 등)은 다른 브라우저로 열기 + 링크 복사. 홈 화면 앱(standalone·TWA)으로 실행 중이면 숨김.",
           "config": "src/lib/pwaInstall.js (main.jsx 에서 렌더 전 이벤트 캡처), src/Components/layout/InstallAppButton.jsx, MainLayout 모바일 헤더"
+        },
+        {
+          "name": "모임 기반 위치 자동 공유",
+          "version": "in-repo",
+          "purpose": "참석한 모임의 [시작 30분 전, 종료) 동안 '저 여기 있어요'를 열어 두면 위치 공유가 자동으로 켜지고(공유 대상은 그 모임 프로젝트만) 종료 시각에 꺼진다. 직접 끄면 그 모임 동안 다시 켜지지 않음. 브라우저는 앱이 닫힌 상태에서 위치를 읽을 수 없어 30분 전 알림으로 화면을 열게 하고, 앱을 닫아 둔 채 끝나도 서버가 종료 후 공유를 지운다.",
+          "config": "src/Pages/GlobalMeetingMap.jsx, src/lib/meetingTime.js, liveLocations.autoUntil"
         }
       ]
     },

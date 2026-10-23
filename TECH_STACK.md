@@ -3,7 +3,7 @@
 > 약속·모임 스케줄러 PWA. React 19 + Vite 7 SPA 를 Firebase(Auth·Firestore·Storage·FCM) 와
 > Netlify Functions 위에 올린 **서버리스 전면 무료** 구성.
 >
-> **마지막 업데이트: 2026-10-22** · 머신 판독용 원본: [`techstack.json`](./techstack.json)
+> **마지막 업데이트: 2026-10-24** · 머신 판독용 원본: [`techstack.json`](./techstack.json)
 > (두 파일은 항상 같은 커밋에서 함께 갱신한다.)
 
 ---
@@ -126,6 +126,7 @@ flowchart TD
 | **guest-og.js** | in-repo | 공유 링크 /?guest=<id> 요청 시 index.html 의 og 태그를 그 모임 제목·일시·금액·카드 이미지로 바꿔 반환 → 링크를 붙여넣어도 모임별 미리보기 카드가 뜬다. 실패해도 원본 index.html(최악은 해시 딥링크 302)로 앱 진입은 유지. | netlify/functions/guest-og.js, netlify.toml 의 query={guest} force 리다이렉트(SPA catch-all 보다 위) |
 | **meeting-card.js** | in-repo | 정기 모임 카톡 공유 카드 이미지(1200×600 PNG) — 제목·날짜·시간·참석/불참/미응답 수. 참석자 이름·비용은 넣지 않음(링크만 있으면 볼 수 있는 미리보기). 숨김 모임·없는 ID 는 정적 배너로 302. | netlify/functions/meeting-card.js, netlify/lib/shareCard.js renderMeetingCard, src/lib/meetingSummary.js |
 | **meeting-og.js** | in-repo | 정기 모임 링크 /?meeting=<id>.<버전> 의 og 태그를 그 모임 내용으로 교체(public/_redirects 쿼리 매칭). 열면 로그인 후 MeetingLinkOpener 가 프로젝트 멤버 확인 뒤 상세 팝업(참석·불참 저장)을 띄운다. | netlify/functions/meeting-og.js, netlify/lib/ogHtml.js(공용 og 교체·폴백), src/Components/meeting/MeetingLinkOpener.jsx |
+| **meeting-reminders.js (예약 함수 · 5분마다)** | in-repo | 정기 모임 참석자에게 시작 1시간 전 알림(누르면 그 모임 팝업), 30분 전 '위치 공유가 켜져요' 알림(누르면 저 여기 있어요에서 자동 공유). 같은 알림은 meetings.reminders.{h1\|m30} 에 그때의 시작 시각을 적어 한 번만 — 시간이 바뀌면 새 기준으로 재발송. 종료 후엔 아무것도 보내지 않고, 자동으로 켜졌던 위치 공유(liveLocations.autoUntil 지남)를 서버가 지운다. 판단 로직(planReminders)은 순수 함수로 분리해 드라이런 가능. | netlify/functions/meeting-reminders.js, netlify.toml [functions."meeting-reminders"] schedule, netlify/lib/pushSend.js(사용자 조회·발송·만료 토큰 정리), netlify/lib/adminApp.js(Admin 앱·Firestore preferRest 공용), src/lib/meetingTime.js(KST 시각 계산) |
 | **satori** | ^0.63.2 | 카드 이미지 레이아웃 → SVG (guest-card). 이모지는 그리지 못해 쓰지 않음. | netlify/lib/shareCard.js |
 | **@resvg/resvg-wasm** | 2.6.2 (고정) | SVG → PNG. wasm 은 cold start 때 jsDelivr 에서 받으므로 npm 버전과 반드시 일치시켜 고정. | netlify/lib/shareCard.js WASM_URL |
 
@@ -198,10 +199,11 @@ flowchart TD
 
 | 이름 | 버전 | 용도 | 위치·설정 |
 |---|---|---|---|
-| **Service Worker** | Workbox(via vite-plugin-pwa) | 오프라인 캐시 + FCM 백그라운드 수신 | vite.config.js workbox 섹션 |
+| **Service Worker** | Workbox(via vite-plugin-pwa) | 오프라인 캐시 + FCM 백그라운드 수신 알림을 누르면 앱이 열려 있어도 그 알림의 화면으로 이동(client.navigate) — 예전엔 앞으로만 가져왔다. /경로 형태 url 은 /#/경로 로 바꿔 연다. | vite.config.js workbox 섹션 |
 | **Web App Manifest** | in-repo | PWA 설치 가능. start_url=/, display=standalone, theme #1a1a2e | — |
 | **PWA 아이콘** | 192/512px | 홈 화면 아이콘 | public/pwa-192x192.png, public/pwa-512x512.png, apple-touch-icon.png |
 | **앱 설치 버튼 (PWA 설치 유도)** | in-repo | 모바일 헤더 언어 설정 옆 원형 버튼. 안드로이드 크롬·삼성 인터넷은 beforeinstallprompt 로 바로 설치 창, iOS 는 공유 → 홈 화면에 추가 안내, 카카오톡 인앱은 kakaotalk://web/openExternal 로 외부 브라우저 열기, 기타 인앱(네이버·인스타 등)은 다른 브라우저로 열기 + 링크 복사. 홈 화면 앱(standalone·TWA)으로 실행 중이면 숨김. | src/lib/pwaInstall.js (main.jsx 에서 렌더 전 이벤트 캡처), src/Components/layout/InstallAppButton.jsx, MainLayout 모바일 헤더 |
+| **모임 기반 위치 자동 공유** | in-repo | 참석한 모임의 [시작 30분 전, 종료) 동안 '저 여기 있어요'를 열어 두면 위치 공유가 자동으로 켜지고(공유 대상은 그 모임 프로젝트만) 종료 시각에 꺼진다. 직접 끄면 그 모임 동안 다시 켜지지 않음. 브라우저는 앱이 닫힌 상태에서 위치를 읽을 수 없어 30분 전 알림으로 화면을 열게 하고, 앱을 닫아 둔 채 끝나도 서버가 종료 후 공유를 지운다. | src/Pages/GlobalMeetingMap.jsx, src/lib/meetingTime.js, liveLocations.autoUntil |
 
 ### 관찰성/신뢰성
 
@@ -285,4 +287,8 @@ flowchart TD
 - **카톡은 링크 미리보기를 URL 단위로 캐시한다.** 이미 붙여넣었던 `?guest=` 링크는 모임 내용이
   바뀌어도 옛 미리보기가 남을 수 있다(카카오 디벨로퍼스의 캐시 초기화 도구로 갱신). SDK 카드는
   내용이 바뀌면 이미지 URL 버전이 바뀌어 항상 새로 그려진다.
+- **모임 알림은 예약 함수가 5분마다 돈다.** 월 약 8,640회로 Netlify Functions 무료 한도(125,000회/월)의
+  약 7%를 쓴다. 알림이 최대 5분 늦을 수 있다(1시간 전 알림이 55~60분 전에 도착).
+- **위치 자동 공유는 '저 여기 있어요' 화면이 열려 있을 때만 켜진다.** 브라우저·PWA 는 앱이 닫힌 상태에서
+  위치를 읽을 수 없다. 그래서 30분 전 알림으로 화면을 열게 하고, 끝나는 처리는 서버(autoUntil)가 맡는다.
 - **`_backup/`, `temp_*.jsx`, `build_error.log` 등 레거시 파일이 남아 있다.** 정리 후보.

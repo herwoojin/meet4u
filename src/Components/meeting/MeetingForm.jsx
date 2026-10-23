@@ -312,7 +312,7 @@ const MeetingForm = () => {
                         name="title"
                         value={formData.title}
                         onChange={handleChange}
-                        className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 placeholder:text-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         placeholder={t('meeting.titlePlaceholder')}
                         required
                     />

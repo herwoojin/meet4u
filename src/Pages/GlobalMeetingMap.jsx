@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query, orderBy, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query, orderBy, setDoc, where } from 'firebase/firestore';
+import { useSearchParams } from 'react-router-dom';
+import { meetingWindow, responseKeyOf, inAutoShareWindow, kstDate } from '../lib/meetingTime';
+import { DEFAULT_PROJECT_ID } from '../lib/projects';
 import { db } from '../lib/firebase';
 import 'leaflet/dist/leaflet.css';
 import { useTranslation } from 'react-i18next';
@@ -263,6 +266,18 @@ const GlobalMeetingMap = () => {
     const [sharePickerOpen, setSharePickerOpen] = useState(false);
     const [pickerSelection, setPickerSelection] = useState(new Set());
 
+    // 모임 기반 자동 위치 공유 — 참석한 모임의 [시작-30분, 종료) 동안 자동으로 켜고 종료 시각에 끈다.
+    // autoUntilRef: 자동 공유의 종료 시각(ms). 수동 공유면 null. liveLocations 에도 저장해
+    // 앱이 닫혀 있어도 서버 예약 함수(meeting-reminders)가 끝난 공유를 지운다.
+    const autoUntilRef = useRef(null);
+    const autoMeetingIdRef = useRef(null);
+    const dismissedAutoRef = useRef(new Set()); // 사용자가 자동 공유를 직접 끈 모임
+    const forcedIdRef = useRef(null);           // 알림을 눌러 들어온 모임 (실패 시 알려 줄 대상)
+    const [autoShareEnd, setAutoShareEnd] = useState(null);
+    const [myMeetings, setMyMeetings] = useState([]);
+    const [nowTick, setNowTick] = useState(() => Date.now());
+    const [searchParams, setSearchParams] = useSearchParams();
+
     // 핀 검색 (외부 지도 API 아님) — 등록된 핀 title/address 를 실시간 필터
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -344,6 +359,25 @@ const GlobalMeetingMap = () => {
                 watchIdRef.current = null;
             }
         };
+    }, []);
+
+    // 어제~내일(KST) 모임 구독 — 자정을 넘기는 모임까지 포함해 자동 공유 대상을 찾는다.
+    useEffect(() => {
+        if (!currentUser?.uid) return undefined;
+        const now = Date.now();
+        const day = 24 * 60 * 60 * 1000;
+        const dates = [kstDate(now - day), kstDate(now), kstDate(now + day)];
+        const q = query(collection(db, 'meetings'), where('date', 'in', dates));
+        const unsub = onSnapshot(q, (snap) => {
+            setMyMeetings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }, (err) => console.error('meetings (auto-share) listen error:', err));
+        return () => unsub();
+    }, [currentUser?.uid]);
+
+    // 30초마다 시각 갱신 — 자동 시작/종료 판단용
+    useEffect(() => {
+        const id = setInterval(() => setNowTick(Date.now()), 30000);
+        return () => clearInterval(id);
     }, []);
 
     // Scroll pending card into view when created
@@ -486,6 +520,7 @@ const GlobalMeetingMap = () => {
                 lng: pos.coords.longitude,
                 accuracy: pos.coords.accuracy ?? null,
                 audienceProjectIds: Array.isArray(audienceIds) ? audienceIds : [],
+                autoUntil: autoUntilRef.current ?? null,
                 updatedAt: serverTimestamp(),
             });
         } catch (err) {
@@ -493,7 +528,13 @@ const GlobalMeetingMap = () => {
         }
     };
 
-    const startSharing = async (audienceIds) => {
+    // opts.auto: 모임 기반 자동 공유 (autoUntilRef 는 호출 전에 설정됨). 수동이면 자동 종료 없음.
+    const startSharing = async (audienceIds, opts = {}) => {
+        if (!opts.auto) {
+            autoUntilRef.current = null;
+            autoMeetingIdRef.current = null;
+            setAutoShareEnd(null);
+        }
         if (!currentUser) {
             alert(t('global.loginRequired'));
             return;
@@ -531,7 +572,14 @@ const GlobalMeetingMap = () => {
             setIsSharing(true);
         } catch (err) {
             console.error('startSharing failed', err);
-            alert(t('global.shareFailed'));
+            if (opts.auto) {
+                // 자동 공유 실패(위치 권한 거부 등) — 같은 모임에서 반복 시도하지 않는다.
+                if (autoMeetingIdRef.current) dismissedAutoRef.current.add(autoMeetingIdRef.current);
+                autoUntilRef.current = null;
+                autoMeetingIdRef.current = null;
+                setAutoShareEnd(null);
+            }
+            if (!opts.auto || opts.loud) alert(t('global.shareFailed'));
         } finally {
             setSharingLoading(false);
         }
@@ -572,7 +620,12 @@ const GlobalMeetingMap = () => {
         await startSharing(ids);
     };
 
-    const stopSharing = async () => {
+    const stopSharing = async (opts = {}) => {
+        // 자동 공유를 사용자가 직접 끄면 그 모임 동안은 다시 켜지 않는다.
+        if (opts.manual && autoMeetingIdRef.current) dismissedAutoRef.current.add(autoMeetingIdRef.current);
+        autoUntilRef.current = null;
+        autoMeetingIdRef.current = null;
+        setAutoShareEnd(null);
         if (watchIdRef.current != null && 'geolocation' in navigator) {
             navigator.geolocation.clearWatch(watchIdRef.current);
             watchIdRef.current = null;
@@ -587,6 +640,50 @@ const GlobalMeetingMap = () => {
             }
         }
     };
+
+    // 모임 기반 자동 위치 공유 판단 — 시작 30분 전 자동 시작, 모임 종료 시각에 자동 종료.
+    useEffect(() => {
+        if (!currentUser?.email) return;
+        const now = Date.now();
+
+        // 알림('30분 전 위치 공유')을 눌러 들어온 경우: 그 모임은 다시 자동 시도 대상으로.
+        const forcedId = searchParams.get('autoshare');
+        if (forcedId) {
+            forcedIdRef.current = forcedId;
+            dismissedAutoRef.current.delete(forcedId);
+            const next = new URLSearchParams(searchParams);
+            next.delete('autoshare');
+            setSearchParams(next, { replace: true });
+        }
+
+        // 종료 시각 도달 → 자동 공유 끔
+        if (isSharing && autoUntilRef.current && now >= autoUntilRef.current) {
+            stopSharing();
+            return;
+        }
+        if (isSharing || sharingLoading) return;
+
+        const myKey = responseKeyOf(currentUser.email);
+        const target = myMeetings.find(m =>
+            !m.hidden && m.status !== 'completed' &&
+            !dismissedAutoRef.current.has(m.id) &&
+            (m.responses?.[myKey] === 'attend' || m.responses?.[myKey.toLowerCase()] === 'attend') &&
+            inAutoShareWindow(m, now)
+        );
+        if (!target) return;
+        const pid = target.projectId || DEFAULT_PROJECT_ID;
+        // 그 모임의 프로젝트 멤버에게만 보인다. 내가 그 프로젝트 멤버가 아니면 자동 공유하지 않는다.
+        if (!myProjectIds.has(pid)) return;
+        const audience = [pid];
+        if (audience.length === 0) return;
+
+        const { endMs } = meetingWindow(target);
+        autoUntilRef.current = endMs;
+        autoMeetingIdRef.current = target.id;
+        setAutoShareEnd(endMs);
+        startSharing(audience, { auto: true, loud: forcedIdRef.current === target.id });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [myMeetings, nowTick, isSharing, sharingLoading, currentUser?.email, myProjectIds, searchParams]);
 
     const handleLocateMe = () => {
         if (!('geolocation' in navigator)) {
@@ -1028,7 +1125,7 @@ const GlobalMeetingMap = () => {
                             {/* Share / Stop sharing button */}
                             <button
                                 type="button"
-                                onClick={isSharing ? stopSharing : openSharePicker}
+                                onClick={isSharing ? () => stopSharing({ manual: true }) : openSharePicker}
                                 disabled={sharingLoading || !currentUser}
                                 className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg shadow-md border text-xs font-medium transition-colors disabled:opacity-60 ${isSharing
                                     ? 'bg-red-500 text-white border-red-600 hover:bg-red-600'
@@ -1044,6 +1141,11 @@ const GlobalMeetingMap = () => {
                                     <Share2 size={14} />
                                 )}
                                 <span>{isSharing ? t('global.stopSharing') : t('global.shareLocation')}</span>
+                                {isSharing && autoShareEnd && (
+                                    <span className="text-[10px] opacity-80">
+                                        · {new Date(autoShareEnd).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })} 자동 종료
+                                    </span>
+                                )}
                             </button>
 
                             {/* My-location (one-shot) */}

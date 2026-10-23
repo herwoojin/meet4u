@@ -166,15 +166,32 @@ self.addEventListener('message', (event) => {
 });
 
 // 알림 클릭 → 앱 열기/포커스
+// 알림의 url 을 해시 라우터 주소로 바꾼다. '/guest-meetups?open=x' → '/#/guest-meetups?open=x'.
+// 루트('/', '/?meeting=x')와 이미 '#' 가 있는 주소는 그대로 (main.jsx 가 쿼리를 처리).
+const toAppUrl = (u) => {
+  if (!u) return '/';
+  if (u.includes('#')) return u;
+  const path = u.split('?')[0];
+  return (path === '/' || path === '') ? u : '/#' + u;
+};
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || '/';
+  const url = toAppUrl(event.notification.data?.url);
+  const target = new URL(url, self.location.origin).href;
+  const hasTarget = url !== '/';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if (client.url && 'focus' in client) return client.focus();
+        if (!client.url || !('focus' in client)) continue;
+        // 앱이 이미 열려 있으면 그 창을 알림의 화면으로 옮긴 뒤 앞으로 (예전엔 앞으로만 가져와
+        // '30분 전 위치 공유' 같은 알림을 눌러도 해당 화면으로 가지 않았다)
+        if (hasTarget && 'navigate' in client) {
+          return client.navigate(target).then((c) => (c || client).focus()).catch(() => client.focus());
+        }
+        return client.focus();
       }
-      if (clients.openWindow) return clients.openWindow(url);
+      if (clients.openWindow) return clients.openWindow(target);
     })
   );
 });

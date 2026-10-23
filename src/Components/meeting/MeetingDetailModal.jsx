@@ -1,7 +1,8 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { X, Clock, Users, Trash2, Edit, Check, XCircle, AlignLeft, EyeOff, Eye, DollarSign, ShieldCheck, UserPlus, Link2 } from 'lucide-react';
+import { X, Clock, Users, Trash2, Edit, Check, XCircle, AlignLeft, EyeOff, Eye, DollarSign, ShieldCheck, UserPlus, Link2, Bell, BellOff, Settings as SettingsIcon } from 'lucide-react';
+import { requestFCMToken } from '../../hooks/useFCM';
 import { db } from '../../lib/firebase';
 import { deleteDoc, doc, updateDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { format, isValid } from 'date-fns';
@@ -128,6 +129,31 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
     };
 
     const [selectedStatus, setSelectedStatus] = React.useState(null);
+    // 사람별 푸시 알림 ON/OFF (소문자 이메일 → boolean). users.fcmTokens 가 있으면 ON.
+    const [pushMap, setPushMap] = React.useState({});
+    // 이 기기에서 방금 권한을 받아 토큰을 등록했는지
+    const [myPushJustOn, setMyPushJustOn] = React.useState(false);
+    const [pushRequesting, setPushRequesting] = React.useState(false);
+
+    // 참석 클릭 → 알림 모드 강제 활성화(권한 요청 + 토큰 등록).
+    // 브라우저는 클릭 같은 사용자 동작 안에서만 권한 창을 띄우므로 클릭 핸들러에서 바로 호출한다.
+    const handleAttendClick = async () => {
+        setSelectedStatus('attend');
+        if (!currentUser?.uid || typeof Notification === 'undefined') return;
+        if (Notification.permission === 'denied') return;
+        setPushRequesting(true);
+        try {
+            const token = await requestFCMToken(currentUser.uid, currentUser.email);
+            if (token) setMyPushJustOn(true);
+        } finally {
+            setPushRequesting(false);
+        }
+    };
+
+    const goPushSettings = () => {
+        onClose?.();
+        navigate('/settings', { state: { focus: 'push' } });
+    };
     const [adminEditorOpen, setAdminEditorOpen] = React.useState(false);
 
     // Initialize selected status from existing response
@@ -245,6 +271,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
             }
 
             const profileMap = {};
+            const pushOn = {};
 
             try {
                 // We have a mix of raw emails and sanitized keys.
@@ -262,6 +289,9 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                             profileMap[userData.email] = userData.displayName;
                             profileMap[userData.email.replace(/\./g, '_')] = userData.displayName;
                         }
+                        if (userData.email) {
+                            pushOn[userData.email.toLowerCase()] = Array.isArray(userData.fcmTokens) && userData.fcmTokens.length > 0;
+                        }
                     });
                 }));
 
@@ -270,6 +300,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                 // But for now, let's assume the primary key is 'email'.
 
                 setUserMap(prev => ({ ...prev, ...profileMap }));
+                setPushMap(prev => ({ ...prev, ...pushOn }));
             } catch (error) {
                 console.error("Error fetching user profiles:", error);
             }
@@ -499,6 +530,9 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                             {Array.from(new Set([...(meeting.attendeesList || []), ...Object.keys(responses).map(k => unsanitizeEmail(k))])).map((emailRaw, idx) => {
                                 const displayName = getDisplayName(emailRaw);
                                 const status = getStatusForEmail(emailRaw);
+                                const lowerEmail = unsanitizeEmail(emailRaw).toLowerCase();
+                                const isMe = !!currentUser?.email && currentUser.email.toLowerCase() === lowerEmail;
+                                const pushOn = !!pushMap[lowerEmail] || (isMe && myPushJustOn);
 
                                 let statusBadge;
                                 switch (status) {
@@ -519,7 +553,31 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                             </div>
                                             <span className="text-sm text-gray-700 truncate group-hover:text-blue-600 transition-colors">{displayName}</span>
                                         </div>
-                                        {statusBadge}
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            {status === 'attend' && (
+                                                <span
+                                                    className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold ${pushOn
+                                                        ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                                        : 'bg-gray-50 text-gray-400 border-gray-200'}`}
+                                                    title={pushOn ? '시작 1시간 전 알림을 받아요' : '알림이 꺼져 있어요'}
+                                                >
+                                                    {pushOn ? <Bell size={10} /> : <BellOff size={10} />}
+                                                    {pushOn ? '알림 ON' : '알림 OFF'}
+                                                </span>
+                                            )}
+                                            {status === 'attend' && isMe && !pushOn && (
+                                                <button
+                                                    type="button"
+                                                    onClick={goPushSettings}
+                                                    className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center hover:bg-blue-700 shadow-sm"
+                                                    title="설정 › 알림에서 켜기"
+                                                    aria-label="알림 설정으로 이동"
+                                                >
+                                                    <SettingsIcon size={11} />
+                                                </button>
+                                            )}
+                                            {statusBadge}
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -532,7 +590,7 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                             <h3 className="text-sm font-bold text-gray-900 mb-3">{t('meeting.responseTitle')}</h3>
                             <div className="grid grid-cols-3 gap-3 mb-4">
                                 <button
-                                    onClick={() => setSelectedStatus('attend')}
+                                    onClick={handleAttendClick}
                                     className={`py-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-1.5 border ${selectedStatus === 'attend'
                                         ? 'bg-green-600 text-white border-green-600 ring-2 ring-green-100'
                                         : 'bg-white text-gray-700 border-gray-200 hover:bg-green-50 hover:border-green-200 hover:text-green-700'
@@ -570,6 +628,30 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
                                     </button>
                                 )}
                             </div>
+                            {selectedStatus === 'attend' && (() => {
+                                const myOn = myPushJustOn || !!pushMap[(currentUser?.email || '').toLowerCase()];
+                                return (
+                                    <div className={`mb-4 p-3 rounded-lg border text-xs flex items-center gap-2 ${myOn ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                                        {myOn ? <Bell size={16} className="shrink-0" /> : <BellOff size={16} className="shrink-0" />}
+                                        <div className="flex-1 leading-relaxed">
+                                            <b>{pushRequesting ? '알림 켜는 중…' : myOn ? '알림 ON' : '알림 OFF'}</b>
+                                            {' · '}
+                                            {myOn
+                                                ? "시작 1시간 전에 알림이 오고, 30분 전부터 '저 여기 있어요'에서 내 위치가 자동 공유돼요. 모임이 끝나면 둘 다 꺼져요."
+                                                : '이 기기는 알림이 꺼져 있어 1시간 전 알림을 받을 수 없어요. 오른쪽 버튼으로 설정에서 켜 주세요.'}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={goPushSettings}
+                                            className="w-6 h-6 rounded-full bg-white border border-current flex items-center justify-center shrink-0 hover:opacity-80"
+                                            title="설정 › 알림"
+                                            aria-label="알림 설정으로 이동"
+                                        >
+                                            <SettingsIcon size={12} />
+                                        </button>
+                                    </div>
+                                );
+                            })()}
                             <button
                                 onClick={saveResponse}
                                 disabled={!selectedStatus || selectedStatus === getStatusForEmail(currentUser?.email)}
