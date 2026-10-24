@@ -9,6 +9,7 @@ import { format, isValid } from 'date-fns';
 import { ko, enUS, zhCN } from 'date-fns/locale';
 import { useAuth } from '../../context/AuthContext';
 import CommentSection from './CommentSection';
+import MeetingLocationCard from './MeetingLocationCard';
 import ScoreBoard from './ScoreBoard';
 import AdminAttendanceEditor from './AdminAttendanceEditor';
 import KakaoTalkIcon from '../KakaoTalkIcon';
@@ -426,6 +427,9 @@ const MeetingDetailModal = ({ meeting, onClose, onEdit }) => {
 
                 {/* Content */}
                 <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+                    {/* 장소 — 지도 핀과 연결돼 있으면 미리보기 지도, 누르면 저 여기 있어요 지도로 */}
+                    <MeetingLocationCard meeting={meeting} onOpenMap={(path) => { onClose?.(); navigate(path); }} />
+
                     {/* Description */}
                     {meeting.description && (
                         <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">

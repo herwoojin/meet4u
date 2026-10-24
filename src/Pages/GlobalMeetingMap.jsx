@@ -5,12 +5,13 @@ import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, query,
 import { useSearchParams } from 'react-router-dom';
 import { meetingWindow, responseKeyOf, inAutoShareWindow, kstDate } from '../lib/meetingTime';
 import { DEFAULT_PROJECT_ID } from '../lib/projects';
+import { kroadNavUrl } from '../lib/globalPins';
 import { db } from '../lib/firebase';
 import 'leaflet/dist/leaflet.css';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { useProjects } from '../context/ProjectContext';
-import { Globe, MapPin, Trash2, Loader, Plus, Search, X, Crosshair, Radio, Share2, Users, ChevronDown, ChevronUp, Map, Check, Folder } from 'lucide-react';
+import { Globe, MapPin, Trash2, Loader, Plus, Search, X, Crosshair, Radio, Share2, Users, ChevronDown, ChevronUp, Map, Check, Folder, Navigation } from 'lucide-react';
 import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -284,6 +285,7 @@ const GlobalMeetingMap = () => {
     const pendingCardRef = useRef(null);
     // 검색 결과에서 선택된 핀 좌표. <OpenPinPopup> 이 감시해 flyTo 후 자동으로 팝업 open.
     const [pinToOpen, setPinToOpen] = useState(null);
+    const mapSectionRef = useRef(null);
     // 마커 라벨 노출을 위한 zoom 추적. 도시 규모(zoom 10~) 정도부터 이미
     // 개별 핀이 클러스터에서 분리돼 보이는 경우가 많아 그때부터 라벨을 노출.
     const [mapZoom, setMapZoom] = useState(10);
@@ -301,6 +303,22 @@ const GlobalMeetingMap = () => {
     useEffect(() => {
         try { localStorage.setItem('meet4u_showMap', showMap ? 'true' : 'false'); } catch (_) { /* ignore */ }
     }, [showMap]);
+
+    // 모임 팝업의 장소를 눌러 들어온 경우(?focus=위도,경도): 지도를 펴고 그 핀으로 확대한 뒤 팝업을 연다.
+    // 핀이 다 불러와진 뒤에 해야 팝업을 열 마커가 지도에 있다.
+    useEffect(() => {
+        const focus = searchParams.get('focus');
+        if (!focus || loading) return;
+        const next = new URLSearchParams(searchParams);
+        next.delete('focus');
+        setSearchParams(next, { replace: true });
+        const [lat, lng] = focus.split(',').map(Number);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        setShowMap(true);
+        setFlyToTarget({ lat, lng, zoom: 17, key: Date.now() });
+        setPinToOpen({ lat, lng, key: Date.now() });
+        setTimeout(() => mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }, [searchParams, loading, setSearchParams]);
 
     // Load pins
     useEffect(() => {
@@ -926,7 +944,7 @@ const GlobalMeetingMap = () => {
             )}
 
             {/* Map toggle header */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div ref={mapSectionRef} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden scroll-mt-20">
                 <button
                     type="button"
                     onClick={() => setShowMap(v => !v)}
@@ -1027,6 +1045,17 @@ const GlobalMeetingMap = () => {
                                                 <div className="text-[11px] text-slate-500">
                                                     {t('global.byLabel')}: {pin.createdByName || pin.createdBy}
                                                 </div>
+                                                {/* k-road.asia 로 넘어가 출발=현재 위치, 도착=이 핀 좌표로 고속도로·추천 경로 안내까지 자동 */}
+                                                <a
+                                                    href={kroadNavUrl(pin)}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    title="k-road 에서 현재 위치 → 이 핀까지 길안내를 바로 시작해요"
+                                                    className="mt-2 flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold !text-white no-underline hover:bg-blue-700"
+                                                >
+                                                    <Navigation size={12} />
+                                                    도착지로 길안내
+                                                </a>
                                                 {(pin.createdBy === currentUser?.email || isAdmin) && (
                                                     <button
                                                         onClick={() => handleDeletePin(pin)}

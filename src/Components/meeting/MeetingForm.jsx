@@ -9,6 +9,7 @@ import { useProjects } from '../../context/ProjectContext';
 import { DEFAULT_PROJECT_ID } from '../../lib/projects';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useGoogleCalendar from '../../hooks/useGoogleCalendar';
+import { useGlobalPins, pinLabel, pinSnapshot, findPinByLabel } from '../../lib/globalPins';
 
 // Searchable user dropdown component
 const UserSearchDropdown = ({ value, onChange, users }) => {
@@ -95,6 +96,82 @@ const UserSearchDropdown = ({ value, onChange, users }) => {
     );
 };
 
+// 장소 입력 + "저 여기 있어요" 지도 핀 목록 드롭다운. 핀을 고르면 그 좌표가 모임에 연결되고,
+// 목록에 없는 곳은 그냥 글자로 적어도 된다(그때는 지도 연결 없음).
+const LocationPicker = ({ value, onChange, pins, placeholder }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const ref = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (ref.current && !ref.current.contains(e.target)) setIsOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const linked = findPinByLabel(pins, value);
+    const q = value.trim().toLowerCase();
+    // 이미 핀을 고른 상태면 전체 목록을, 입력 중이면 이름·주소로 걸러서 보여 준다
+    const filtered = linked || !q ? pins : pins.filter(p =>
+        pinLabel(p).toLowerCase().includes(q) || String(p.address || '').toLowerCase().includes(q));
+
+    return (
+        <div ref={ref} className="relative">
+            <div className="relative">
+                <input
+                    type="text"
+                    name="location"
+                    value={value}
+                    onChange={(e) => { onChange(e.target.value); setIsOpen(true); }}
+                    onFocus={() => pins.length > 0 && setIsOpen(true)}
+                    autoComplete="off"
+                    className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 pr-10 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder={placeholder}
+                />
+                {pins.length > 0 && (
+                    <button
+                        type="button"
+                        onClick={() => setIsOpen(o => !o)}
+                        aria-label="등록된 핀 목록 열기"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded text-gray-400 hover:text-blue-600"
+                    >
+                        <ChevronDown size={16} />
+                    </button>
+                )}
+            </div>
+            {isOpen && filtered.length > 0 && (
+                <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    <div className="px-3 py-1.5 text-[11px] text-gray-400 border-b border-gray-100 sticky top-0 bg-white">
+                        📍 저 여기 있어요 지도에 등록된 핀 {pins.length}개
+                    </div>
+                    {filtered.map(p => (
+                        <button
+                            type="button"
+                            key={p.id}
+                            onClick={() => { onChange(pinLabel(p)); setIsOpen(false); }}
+                            className={`w-full text-left px-3 py-2 hover:bg-blue-50 flex items-start gap-2 transition-colors ${linked?.id === p.id ? 'bg-blue-50' : ''}`}
+                        >
+                            <MapPin size={14} className="mt-0.5 shrink-0 text-blue-500" />
+                            <span className="min-w-0">
+                                <span className="block text-sm font-medium text-gray-900 truncate">{pinLabel(p)}</span>
+                                {p.title && p.address && (
+                                    <span className="block text-[11px] text-gray-500 truncate">{p.address}</span>
+                                )}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
+            {linked ? (
+                <p className="mt-1.5 text-xs text-emerald-600">✓ 지도 핀과 연결됨 — 모임 팝업에서 위치를 보고 길안내를 받을 수 있어요</p>
+            ) : pins.length > 0 && (
+                <p className="mt-1.5 text-xs text-gray-400">등록된 핀 {pins.length}개 중에서 고르면 지도와 연결돼요. 목록에 없으면 직접 적어도 됩니다.</p>
+            )}
+        </div>
+    );
+};
+
 const MeetingForm = () => {
     const { t } = useTranslation();
     const { currentUser } = useAuth();
@@ -120,6 +197,9 @@ const MeetingForm = () => {
     });
 
     const [costEntries, setCostEntries] = useState([]);
+    const pins = useGlobalPins();
+    // 수정 중인 모임에 원래 연결돼 있던 핀 — 그 핀이 지도에서 지워졌어도 장소를 그대로 두면 유지
+    const [origLocationPin, setOrigLocationPin] = useState(null);
 
     // Fetch all users for the dropdown
     useEffect(() => {
@@ -167,6 +247,7 @@ const MeetingForm = () => {
                 description: m.description || '',
                 attendees: m.attendees || '',
             });
+            setOrigLocationPin(m.locationPin ? { location: m.location || '', pin: m.locationPin } : null);
 
             // Load cost entries (support both new array and legacy single fields)
             if (m.costEntries && m.costEntries.length > 0) {
@@ -208,8 +289,11 @@ const MeetingForm = () => {
 
         const totalRentalCost = validCostEntries.reduce((sum, e) => sum + e.cost, 0);
 
+        const pinMatch = findPinByLabel(pins, formData.location);
         const meetingData = {
             ...formData,
+            locationPin: pinMatch ? pinSnapshot(pinMatch)
+                : (origLocationPin && origLocationPin.location === formData.location ? origLocationPin.pin : null),
             costEntries: validCostEntries,
             rentalCost: totalRentalCost,
             bookedBy: validCostEntries.length === 1 ? validCostEntries[0].bookedBy : '',
@@ -376,13 +460,11 @@ const MeetingForm = () => {
                     <label className="block text-gray-700 mb-2 font-medium flex items-center gap-2">
                         <MapPin size={16} /> {t('meeting.location')}
                     </label>
-                    <input
-                        type="text"
-                        name="location"
+                    <LocationPicker
                         value={formData.location}
-                        onChange={handleChange}
-                        className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
-                        placeholder={t('meeting.locationPlaceholder')}
+                        onChange={(v) => setFormData(prev => ({ ...prev, location: v }))}
+                        pins={pins}
+                        placeholder={pins.length > 0 ? '등록된 핀에서 선택 또는 직접 입력' : t('meeting.locationPlaceholder')}
                     />
                 </div>
 

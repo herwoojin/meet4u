@@ -111,6 +111,7 @@ flowchart TD
 | **leaflet.markercluster** | ^1.5.3 | 마커 클러스터링 | — |
 | **react-leaflet-cluster** | ^4.1.3 | react-leaflet용 클러스터 래퍼 | — |
 | **recharts** | ^3.8.0 | 출석 통계 차트(AdminPage 등) | — |
+| **모임 장소 ↔ 지도 핀 연결 + k-road 길안내 (in-repo)** | in-repo | 새 모임 예약의 장소 칸에서 '저 여기 있어요' 지도 핀(globalPins)을 드롭다운으로 고르면 좌표를 meetings.locationPin 에 저장. 모임 팝업은 미리보기 지도(Leaflet, 조작 잠금)로 위치를 보여 주고, 누르면 /global-meeting?focus=위도,경도 로 이동해 그 핀을 확대·팝업. 핀 팝업의 '도착지로 길안내'는 k-road.asia/?navTo=위도,경도&navName=이름 을 새 탭으로 열어 현재 위치 → 핀 좌표 고속도로·추천 경로 + 주행 모드까지 자동 실행. 예전 모임은 장소 이름이 같은 핀으로 연결. | src/lib/globalPins.js (useGlobalPins 공용 구독/kroadNavUrl/pinMapPath), src/Components/meeting/MeetingForm.jsx (LocationPicker), src/Components/meeting/MeetingLocationCard.jsx, src/Pages/GlobalMeetingMap.jsx (?focus 처리, 길안내 버튼) |
 
 ### 백엔드 — 서버리스 함수(Netlify Functions)
 
