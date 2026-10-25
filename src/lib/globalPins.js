@@ -11,8 +11,9 @@ let cache = null;
 let unsub = null;
 const listeners = new Set();
 
-export const useGlobalPins = () => {
-    const [pins, setPins] = useState(cache || []);
+// { pins, loaded } — 핀이 아직 안 왔는지(loaded=false), 정말 없는지 구분이 필요한 화면용
+export const useGlobalPinsState = () => {
+    const [pins, setPins] = useState(cache);
     useEffect(() => {
         listeners.add(setPins);
         if (!unsub) {
@@ -20,7 +21,11 @@ export const useGlobalPins = () => {
                 cache = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
                     .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
                 listeners.forEach((f) => f(cache));
-            }, (err) => console.error('globalPins subscribe failed:', err));
+            }, (err) => {
+                console.error('globalPins subscribe failed:', err);
+                cache = cache || [];
+                listeners.forEach((f) => f(cache));
+            });
         } else if (cache) {
             setPins(cache);
         }
@@ -29,8 +34,10 @@ export const useGlobalPins = () => {
             if (!listeners.size && unsub) { unsub(); unsub = null; }
         };
     }, []);
-    return pins;
+    return { pins: pins || [], loaded: pins !== null };
 };
+
+export const useGlobalPins = () => useGlobalPinsState().pins;
 
 // 모임 장소 칸에 들어갈 이름 — 제목 우선, 없으면 주소
 export const pinLabel = (pin) => String(pin?.title || pin?.address || '').trim();

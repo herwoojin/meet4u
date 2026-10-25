@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useProjects } from '../../context/ProjectContext';
 import { DEFAULT_PROJECT_ID } from '../../lib/projects';
 import MeetingDetailModal from '../meeting/MeetingDetailModal';
+import { DayWeather, AttendanceCounts } from './MeetingWeather';
 import { useNavigate } from 'react-router-dom';
 
 const DATE_FNS_LOCALES = { ko, en: enUS, zh: zhCN };
@@ -315,7 +316,7 @@ const CalendarGrid = () => {
                             const isToday = isSameDay(date, new Date());
                             return (
                                 <li key={dateStr} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-                                    <div className={`flex items-baseline justify-between px-4 py-2 border-b border-gray-100 ${isToday ? 'bg-amber-50' : 'bg-gray-50'}`}>
+                                    <div className={`flex items-baseline justify-between gap-2 px-4 py-2 border-b border-gray-100 ${isToday ? 'bg-amber-50' : 'bg-gray-50'}`}>
                                         <div className="flex items-baseline gap-2">
                                             <span className={`text-base font-bold ${dowColor}`}>
                                                 {format(date, 'M월 d일', { locale: dateLocale })}
@@ -327,12 +328,11 @@ const CalendarGrid = () => {
                                                 <span className="text-[10px] px-1.5 py-0.5 bg-gray-900 text-white rounded-full">오늘</span>
                                             )}
                                         </div>
-                                        <span className="text-[11px] text-gray-500">{items.length}건</span>
+                                        <DayWeather meetings={items} />
                                     </div>
                                     <ul className="divide-y divide-gray-100">
                                         {items.map(meeting => {
                                             const isCompleted = meeting.status === 'completed';
-                                            const attendCount = Object.values(meeting.responses || {}).filter(v => v === 'attend').length;
                                             return (
                                                 <li
                                                     key={meeting.id}
@@ -353,13 +353,9 @@ const CalendarGrid = () => {
                                                         {meeting.description && (
                                                             <div className="text-[11px] text-gray-500 truncate mt-0.5">{meeting.description}</div>
                                                         )}
+                                                        <AttendanceCounts meeting={meeting} className="mt-0.5" />
                                                     </div>
                                                     <div className="flex items-center gap-2 shrink-0">
-                                                        {meeting.attendeesList?.length > 0 && (
-                                                            <span className="text-[10px] flex items-center gap-0.5 text-gray-500">
-                                                                <Users size={10} /> {attendCount}/{meeting.attendeesList.length}
-                                                            </span>
-                                                        )}
                                                         {isCompleted && (
                                                             <span className="text-[9px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded-full border border-red-200 font-medium">완료</span>
                                                         )}

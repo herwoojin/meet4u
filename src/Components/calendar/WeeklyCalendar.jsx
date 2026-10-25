@@ -2,13 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, addWeeks, subWeeks, isSameDay } from 'date-fns';
 import { ko, enUS, zhCN } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight, Users, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { db } from '../../lib/firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useProjects } from '../../context/ProjectContext';
 import { DEFAULT_PROJECT_ID } from '../../lib/projects';
 import MeetingDetailModal from '../meeting/MeetingDetailModal';
+import { DayWeather, AttendanceCounts } from './MeetingWeather';
 import { useNavigate } from 'react-router-dom';
 
 const DATE_FNS_LOCALES = { ko, en: enUS, zh: zhCN };
@@ -89,12 +90,13 @@ const WeeklyCalendar = () => {
 
             return (
                 <div key={date.toISOString()} className={`mb-4 bg-white rounded-xl border ${isToday ? 'border-blue-200 ring-1 ring-blue-100' : 'border-gray-200'} p-4 shadow-sm`}>
-                    <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
-                        <div className="flex items-center gap-2">
+                    <div className="flex justify-between items-center gap-2 mb-3 border-b border-gray-100 pb-2">
+                        <div className="flex items-center gap-2 min-w-0">
                             <span className={`font-bold text-lg ${dayOfWeek === 0 || dayOfWeek === 6 ? 'text-red-600' : 'text-gray-900'}`}>{dayName}</span>
                             <span className="font-bold text-gray-800 text-sm">{dateStr}</span>
+                            {isToday && <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold">{t('dashboard.today')}</span>}
                         </div>
-                        {isToday && <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold">{t('dashboard.today')}</span>}
+                        <DayWeather meetings={dailyMeetings} />
                     </div>
 
                     <div className="space-y-2">
@@ -116,10 +118,7 @@ const WeeklyCalendar = () => {
                                     {meeting.description && (
                                         <p className="text-xs text-gray-500 mt-1 truncate">{meeting.description}</p>
                                     )}
-                                </div>
-                                <div className="flex items-center gap-1 text-xs text-gray-500 bg-white px-2 py-1 rounded border border-gray-200 ml-2 shrink-0">
-                                    <Users size={12} />
-                                    <span>{Object.values(meeting.responses || {}).filter(r => r === 'attend').length}</span>
+                                    <AttendanceCounts meeting={meeting} className="mt-1" />
                                 </div>
                             </div>
                         ))}

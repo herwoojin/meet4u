@@ -130,6 +130,7 @@ flowchart TD
 | **meeting-reminders.js (예약 함수 · 5분마다)** | in-repo | 정기 모임 참석자에게 시작 1시간 전 알림(누르면 그 모임 팝업), 30분 전 '위치 공유가 켜져요' 알림(누르면 저 여기 있어요에서 자동 공유). 같은 알림은 meetings.reminders.{h1\|m30} 에 그때의 시작 시각을 적어 한 번만 — 시간이 바뀌면 새 기준으로 재발송. 종료 후엔 아무것도 보내지 않고, 자동으로 켜졌던 위치 공유(liveLocations.autoUntil 지남)를 서버가 지운다. 판단 로직(planReminders)은 순수 함수로 분리해 드라이런 가능. 게스트 모집도 참가자(roster uid)에게 시작 1시간 전 알림(guestMeetups.reminders.h1, 위치 공유는 프로젝트 기반이라 제외). 참석·참가·대기 클릭 시 src/lib/pushPrompt.js 의 ensurePushOn 으로 알림 권한을 요청한다. | netlify/functions/meeting-reminders.js, netlify.toml [functions."meeting-reminders"] schedule, netlify/lib/pushSend.js(사용자 조회·발송·만료 토큰 정리), netlify/lib/adminApp.js(Admin 앱·Firestore preferRest 공용), src/lib/meetingTime.js(KST 시각 계산) |
 | **satori** | ^0.63.2 | 카드 이미지 레이아웃 → SVG (guest-card). 이모지는 그리지 못해 쓰지 않음. | netlify/lib/shareCard.js |
 | **@resvg/resvg-wasm** | 2.6.2 (고정) | SVG → PNG. wasm 은 cold start 때 jsDelivr 에서 받으므로 npm 버전과 반드시 일치시켜 고정. | netlify/lib/shareCard.js WASM_URL |
+| **netlify/functions/weather.js** | Netlify Function (esbuild) | 모임 날씨 — OpenWeather 5일/3시간 예보를 대신 받아 화면용으로 줄여 반환. 키는 서버에만, 좌표 소수 둘째 자리 반올림 + CDN 30분 캐시, 한반도 밖 좌표 거부. 키 없음/활성화 전이면 no-key/owm-401 을 돌려줘 화면에 '날씨 준비 중'. | Netlify env OPENWEATHER_API_KEY (없으면 OWM_API_KEY), GET /.netlify/functions/weather?lat=&lon= |
 
 ### AI/외부 API — 무료 엔드포인트 위주
 
@@ -150,6 +151,7 @@ flowchart TD
 | **Gemini Vision (OCR 폴백)** | gemini-2.5-flash → 2.0-flash → flash-latest 폴백 | Tesseract 인식률이 낮을 때 이미지에서 예약 건을 JSON 배열로 직접 구조화 추출. 사용자 개인 무료 키 사용. | src/lib/ocrReservation.js (ocrWithGemini), 키는 grammar.js getGeminiKey 공유 |
 | **Kakao JavaScript SDK (카카오톡 공유)** | 2.8.4 (t1.kakaocdn.net, SRI sha384 고정) | 게스트 모집을 카톡방에 이미지 카드(피드 템플릿)로 공유. 카드 버튼은 https://<도메인>/?guest=<id> 로 연결되고 main.jsx 가 /#/guest-meetups?open=<id> 로 바꿔 상세 팝업을 연다. SDK 는 상세 팝업이 열릴 때만 동적 로드(88KB). 카드 이미지는 guest-card 함수가 모임별로 그린다. 키가 없거나 로드 실패 시 링크 한 줄만 복사(붙여넣으면 guest-og 미리보기 카드가 뜸). | src/lib/kakaoShare.js (loadKakaoSdk/shareGuestMeetupToKakao/summarizeMeetup/guestShareText), src/Components/guest/GuestMeetupDetail.jsx 하단 노란 버튼, public/share/guest-invite.jpg (함수 실패 시 폴백 배너), .env VITE_KAKAO_JS_KEY + Kakao Developers Web 사이트 도메인 등록 필요 |
 | **Google Fonts CSS API (Noto Sans KR 서브셋)** | fonts.googleapis.com css2?text= | 카드 이미지에 쓰인 글자만 잘라 TTF 로 받음(약 30KB). 함수 번들에 수 MB 한글 폰트를 넣지 않기 위함. 실패 시 정적 배너로 폴백. | netlify/lib/shareCard.js loadFont |
+| **OpenWeather 5 Day / 3 Hour Forecast** | api.openweathermap.org/data/2.5/forecast (무료 플랜) | 주간 모임·월간 모아보기 날짜 헤더의 날씨(맑음/흐림/비… + 기온 + 강수확률). 모임 장소(지도 핀 좌표)와 시작 시각에 가장 가까운 3시간 칸을 고른다. 장소를 모르거나 5일 넘게 남았거나 지난 일정이면 그 이유를 표시. | netlify/functions/weather.js, src/lib/weather.js (resolveMeetingPlace/weatherPlan/pickSlot/describeSlot), src/Components/calendar/MeetingWeather.jsx (DayWeather/AttendanceCounts) |
 
 ### 인증/접근제어
 
@@ -253,6 +255,7 @@ flowchart TD
 | Netlify 대역폭 | 100 GB/월 | 사이트 정지 | Netlify 대시보드 |
 | Gemini (개인 키) | 계정별 무료 티어 | 429 → 분석/OCR 폴백 실패 | 호출부 에러 표면화 |
 | Google Translate gtx | 공식 한도 없음(비공식) | 레이트 리밋 시 번역 미동작 | 실패 시 원문 표시 |
+| OpenWeather 예보 | 60회/분 · 100만 회/월 (무료) | 날씨 칸이 "날씨 불러오기 실패" | 좌표별 CDN 30분 캐시로 호출 최소화, 함수 호출 수는 `capacityMonitor.js` 가 집계 |
 | FCM | 사실상 무제한 | — | — |
 | 카카오톡 공유 (JS SDK) | 앱별 쿼터(디벨로퍼스 콘솔) | 공유 창이 안 열림 → 링크 복사 폴백 | 콘솔 쿼터 화면 |
 | 카드 이미지 런타임 의존 (Google Fonts · jsDelivr wasm) | 공식 한도 없음 | 카드가 정적 배너로 대체(공유 자체는 정상) | 함수 로그 `[guest-card]` |
