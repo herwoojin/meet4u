@@ -1,7 +1,7 @@
 // PromiseU PWA Service Worker
 // - PWA 오프라인 캐싱 + Firebase Cloud Messaging 통합
 
-const CACHE_NAME = 'promiseu-v1';
+const CACHE_NAME = 'promiseu-v2';   // v2: 앱 아이콘을 테니스 코트 일러스트로 교체
 const OFFLINE_URL = '/offline.html';
 
 // 프리캐시할 핵심 자원 (앱 셸)

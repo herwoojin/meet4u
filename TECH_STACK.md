@@ -203,7 +203,7 @@ flowchart TD
 |---|---|---|---|
 | **Service Worker** | Workbox(via vite-plugin-pwa) | 오프라인 캐시 + FCM 백그라운드 수신 알림을 누르면 앱이 열려 있어도 그 알림의 화면으로 이동(client.navigate) — 예전엔 앞으로만 가져왔다. /경로 형태 url 은 /#/경로 로 바꿔 연다. | vite.config.js workbox 섹션 |
 | **Web App Manifest** | in-repo | PWA 설치 가능. start_url=/, display=standalone, theme #1a1a2e | — |
-| **PWA 아이콘** | 192/512px | 홈 화면 아이콘 | public/pwa-192x192.png, public/pwa-512x512.png, apple-touch-icon.png |
+| **PWA 아이콘** | 192/512px | 홈 화면 아이콘 — 웰컴 이미지(welcome-splash.jpg, 테니스 코트 일러스트)를 정사각형으로 잘라 192/512/180/64px 생성. manifest·index.html 의 아이콘 주소에 ?v=2 를 붙여 설치된 앱도 새 아이콘을 다시 받게 함 | public/pwa-192x192.png, public/pwa-512x512.png, apple-touch-icon.png, favicon.png |
 | **앱 설치 버튼 (PWA 설치 유도)** | in-repo | 모바일 헤더 언어 설정 옆 원형 버튼. 안드로이드 크롬·삼성 인터넷은 beforeinstallprompt 로 바로 설치 창, iOS 는 공유 → 홈 화면에 추가 안내, 카카오톡 인앱은 kakaotalk://web/openExternal 로 외부 브라우저 열기, 기타 인앱(네이버·인스타 등)은 다른 브라우저로 열기 + 링크 복사. 홈 화면 앱(standalone·TWA)으로 실행 중이면 숨김. | src/lib/pwaInstall.js (main.jsx 에서 렌더 전 이벤트 캡처), src/Components/layout/InstallAppButton.jsx, MainLayout 모바일 헤더 |
 | **모임 기반 위치 자동 공유** | in-repo | 참석한 모임의 [시작 30분 전, 종료) 동안 '저 여기 있어요'를 열어 두면 위치 공유가 자동으로 켜지고(공유 대상은 그 모임 프로젝트만) 종료 시각에 꺼진다. 직접 끄면 그 모임 동안 다시 켜지지 않음. 브라우저는 앱이 닫힌 상태에서 위치를 읽을 수 없어 30분 전 알림으로 화면을 열게 하고, 앱을 닫아 둔 채 끝나도 서버가 종료 후 공유를 지운다. | src/Pages/GlobalMeetingMap.jsx, src/lib/meetingTime.js, liveLocations.autoUntil |
 

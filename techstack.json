@@ -494,7 +494,7 @@
         {
           "name": "PWA 아이콘",
           "version": "192/512px",
-          "purpose": "홈 화면 아이콘",
+          "purpose": "홈 화면 아이콘 — 웰컴 이미지(welcome-splash.jpg, 테니스 코트 일러스트)를 정사각형으로 잘라 192/512/180/64px 생성. manifest·index.html 의 아이콘 주소에 ?v=2 를 붙여 설치된 앱도 새 아이콘을 다시 받게 함",
           "config": "public/pwa-192x192.png, public/pwa-512x512.png, apple-touch-icon.png"
         },
         {
