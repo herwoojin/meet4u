@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useMenuPermissions, canAccessMenu, getUserGroup, GROUP_LABEL_KEY, minRequiredGroup, GROUP_BADGE_SHORT } from '../../lib/menuPermissions';
 import { useProjects } from '../../context/ProjectContext';
-import { Calendar, Home, LogOut, PlusCircle, Settings, X, Shield, BarChart3, Globe, PanelLeftClose, PanelLeftOpen, Folder, FolderPlus, Check, Trophy, MessageSquare, Mail, ChevronRight } from 'lucide-react';
+import { Calendar, Home, LogOut, PlusCircle, Settings, X, Shield, BarChart3, Globe, PanelLeftClose, PanelLeftOpen, Folder, FolderPlus, Check, Trophy, MessageSquare, Mail, ChevronRight, BellRing, ExternalLink } from 'lucide-react';
 
 // 모바일 카드용 색상/서브카피 — 요청 참조 이미지처럼 큰 컬러 아이콘 + 설명
 const MENU_META = {
@@ -356,6 +356,18 @@ const Sidebar = ({ isMobileMenuOpen, closeMobileMenu, toggleMobileMenu, isCollap
                         ))}
                     </div>
                 )}
+                {/* 외부 사이트 — 빈자리 코트 알림(catchcourt). 새 창으로 연다. */}
+                <a
+                    href="https://catchcourt.netlify.app/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={isCollapsed ? '빈자리코트 알림 (새 창)' : '새 창으로 열기'}
+                    className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} p-3 rounded-lg transition-all duration-200 text-blue-900/60 hover:bg-white/50 hover:text-blue-800`}
+                >
+                    <BellRing size={20} />
+                    {!isCollapsed && <span className="font-medium">빈자리코트 알림</span>}
+                    {!isCollapsed && <ExternalLink size={14} className="ml-auto opacity-60" />}
+                </a>
             </nav>
 
             <div className={`${isCollapsed ? 'p-2' : 'p-4'} border-t border-blue-100/60`}>
